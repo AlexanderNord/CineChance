@@ -95,15 +95,15 @@ export default function Home() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
             CineChance
           </h1>
-          <div className="mx-6 flex-1">
-            <div className="flex w-full max-w-2xl mx-auto">
+          <div className="mx-6 flex-1 min-w-0">
+            <div className="flex w-full">
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && search()}
                 placeholder="Поиск фильмов и сериалов..."
-                className="flex-1 px-5 py-3.5 bg-gray-900/80 border border-gray-700 rounded-xl text-base outline-none focus:border-blue-500 transition"
+                className="flex-1 min-w-0 px-5 py-3.5 bg-gray-900/80 border border-gray-700 rounded-xl text-base outline-none focus:border-blue-500 transition"
               />
             </div>
           </div>
