@@ -1,0 +1,58 @@
+// src/app/components/HorizontalMovieGridServer.tsx
+import { fetchTrendingMovies } from '@/lib/tmdb';
+import MovieCard from './MovieCard';
+
+export default async function HorizontalMovieGridServer() {
+  try {
+    const movies = await fetchTrendingMovies('week');
+    const displayMovies = movies.slice(0, 20);
+
+    if (displayMovies.length === 0) {
+      return (
+        <div className="w-full">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-6 mt-4">Популярное на этой неделе</h1>
+          <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-6">
+            <p className="text-yellow-300">Не удалось загрузить фильмы. Возможные причины:</p>
+            <ul className="text-gray-400 text-sm mt-2 list-disc pl-5">
+              <li>Проблемы с API ключом TMDB</li>
+              <li>Ограничения API (лимит запросов)</li>
+              <li>Временно недоступен сервер TMDB</li>
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-6 mt-4">Популярное на этой неделе</h1>
+        
+        <div className="relative">
+          {/* Горизонтальный скролл контейнер */}
+          <div className="flex overflow-x-auto gap-4 pb-4 hide-scrollbar">
+            {displayMovies.map((movie) => (
+              <div key={movie.id} className="flex-shrink-0 w-48">
+                <MovieCard movie={movie} />
+              </div>
+            ))}
+          </div>
+          
+          {/* Градиентные индикаторы для скролла */}
+          <div className="absolute left-0 top-0 bottom-4 w-8 bg-gradient-to-r from-gray-950 to-transparent pointer-events-none"></div>
+          <div className="absolute right-0 top-0 bottom-4 w-8 bg-gradient-to-l from-gray-950 to-transparent pointer-events-none"></div>
+        </div>
+      </div>
+    );
+  } catch (error) {
+    console.error('Ошибка в компоненте HorizontalMovieGridServer:', error);
+    return (
+      <div className="w-full">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-6 mt-4">Популярное на этой неделе</h1>
+        <div className="bg-red-900/30 border border-red-700 rounded-lg p-6">
+          <p className="text-red-300">Критическая ошибка при загрузке фильмов</p>
+          <p className="text-gray-400 text-sm mt-2">Пожалуйста, проверьте консоль для подробностей.</p>
+        </div>
+      </div>
+    );
+  }
+}
