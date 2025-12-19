@@ -151,49 +151,49 @@ export default function MovieCard({ movie }: MovieCardProps) {
         {showOverlay && (
           <div 
             ref={overlayRef}
-            className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-4 z-20"
+            className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-3 sm:p-4 z-20"
           >
-            <div className="w-full max-w-[180px] space-y-2">
+            <div className="w-full max-w-[160px] space-y-1.5">
               <button
                 onClick={() => handleStatusChange('want')}
-                className={`w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
+                className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
                   status === 'want' 
                     ? 'bg-blue-500 text-white' 
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
-                <span className="mr-2">+</span>
+                <span className="mr-2 text-base">+</span>
                 Хочу посмотреть
               </button>
               
               <button
                 onClick={() => handleStatusChange('watched')}
-                className={`w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
+                className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
                   status === 'watched' 
                     ? 'bg-green-500 text-white' 
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
-                <span className="mr-2">✓</span>
+                <span className="mr-2 text-sm">✓</span>
                 Просмотрено
               </button>
               
               <button
                 onClick={() => handleStatusChange('dropped')}
-                className={`w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
+                className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
                   status === 'dropped' 
                     ? 'bg-red-500 text-white' 
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
-                <span className="mr-2">×</span>
+                <span className="mr-2 text-sm">×</span>
                 Брошено
               </button>
 
               {status && (
                 <button
                   onClick={() => handleStatusChange(null)}
-                  className="w-full py-2 px-4 rounded-lg text-sm font-medium bg-gray-800/50 text-gray-300 hover:bg-gray-800/70 mt-2"
+                  className="w-full py-1.5 px-3 rounded-lg text-xs font-medium bg-gray-800/50 text-gray-300 hover:bg-gray-800/70 mt-2"
                 >
                   Убрать из списков
                 </button>
