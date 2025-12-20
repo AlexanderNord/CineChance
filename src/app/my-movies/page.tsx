@@ -1,35 +1,44 @@
 // src/app/my-movies/page.tsx
 
 import Link from 'next/link';
-import { Movie } from '@/lib/tmdb';
+import { Media } from '@/lib/tmdb';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import MyMoviesClient from './MyMoviesClient';
 
-// Заглушки
-const mockMovies: Movie[] = [
+// Заглушки - обновляем для интерфейса Media
+const mockMovies: Media[] = [
   {
     id: 299536,
+    media_type: 'movie',
     title: 'Мстители: Финал',
+    name: 'Мстители: Финал',
     poster_path: '/or06FN3Dka5tukK1e9sl16pB3iy.jpg',
     vote_average: 8.3,
     release_date: '2019-04-24',
+    first_air_date: '2019-04-24',
     overview: '',
   },
   {
     id: 299534,
+    media_type: 'movie',
     title: 'Мстители: Война бесконечности',
+    name: 'Мстители: Война бесконечности',
     poster_path: '/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg',
     vote_average: 8.3,
     release_date: '2018-04-25',
+    first_air_date: '2018-04-25',
     overview: '',
   },
   {
     id: 550,
+    media_type: 'movie',
     title: 'Бойцовский клуб',
+    name: 'Бойцовский клуб',
     poster_path: '/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg',
     vote_average: 8.4,
     release_date: '1999-10-15',
+    first_air_date: '1999-10-15',
     overview: '',
   },
 ];
