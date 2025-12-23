@@ -1,50 +1,56 @@
+```md
 # Copilot / AI-инструкции для проекта CineChance
 
-Коротко и по делу — что важно знать, чтобы быстро вносить изменения в этот репозиторий.
+Коротко и по делу — что важно знать, чтобы быстро вносить изменения в этот репозиторием.
 
-- **Архитектура:** монорепо с серверной частью на Express (Node + TypeScript) и клиентом на React/Vite. Сервер и клиент находятся в одном проекте и обслуживаются одним HTTP-сервером в `server/index.ts`.
+- **Архитектура:** Next.js (app router) + React (TypeScript). Серверные и клиентские части находятся в `src/app/` — используются Server Components и Route Handlers. БД — Postgres с Prisma (Neon adapter).
 
-- **Где смотреть стартовую точку:** главный серверный вход — `server/index.ts`. Роуты и API описаны в `server/routes.ts`. Клиентская точка входа — `client/src/main.tsx`, корневой компонент — `client/src/App.tsx`.
+- **Ключевые файлы и точки входа:**
+  - `src/app/layout.tsx`, `src/app/page.tsx` — основной UI и провайдеры.
+  - `src/app/api/` — Route Handlers (создавайте `route.ts` и экспортируйте `GET/POST`). Пример: `src/app/api/auth/[...nextauth]/route.ts`.
+  - `src/lib/prisma.ts` — единый экспорт `prisma`; импортируйте его всегда отсюда.
+  - `src/auth.ts` — конфигурация `authOptions` для NextAuth и helper `getServerAuthSession()`.
+  - `src/lib/tmdb.ts` — TMDB helper (проверка `TMDB_API_KEY`, обработка ошибок).
+  - `prisma/schema.prisma` и `prisma/migrations/` — схема и миграции.
 
-- **База данных:** используется Postgres + Drizzle ORM. Схемы таблиц описаны в `shared/schema.ts`. Подключение через `server/db.ts` использует `DATABASE_URL`.
+- **Запуск и основные команды:**
+  - `npm run dev` — запуск в dev режиме (Next).
+  - `npm run build` — сборка.
+  - `npm run start` — запуск продакшн.
+  - `postinstall` выполняет `prisma generate` (см. `package.json`).
 
-- **Аутентификация:** интегрирована через Replit auth helper — см. `server/replitAuth.ts` и использование middleware в `server/routes.ts` (`setupAuth`, `isAuthenticated`). API-эндпоинты для входа/выхода — `/api/login`, `/api/logout`, `/api/auth/user`.
+- **Обязательные переменные окружения:**
+  - `DATABASE_URL` (Neon / Postgres)
+  - `NEXTAUTH_SECRET`
+  - `NEXTAUTH_URL`
+  - `TMDB_API_KEY`
 
-- **Внешние интеграции:** TMDB API используется для поиска/трендов; ключ — `TMDB_API_KEY`. Запросы идут из `server/routes.ts` через helper `tmdbFetch`.
+- **Prisma / миграции:**
+  - Не создавайте новые `PrismaClient` — импортируйте `prisma` из `src/lib/prisma.ts`.
+  - Миграции находятся в `prisma/migrations/`. Для локальной разработки используйте `npx prisma migrate dev`, в проде — `npx prisma migrate deploy`.
 
-- **Запуск и сборка:** ключевые npm-скрипты в `package.json`:
-  - `dev` — локальная разработка: `NODE_ENV=development tsx server/index.ts` (поднимает сервер + Vite в dev режиме).
-  - `build` — билд: `tsx script/build.ts`.
-  - `start` — запуск продакшна: `NODE_ENV=production node dist/index.cjs`.
-  - `db:push` — применить миграции/схему через `drizzle-kit`.
+- **Аутентификация:**
+  - NextAuth настроен в `src/auth.ts` (CredentialsProvider). Пароли — в `User.hashedPassword`, сравнение — `bcryptjs`.
+  - Route handler: `src/app/api/auth/[...nextauth]/route.ts`.
+  - Для серверной сессии используйте `getServerAuthSession()`.
 
-- **Порты и окружение:** сервер слушает `process.env.PORT` (по умолчанию 5000). Обязательно настроить `DATABASE_URL` и `TMDB_API_KEY` в окружении для интеграций.
+- **TMDB и внешние API:**
+  - Используйте `src/lib/tmdb.ts` (функции `searchMedia`, `fetchTrendingMovies` и т.п.). Проверяйте обёртку и обработку ошибок, особенно когда `TMDB_API_KEY` отсутствует.
 
-- **Ключевые паттерны и конвенции в проекте:**
-  - Сервер логирует только `/api` запросы (см. логика в `server/index.ts`) — не дублируйте логирование в других слоях без надобности.
-  - API-роуты валидируются через `zod`/`drizzle-zod` (см. `shared/schema.ts` — `insertWatchlistItemSchema`). Используйте эти схемы для валидации входящих данных в новых эндпоинтах.
-  - Клиент использует `@tanstack/react-query` для загрузки данных (см. `client/src/hooks/useAuth.ts`, `client/src/lib/queryClient.ts`). Добавляйте/используйте queryKeys консистентно (обычно строковые URL-ключи, например `['/api/auth/user']`).
-  - Компоненты UI используют дизайн-систему в `client/src/components/ui/*` и утилиты (`cn` в `client/src/lib/utils.ts`). Поддерживайте эти примитивы для согласованного стиля.
+- **Кодовые паттерны для ИИ-агентов:**
+  - По умолчанию файлы в `src/app/` — Server Components. Для client components добавляйте `'use client'` вверху файла.
+  - API: Route Handlers (`route.ts`) экспортируют методы (`GET`, `POST`).
+  - Повторное использование общих клиентов/хелперов — через `src/lib/*`.
 
-- **Где менять поведение:**
-  - API/логика хранения — `server/storage.ts` (реализация storage), `server/routes.ts` (контракты).
-  - База/схема — `shared/schema.ts` (вносите изменения через `drizzle-kit` и `db:push`).
-  - Клиентские фичи — `client/src/pages/*` и `client/src/components/*`.
+- **Частые изменения — где править:**
+  - Добавить API-эндпоинт: `src/app/api/<path>/route.ts` → импорт `prisma` из `src/lib/prisma.ts` → валидация входа (например, `zod`) → вернуть json/статус.
+  - Интеграция с TMDB: добавить/переиспользовать функции в `src/lib/tmdb.ts`.
+  - Работа с пользователем/сессией: `getServerAuthSession()` / `src/auth.ts`.
 
-- **Тестовый/отладочный флоу:**
-  - Для локальной разработки запустите `pnpm install` (или `npm install`) и `pnpm dev` (или `npm run dev`).
-  - Логи сервера видны в терминале, Vite overlay показывает ошибки клиентской сборки в браузере.
+- **Отладка и рекомендации:**
+  - Логи в `npm run dev` видны в терминале.
+  - После изменений в `prisma/schema.prisma` запустите `npx prisma generate` и/или `npx prisma migrate dev`.
 
-- **Частые мелкие подсказки для изменений:**
-  - При добавлении API-эндпоинта: добавьте маршрут в `server/routes.ts`, используйте `isAuthenticated` для защищённых ресурсов и `insertWatchlistItemSchema`/`zod` для проверки тела запроса.
-  - При изменении модели — обновите `shared/schema.ts` и выполните `npm run db:push` для применения изменений в базе.
-  - Не меняйте порт — проект ожидает `PORT` из окружения (CI/hosting полагается на этом).
+Если нужно, добавлю секции про CI, deploy или конкретные примеры изменений. Оставьте список желаемых примеров — быстро допишу.
 
-- **Файлы, которые следует открыть для быстрого контекста:**
-  - `server/index.ts` — сервер, логика подключения Vite/статической сборки.
-  - `server/routes.ts` — все API-эндпоинты и интеграции с TMDB/storage.
-  - `shared/schema.ts` — таблицы Drizzle + Zod схемы.
-  - `client/src/App.tsx` и `client/src/main.tsx` — клиентский роутинг и провайдеры (`react-query`, темы, тултипы).
-  - `client/src/hooks/useAuth.ts` — как клиент получает текущего пользователя.
-
-Если что-то неясно или нужно расширить раздел (например, объяснить `server/storage.ts` или CI/CD), скажите — я обновлю инструкцию. 
+```

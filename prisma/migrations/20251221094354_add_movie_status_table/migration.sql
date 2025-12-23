@@ -1,0 +1,2 @@
+-- This migration was already applied to the database.
+-- This file exists only to resolve Prisma migration drift.

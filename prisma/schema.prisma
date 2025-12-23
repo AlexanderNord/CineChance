@@ -64,13 +64,24 @@ model WatchList {
   id        String   @id @default(cuid())
   userId    String
   tmdbId    Int
-  mediaType String   // "movie" или "tv"
-  status    String   // "watched" или "wantToWatch"
+  mediaType String
+  statusId  Int
   addedAt   DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    MovieStatus @relation(fields: [statusId], references: [id])
 
-  @@unique([userId, tmdbId, mediaType, status])
+  @@unique([userId, tmdbId, mediaType, statusId])
   @@index([userId])
   @@index([tmdbId])
+}
+
+
+model MovieStatus {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  
+  watchLists WatchList[]
+
+  @@map("MovieStatus") // Явно указываем имя таблицы в БД
 }
