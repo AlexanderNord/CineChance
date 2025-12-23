@@ -1,3 +1,4 @@
+// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -9,7 +10,18 @@ const nextConfig: NextConfig = {
         pathname: "/**",
       },
     ],
-    unoptimized: true, // Отключает оптимизацию Next.js для TMDB изображений
+    unoptimized: true,
+  },
+
+  experimental: {
+    serverActions: {
+      // Разрешаем Server Actions с preview-доменов GitHub Codespaces
+      allowedOrigins: [
+        'localhost:3000',
+        '*.app.github.dev',
+        '*.github.dev',
+      ],
+    },
   },
 };
 
