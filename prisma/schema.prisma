@@ -61,19 +61,23 @@ model VerificationToken {
 }
 
 model WatchList {
-  id        String   @id @default(cuid())
-  userId    String
-  tmdbId    Int
-  mediaType String
-  statusId  Int
-  addedAt   DateTime @default(now())
+  id           Int      @id @default(autoincrement())  // Счётчик
+  userId       String
+  tmdbId       Int
+  mediaType    String   // "movie" или "tv"
+  title        String   // Название фильма/сериала (дублируем из TMDB для быстрого доступа)
+  voteAverage  Float    // Рейтинг на TMDB (например, 8.3)
+  userRating   Int?     // Рейтинг пользователя от 1 до 10 (опционально)
+  statusId     Int
+  addedAt      DateTime @default(now())
 
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status    MovieStatus @relation(fields: [statusId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status       MovieStatus  @relation(fields: [statusId], references: [id])
 
-  @@unique([userId, tmdbId, mediaType, statusId])
+  @@unique([userId, tmdbId, mediaType])  // Один фильм/сериал в списке только один раз (независимо от статуса)
   @@index([userId])
   @@index([tmdbId])
+  @@index([statusId])
 }
 
 

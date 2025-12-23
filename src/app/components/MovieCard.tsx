@@ -4,7 +4,9 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Media } from '@/lib/tmdb';
-import { getMediaStatus, setMediaStatus, MediaStatus } from '@/lib/movieStatus';
+
+// Определяем тип локально
+type MediaStatus = 'want' | 'watched' | 'dropped' | null;
 
 interface MovieCardProps {
   movie: Media;
@@ -14,6 +16,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
   const [showOverlay, setShowOverlay] = useState(false);
   const [status, setStatus] = useState<MediaStatus>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -21,18 +24,26 @@ export default function MovieCard({ movie }: MovieCardProps) {
     ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
     : '/placeholder-poster.svg';
   
-  // Получаем правильное название (для фильмов - title, для сериалов - name)
   const title = movie.title || movie.name || 'Без названия';
-  
-  // Получаем правильную дату
   const date = movie.release_date || movie.first_air_date;
   const year = date ? date.split('-')[0] : '—';
 
   // Инициализируем статус при монтировании
   useEffect(() => {
-    setStatus(getMediaStatus(movie.id, movie.media_type));
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`/api/watchlist?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
+        if (res.ok) {
+          const data = await res.json();
+          setStatus(data.status);
+        }
+      } catch (error) {
+        console.error("Failed to fetch status", error);
+      }
+    };
+
+    fetchStatus();
     
-    // Проверяем, мобильное ли устройство
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
@@ -68,11 +79,35 @@ export default function MovieCard({ movie }: MovieCardProps) {
     };
   }, [showOverlay]);
 
-  // Функция для изменения статуса
-  const handleStatusChange = (newStatus: MediaStatus) => {
+  // Функция для изменения статуса (отправка в API)
+  const handleStatusChange = async (newStatus: MediaStatus) => {
+    const oldStatus = status;
     setStatus(newStatus);
-    setMediaStatus(movie.id, movie.media_type, newStatus);
     setShowOverlay(false);
+
+    try {
+      const res = await fetch('/api/watchlist', {
+        method: newStatus === null ? 'DELETE' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tmdbId: movie.id,
+          mediaType: movie.media_type,
+          status: newStatus,
+          title: title,
+          voteAverage: movie.vote_average,
+        }),
+      });
+
+      if (!res.ok) {
+        setStatus(oldStatus); 
+        console.error('Failed to update status');
+      }
+    } catch (error) {
+      setStatus(oldStatus);
+      console.error('Network error', error);
+    }
   };
 
   // Функция для получения иконки статуса
@@ -110,7 +145,6 @@ export default function MovieCard({ movie }: MovieCardProps) {
   // Обработчик клика/тапа на карточку
   const handleCardClick = () => {
     if (isMobile) {
-      // На мобильных показываем/скрываем оверлей по клику
       setShowOverlay(!showOverlay);
     }
   };
@@ -138,16 +172,15 @@ export default function MovieCard({ movie }: MovieCardProps) {
     >
       {/* Общий контейнер для плашки и постера */}
       <div className="relative">
-        {/* Плашка с типом медиа (Фильм/Сериал) */}
+        {/* Плашка с типом медиа */}
         <div className={`${movie.media_type === 'movie' ? 'bg-green-500' : 'bg-blue-500'} text-white text-xs font-semibold px-2 py-1.5 rounded-t-lg w-full text-center`}>
           {movie.media_type === 'movie' ? 'Фильм' : 'Сериал'}
         </div>
         
-        {/* Контейнер постера с плавной анимацией */}
+        {/* Контейнер постера */}
         <div className={`relative w-full aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 rounded-b-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 ${
           showOverlay && !isMobile ? 'cursor-default' : 'cursor-pointer'
         }`}>
-          {/* Иконка статуса (всегда видна, но будет перекрыта оверлеем) */}
           {getStatusIcon()}
 
           <Image
@@ -163,7 +196,6 @@ export default function MovieCard({ movie }: MovieCardProps) {
             loading="lazy"
           />
           
-          {/* Оверлей при наведении (только для десктопа, если не показываются кнопки) */}
           {!showOverlay && (
             <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 sm:p-3">
               <h3 className="text-white font-bold text-xs sm:text-sm mb-1.5 line-clamp-3">
@@ -186,7 +218,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
           )}
         </div>
 
-        {/* Оверлей с кнопками выбора статуса (перекрывает ВСЁ: плашку, постер и иконку статуса) */}
+        {/* Оверлей с кнопками выбора статуса */}
         {showOverlay && (
           <div 
             ref={overlayRef}
@@ -248,18 +280,13 @@ export default function MovieCard({ movie }: MovieCardProps) {
           {title}
         </h3>
         <div className="flex items-center justify-between mt-1.5">
-          <div className="flex items-center space-x-1">
-            <div className="flex items-center bg-gray-800/50 px-1.5 py-0.5 rounded text-xs">
-              <span className="text-yellow-400 mr-1">★</span>
-              <span className="text-gray-200 font-medium">
-                {movie.vote_average?.toFixed(1) || '0.0'}
-              </span>
-            </div>
-            <div className="text-xs text-gray-400 hidden sm:inline">
-              {year}
-            </div>
+          <div className="flex items-center bg-gray-800/50 px-1.5 py-0.5 rounded text-xs">
+            <span className="text-yellow-400 mr-1">★</span>
+            <span className="text-gray-200 font-medium">
+              {movie.vote_average?.toFixed(1) || '0.0'}
+            </span>
           </div>
-          <div className="text-xs text-gray-400 sm:hidden">
+          <div className="text-xs text-gray-400">
             {year}
           </div>
         </div>

@@ -1,52 +1,33 @@
 // src/app/my-movies/page.tsx
-
 import Link from 'next/link';
-import { Media } from '@/lib/tmdb';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
+import { prisma } from '@/lib/prisma'; // Исправлен импорт (обычно prisma тут, а не в @/auth)
 import MyMoviesClient from './MyMoviesClient';
+import { Media } from '@/lib/tmdb';
 
-// Заглушки - обновляем для интерфейса Media
-const mockMovies: Media[] = [
-  {
-    id: 299536,
-    media_type: 'movie',
-    title: 'Мстители: Финал',
-    name: 'Мстители: Финал',
-    poster_path: '/or06FN3Dka5tukK1e9sl16pB3iy.jpg',
-    vote_average: 8.3,
-    release_date: '2019-04-24',
-    first_air_date: '2019-04-24',
-    overview: '',
-  },
-  {
-    id: 299534,
-    media_type: 'movie',
-    title: 'Мстители: Война бесконечности',
-    name: 'Мстители: Война бесконечности',
-    poster_path: '/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg',
-    vote_average: 8.3,
-    release_date: '2018-04-25',
-    first_air_date: '2018-04-25',
-    overview: '',
-  },
-  {
-    id: 550,
-    media_type: 'movie',
-    title: 'Бойцовский клуб',
-    name: 'Бойцовский клуб',
-    poster_path: '/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg',
-    vote_average: 8.4,
-    release_date: '1999-10-15',
-    first_air_date: '1999-10-15',
-    overview: '',
-  },
-];
+// Вспомогательная функция для получения деталей с TMDB
+async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) return null;
+
+  // Делаем запрос к TMDB API
+  const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU`;
+  
+  try {
+    const res = await fetch(url, { next: { revalidate: 3600 } }); // Кешируем на 1 час
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (error) {
+    console.error(`Error fetching ${mediaType} ${tmdbId}:`, error);
+    return null;
+  }
+}
 
 export default async function MyMoviesPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
         <div className="text-center">
@@ -61,5 +42,55 @@ export default async function MyMoviesPage() {
     );
   }
 
-  return <MyMoviesClient initialMovies={mockMovies} />;
+  // 1. Получаем записи из нашей БД
+  const watchListRecords = await prisma.watchList.findMany({
+    where: {
+      userId: session.user.id as string,
+    },
+    include: {
+      status: true,
+    },
+    orderBy: {
+      addedAt: 'desc',
+    },
+  });
+
+  // 2. Для каждой записи подтягиваем постер и дату с TMDB
+  const moviesWithStatus = await Promise.all(
+    watchListRecords.map(async (record: any) => {
+      // Запрашиваем данные с TMDB
+      const tmdbData = await fetchMediaDetails(record.tmdbId, record.mediaType);
+
+      // Собираем объект, объединяя данные из БД и TMDB
+      return {
+        id: record.tmdbId,
+        media_type: record.mediaType as 'movie' | 'tv',
+        title: record.title,
+        name: record.title, // Для сериалов TMDB использует name, но мы храним в title
+        // Берем постер из TMDB, если не получилось - null
+        poster_path: tmdbData?.poster_path || null, 
+        // Рейтинг берем из БД, если его нет - из TMDB
+        vote_average: record.voteAverage || tmdbData?.vote_average || 0,
+        // Дату берем только из TMDB
+        release_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
+        first_air_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
+        overview: tmdbData?.overview || '',
+        statusName: record.status.name,
+      };
+    })
+  );
+
+  const grouped = {
+    watched: moviesWithStatus.filter(m => m.statusName === 'Просмотрено'),
+    wantToWatch: moviesWithStatus.filter(m => m.statusName === 'Хочу посмотреть'),
+    dropped: moviesWithStatus.filter(m => m.statusName === 'Брошено'),
+  };
+
+  return (
+    <MyMoviesClient
+      watched={grouped.watched}
+      wantToWatch={grouped.wantToWatch}
+      dropped={grouped.dropped}
+    />
+  );
 }
