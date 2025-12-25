@@ -34,9 +34,33 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   // 2. Получаем медиа из TMDB
   const media = query ? await searchMedia(query) : [];
-
   // 3. Фильтруем: убираем фильмы, которые есть в черном списке
   const filteredMedia = media.filter(item => !blacklistedIds.has(item.id));
+
+  // 4. Получаем статусы пакетом для отображаемых фильмов (если пользователь авторизован)
+  const watchlistMap = new Map<string, string | null>();
+  if (userId && filteredMedia.length > 0) {
+    try {
+      const ids = filteredMedia.map(m => m.id);
+      const rows = await prisma.watchList.findMany({
+        where: { userId, tmdbId: { in: ids } },
+        include: { status: true },
+      });
+      const STATUS_FROM_DB: Record<string, string> = {
+        'Хочу посмотреть': 'want',
+        'Просмотрено': 'watched',
+        'Брошено': 'dropped',
+      };
+      rows.forEach(r => watchlistMap.set(`${r.tmdbId}:${r.mediaType}`, STATUS_FROM_DB[r.status?.name ?? ''] ?? null));
+      // ensure explicit null for media items without a watchlist row
+      filteredMedia.forEach(m => {
+        const key = `${m.id}:${m.media_type}`;
+        if (!watchlistMap.has(key)) watchlistMap.set(key, null);
+      });
+    } catch (error) {
+      console.error('Failed to fetch watchlist for search results', error);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 py-4">
@@ -68,7 +92,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                 key={`${item.media_type}_${item.id}`} 
                 className="w-full min-w-0 p-1"
               >
-                <MovieCard movie={item} />
+                    <MovieCard
+                      movie={item}
+                      initialStatus={watchlistMap.has(`${item.id}:${item.media_type}`) ? (watchlistMap.get(`${item.id}:${item.media_type}`) as any) : null}
+                      initialIsBlacklisted={blacklistedIds.has(item.id)}
+                    />
               </div>
             ))}
           </div>

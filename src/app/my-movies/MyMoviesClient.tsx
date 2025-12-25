@@ -41,7 +41,14 @@ export default function MyMoviesClient({
   };
 
   const currentMovies = tabData[activeTab];
+  const currentIsBlacklisted = activeTab === 'hidden';
   const isRestoreView = activeTab === 'hidden'; // Флаг режима восстановления
+
+  const STATUS_FROM_DB: Record<string, 'want' | 'watched' | 'dropped'> = {
+    'Хочу посмотреть': 'want',
+    'Просмотрено': 'watched',
+    'Брошено': 'dropped',
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 py-3 sm:py-4">
@@ -83,8 +90,13 @@ export default function MyMoviesClient({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
             {currentMovies.map((movie) => (
               <div key={movie.id} className="p-1">
-                {/* Передаем флаг restoreView */}
-                <MovieCard movie={movie} restoreView={isRestoreView} />
+                {/* Передаем флаг restoreView, initialStatus и initialIsBlacklisted, если применимо */}
+                <MovieCard
+                  movie={movie}
+                  restoreView={isRestoreView}
+                  initialStatus={((movie as any).statusName ? (STATUS_FROM_DB[(movie as any).statusName] ?? null) : null)}
+                  initialIsBlacklisted={currentIsBlacklisted}
+                />
               </div>
             ))}
           </div>

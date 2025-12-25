@@ -6,11 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "jest --passWithNoTests",
     "lint": "eslint",
     "postinstall": "prisma generate",
     "seed": "ts-node prisma/seed.ts"
   },
- 
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@neondatabase/serverless": "^1.0.2",
@@ -28,20 +28,28 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@tailwindcss/typography": "^0.5.19",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^15.0.0",
     "@types/bcryptjs": "^2.4.2",
+    "@types/jest": "^29.5.3",
     "@types/node": "^20",
     "@types/pg": "^8.6.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.23",
+    "babel-jest": "^29.7.0",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.5.6",
     "prisma": "^7.2.0",
     "tailwindcss": "^4.1.18",
     "tailwindcss-animate": "^1.0.7",
+    "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "whatwg-fetch": "^3.6.2"
   }
 }
