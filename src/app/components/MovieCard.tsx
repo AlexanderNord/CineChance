@@ -44,6 +44,11 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
   const [cineChanceRating, setCineChanceRating] = useState<number | null>(null);
   const [cineChanceVoteCount, setCineChanceVoteCount] = useState(0);
   const [userRating, setUserRating] = useState<number | null>(null);
+  const [movieDetails, setMovieDetails] = useState<{
+    genres: string[];
+    runtime: number;
+    adult: boolean;
+  } | null>(null);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -103,6 +108,33 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, [movie.id, movie.media_type, restoreView, initialIsBlacklisted, initialStatus]);
+
+  // Получаем детали фильма при открытии модального окна рейтинга
+  useEffect(() => {
+    if (!isRatingInfoOpen) {
+      setMovieDetails(null);
+      return;
+    }
+
+    const fetchMovieDetails = async () => {
+      try {
+        const res = await fetch(`/api/movie-details?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
+        
+        if (res.ok) {
+          const data = await res.json();
+          setMovieDetails({
+            genres: data.genres || [],
+            runtime: data.runtime || 0,
+            adult: data.adult || false,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching movie details:', error);
+      }
+    };
+
+    fetchMovieDetails();
+  }, [isRatingInfoOpen, movie.id, movie.media_type]);
 
   // Получаем средний рейтинг Cine-chance
   useEffect(() => {
@@ -332,11 +364,17 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
       <RatingInfoModal
         isOpen={isRatingInfoOpen}
         onClose={() => setIsRatingInfoOpen(false)}
+        title={title}
         tmdbRating={movie.vote_average || 0}
         tmdbVoteCount={movie.vote_count || 0}
         cineChanceRating={cineChanceRating}
         cineChanceVoteCount={cineChanceVoteCount}
-        combinedRating={combinedRating} // Передаем combinedRating
+        combinedRating={combinedRating}
+        overview={movie.overview}
+        releaseDate={movie.release_date || movie.first_air_date}
+        genres={movieDetails?.genres}
+        runtime={movieDetails?.runtime}
+        adult={movieDetails?.adult}
         isMobile={isMobile}
       />
 
