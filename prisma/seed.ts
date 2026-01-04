@@ -17,6 +17,7 @@ async function main() {
     { name: 'Хочу посмотреть' },
     { name: 'Просмотрено' },
     { name: 'Брошено' },
+    { name: 'Пересмотрено' },
   ];
 
   await client.connect();

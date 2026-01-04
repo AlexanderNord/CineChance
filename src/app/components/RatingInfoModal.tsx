@@ -12,8 +12,9 @@ import {
   updateMovieNote,
   TagData 
 } from '@/app/actions/tagsActions';
+import RatingModal from './RatingModal';
 
-type MediaStatus = 'want' | 'watched' | 'dropped' | null;
+type MediaStatus = 'want' | 'watched' | 'dropped' | 'rewatched' | null;
 
 interface RatingInfoModalProps {
   isOpen: boolean;
@@ -38,15 +39,19 @@ interface RatingInfoModalProps {
   currentStatus?: MediaStatus;
   isBlacklisted?: boolean;
   onStatusChange?: (status: MediaStatus) => void;
+  onRatingUpdate?: (rating: number) => void;
   onBlacklistToggle?: () => void;
   isMobile: boolean;
   tmdbId?: number;
+  userRating?: number | null;
+  watchCount?: number;
 }
 
 const STATUS_OPTIONS: { value: MediaStatus; label: string; icon: string; colorClass: string; hoverClass: string }[] = [
   { value: 'want', label: 'Хочу посмотреть', icon: '+', colorClass: 'bg-blue-500', hoverClass: 'hover:bg-blue-500' },
   { value: 'watched', label: 'Просмотрено', icon: '✓', colorClass: 'bg-green-500', hoverClass: 'hover:bg-green-500' },
   { value: 'dropped', label: 'Брошено', icon: '×', colorClass: 'bg-red-500', hoverClass: 'hover:bg-red-500' },
+  { value: 'rewatched', label: 'Пересмотрено', icon: '↻', colorClass: 'bg-purple-500', hoverClass: 'hover:bg-purple-500' },
 ];
 
 const MAX_TAGS = 5;
@@ -74,15 +79,21 @@ export default function RatingInfoModal({
   currentStatus,
   isBlacklisted,
   onStatusChange,
+  onRatingUpdate,
   onBlacklistToggle,
   isMobile,
-  tmdbId
+  tmdbId,
+  userRating,
+  watchCount
 }: RatingInfoModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  
+  // Состояние оценки для пересмотра
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   
   // Состояние тегов
   const [currentTags, setCurrentTags] = useState<TagData[]>([]);
@@ -334,6 +345,45 @@ export default function RatingInfoModal({
     setIsStatusDropdownOpen(false);
   };
 
+  // Обработчик сохранения оценки при пересмотре
+  const handleSaveRating = async (rating: number, date: string) => {
+    if (!tmdbId || !mediaType || !title) return;
+
+    try {
+      const res = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tmdbId,
+          mediaType,
+          title,
+          voteAverage: 0,
+          userRating: rating,
+          watchedDate: date,
+          isRewatch: true,
+        }),
+      });
+
+      if (res.ok) {
+        setIsRatingModalOpen(false);
+        // Закрываем RatingInfoModal, чтобы при следующем открытии получить обновлённые данные
+        onClose();
+        // Обновляем статус через коллбэк
+        if (onStatusChange) {
+          onStatusChange('rewatched');
+        }
+        // Уведомляем родителя о необходимости обновить рейтинги с новой оценкой
+        if (onRatingUpdate) {
+          onRatingUpdate(rating);
+        }
+      } else {
+        console.error('Error updating rating');
+      }
+    } catch (error) {
+      console.error('Network error', error);
+    }
+  };
+
   // Получаем цвет фона для текущего статуса
   const getStatusBackgroundColor = () => {
     if (currentStatus === null || currentStatus === undefined) {
@@ -377,7 +427,7 @@ export default function RatingInfoModal({
           className="relative bg-[#0a0e17] border border-blue-500/50 rounded-[20px] shadow-2xl overflow-hidden"
           style={{ 
             width: isMobile ? '95vw' : '700px',
-            height: isMobile ? '85vh' : 'auto',
+            height: isMobile ? '85vh' : '80vh',
             maxWidth: '95vw',
             maxHeight: '90vh'
           }}
@@ -406,7 +456,7 @@ export default function RatingInfoModal({
           {/* Контент с вертикальным скроллом */}
           <div 
             ref={contentRef}
-            className="h-full overflow-y-auto"
+            className="modal-scrollbar h-full overflow-y-auto"
           >
             <div className="p-4 sm:p-5">
               {/* Название фильма с типом и страной */}
@@ -506,27 +556,64 @@ export default function RatingInfoModal({
                     </svg>
                   </button>
                   
+                  {/* Количество пересмотров - только для статуса Пересмотрено */}
+                  {currentStatus === 'rewatched' && watchCount !== undefined && watchCount > 1 && (
+                    <div className="mt-1 text-xs text-purple-400 flex items-center gap-1">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 1l4 4-4 4"></path>
+                        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                        <path d="M7 23l-4-4 4-4"></path>
+                        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                      </svg>
+                      <span>Всего просмотров: {watchCount}</span>
+                    </div>
+                  )}
+                  
                   {/* Выпадающий список */}
                   {isStatusDropdownOpen && (
                     <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[#1a1f2e] border border-gray-700 rounded-lg shadow-xl overflow-hidden" style={{ maxWidth: '270px' }}>
                       <div className="py-1">
                         {/* Статусы */}
-                        {STATUS_OPTIONS.map((option) => (
-                          <button
-                            key={option.value}
-                            onClick={() => handleStatusChange(option.value)}
-                            className={`w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer ${
-                              currentStatus === option.value 
-                                ? `${option.colorClass} text-white` 
-                                : 'bg-white/5 text-white hover:bg-white/10'
-                            }`}
-                          >
-                            <span className="text-sm font-bold min-w-[16px] flex justify-center mr-1.5">
-                              {option.icon}
-                            </span>
-                            <span className="truncate">{option.label}</span>
-                          </button>
-                        ))}
+                        {STATUS_OPTIONS.map((option) => {
+                          // Для Пересмотрено открываем модальное окно оценки
+                          if (option.value === 'rewatched') {
+                            return (
+                              <button
+                                key={option.value}
+                                onClick={() => {
+                                  setIsRatingModalOpen(true);
+                                  setIsStatusDropdownOpen(false);
+                                }}
+                                className={`w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer ${
+                                  currentStatus === option.value 
+                                    ? `${option.colorClass} text-white` 
+                                    : 'bg-white/5 text-white hover:bg-white/10'
+                                }`}
+                              >
+                                <span className="text-sm font-bold min-w-[16px] flex justify-center mr-1.5">
+                                  {option.icon}
+                                </span>
+                                <span className="truncate">{option.label}</span>
+                              </button>
+                            );
+                          }
+                          return (
+                            <button
+                              key={option.value}
+                              onClick={() => handleStatusChange(option.value)}
+                              className={`w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer ${
+                                currentStatus === option.value 
+                                  ? `${option.colorClass} text-white` 
+                                  : 'bg-white/5 text-white hover:bg-white/10'
+                              }`}
+                            >
+                              <span className="text-sm font-bold min-w-[16px] flex justify-center mr-1.5">
+                                {option.icon}
+                              </span>
+                              <span className="truncate">{option.label}</span>
+                            </button>
+                          );
+                        })}
                         
                         {/* Разделитель */}
                         <div className="h-px bg-gray-700 my-1 mx-2"></div>
@@ -770,6 +857,16 @@ export default function RatingInfoModal({
               </div>
             </div>
           </div>
+
+          {/* Модальное окно оценки для пересмотра */}
+          <RatingModal 
+            isOpen={isRatingModalOpen}
+            onClose={() => setIsRatingModalOpen(false)}
+            onSave={handleSaveRating}
+            title={title}
+            releaseDate={releaseDate || null}
+            defaultRating={6}
+          />
 
           {/* Индикатор скролла */}
           {!isMobile && (

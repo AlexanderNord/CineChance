@@ -19,9 +19,11 @@ model User {
 
   accounts Account[]
   sessions Session[]
-  watchList WatchList[]
-  blacklists Blacklist[]
-  tags       Tag[]      // Теги, созданные пользователем
+  watchList     WatchList[]
+  blacklists    Blacklist[]
+  tags          Tag[]        // Теги, созданные пользователем
+  rewatchLogs   RewatchLog[]
+  ratingHistory RatingHistory[]
 }
 
 model Account {
@@ -74,8 +76,11 @@ model WatchList {
   addedAt      DateTime  @default(now()) // дата добавления фильма в таблицу
   watchedDate  DateTime? // дата просмотра фильма
   note         String?   @db.Text // Приватная заметка пользователя
+  watchCount   Int       @default(0) // Количество просмотров (включая пересмотры)
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewatchLogs  RewatchLog[]
+  ratingHistory RatingHistory[]
   status       MovieStatus  @relation(fields: [statusId], references: [id])
   tags         Tag[]        // Связь many-to-many с тегами
 
@@ -87,6 +92,46 @@ model WatchList {
   @@index([userRating])
   @@index([userId, statusId])
   @@index([userId, addedAt])
+  @@index([watchCount])
+}
+
+// Таблица пересмотров фильмов
+model RewatchLog {
+  id                  String    @id @default(cuid())
+  userId              String
+  tmdbId              Int
+  mediaType           String
+  watchedAt           DateTime  @default(now()) // Дата пересмотра
+  ratingBefore        Float?    // Оценка до пересмотра
+  ratingAfter         Float?    // Оценка после пересмотра (если изменилась)
+  previousWatchCount  Int       // Счётчик просмотров до этого пересмотра
+
+  user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  watchList           WatchList? @relation(fields: [userId, tmdbId, mediaType], references: [userId, tmdbId, mediaType], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([tmdbId, mediaType])
+  @@index([watchedAt])
+  @@index([userId, watchedAt])
+}
+
+// Таблица истории оценок
+model RatingHistory {
+  id          String    @id @default(cuid())
+  userId      String
+  tmdbId      Int
+  mediaType   String
+  rating      Float     // Оценка, которую поставили (0.5-10.0)
+  actionType  String    // 'initial', 'rating_change', 'rewatch'
+  createdAt   DateTime  @default(now())
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  watchList   WatchList? @relation(fields: [userId, tmdbId, mediaType], references: [userId, tmdbId, mediaType], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([tmdbId, mediaType])
+  @@index([createdAt])
+  @@index([userId, tmdbId, mediaType])
 }
 
 

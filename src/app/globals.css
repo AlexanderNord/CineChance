@@ -66,3 +66,28 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #6B7280;
 }
+
+/* Кастомный вертикальный скроллбар для модального окна */
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #3B4B5B #1a1f2e;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  display: block;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: #1a1f2e;
+  border-radius: 4px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #3B4B5B;
+  border-radius: 4px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #4B5B6B;
+}

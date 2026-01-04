@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/auth';
 
 export async function GET(req: Request) {
   try {
@@ -9,6 +11,27 @@ export async function GET(req: Request) {
 
     if (!tmdbId || !mediaType) {
       return NextResponse.json({ error: 'Missing tmdbId or mediaType' }, { status: 400 });
+    }
+
+    // Получаем сессию для определения текущего пользователя
+    const session = await getServerSession(authOptions);
+    let userRating = null;
+
+    // Если пользователь авторизован, получаем его оценку
+    if (session?.user?.id) {
+      const userRecord = await prisma.watchList.findUnique({
+        where: {
+          userId_tmdbId_mediaType: {
+            userId: session.user.id,
+            tmdbId,
+            mediaType,
+          },
+        },
+        select: {
+          userRating: true,
+        },
+      });
+      userRating = userRecord?.userRating;
     }
 
     // Получаем все оценки для данного фильма
@@ -41,7 +64,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ 
       averageRating,
-      count: validRatings.length
+      count: validRatings.length,
+      userRating
     });
   } catch (error) {
     console.error('Cine-chance rating error:', error);
