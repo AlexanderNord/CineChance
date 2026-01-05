@@ -11,6 +11,7 @@ interface RatingModalProps {
   releaseDate: string | null; // Дата релиза фильма (для быстрой кнопки)
   userRating?: number | null; // Текущая оценка пользователя
   defaultRating?: number; // Значение по умолчанию для оценки
+  showWatchedDate?: boolean; // Показывать поле даты просмотра
 }
 
 const RATING_TEXTS: Record<number, string> = {
@@ -39,7 +40,7 @@ const RATING_RECOMMENDATIONS: Record<number, string> = {
   10: 'Пересмотр в голове уже начался!',
 };
 
-export default function RatingModal({ isOpen, onClose, onSave, title, releaseDate, userRating, defaultRating = 6 }: RatingModalProps) {
+export default function RatingModal({ isOpen, onClose, onSave, title, releaseDate, userRating, defaultRating = 6, showWatchedDate = true }: RatingModalProps) {
   const [rating, setRating] = useState(0);
   const [watchedDate, setWatchedDate] = useState(new Date().toISOString().split('T')[0]);
   const starRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -208,31 +209,35 @@ export default function RatingModal({ isOpen, onClose, onSave, title, releaseDat
           </div>
         )}
 
-        <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">Дата просмотра</label>
-          <input
-            type="date"
-            value={watchedDate}
-            onChange={(e) => setWatchedDate(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-          />
-        </div>
+        {showWatchedDate && (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">Дата просмотра</label>
+            <input
+              type="date"
+              value={watchedDate}
+              onChange={(e) => setWatchedDate(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        )}
 
         {/* Новые кнопки быстрого выбора даты */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={setTodayDate}
-            className="flex-1 py-1.5 rounded-md bg-gray-800 text-gray-300 text-xs hover:bg-gray-700 transition-colors"
-          >
-            Сейчас
-          </button>
-          <button
-            onClick={setReleaseDate}
-            className="flex-1 py-1.5 rounded-md bg-gray-800 text-gray-300 text-xs hover:bg-gray-700 transition-colors"
-          >
-            В дату выхода
-          </button>
-        </div>
+        {showWatchedDate && (
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={setTodayDate}
+              className="flex-1 py-1.5 rounded-md bg-gray-800 text-gray-300 text-xs hover:bg-gray-700 transition-colors"
+            >
+              Сейчас
+            </button>
+            <button
+              onClick={setReleaseDate}
+              className="flex-1 py-1.5 rounded-md bg-gray-800 text-gray-300 text-xs hover:bg-gray-700 transition-colors"
+            >
+              В дату выхода
+            </button>
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button

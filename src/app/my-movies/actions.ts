@@ -75,7 +75,7 @@ const ITEMS_PER_PAGE = 20;
 
 export async function fetchMoviesByStatus(
   userId: string,
-  statusName: string | null,
+  statusName: string | string[] | null, // Может быть массивом для watched (Просмотрено + Пересмотрено)
   includeHidden: boolean,
   page: number = 1,
   sortBy: SortState['sortBy'] = 'rating',
@@ -88,7 +88,11 @@ export async function fetchMoviesByStatus(
   // 1. Загружаем ВСЕ записи WatchList для корректной сортировки
   const whereClause: any = { userId };
   if (statusName) {
-    whereClause.status = { name: statusName };
+    if (Array.isArray(statusName)) {
+      whereClause.status = { name: { in: statusName } };
+    } else {
+      whereClause.status = { name: statusName };
+    }
   }
 
   const watchListRecords = await prisma.watchList.findMany({
@@ -248,8 +252,16 @@ function sortMoviesOnServer(
 
 // Функция для получения общего количества фильмов по статусам
 export async function getMoviesCounts(userId: string) {
+  // Считаем и "Просмотрено" и "Пересмотрено" в одну категорию
   const [watched, wantToWatch, dropped, hidden] = await Promise.all([
-    prisma.watchList.count({ where: { userId, status: { name: 'Просмотрено' } } }),
+    prisma.watchList.count({ 
+      where: { 
+        userId, 
+        status: { 
+          name: { in: ['Просмотрено', 'Пересмотрено'] } 
+        } 
+      } 
+    }),
     prisma.watchList.count({ where: { userId, status: { name: 'Хочу посмотреть' } } }),
     prisma.watchList.count({ where: { userId, status: { name: 'Брошено' } } }),
     prisma.blacklist.count({ where: { userId } }),

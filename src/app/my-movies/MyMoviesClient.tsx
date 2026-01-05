@@ -232,8 +232,9 @@ export default function MyMoviesClient({
     const reloadWithNewSort = async () => {
       setLoadingMore(true);
       try {
-        let statusName: string | null = null;
-        if (activeTab === 'watched') statusName = 'Просмотрено';
+        // Для watched показываем и "Просмотрено" и "Пересмотрено"
+        let statusName: string | string[] | null = null;
+        if (activeTab === 'watched') statusName = ['Просмотрено', 'Пересмотрено'];
         else if (activeTab === 'wantToWatch') statusName = 'Хочу посмотреть';
         else if (activeTab === 'dropped') statusName = 'Брошено';
 
@@ -286,8 +287,8 @@ export default function MyMoviesClient({
     setLoadingMore(true);
 
     try {
-      let statusName: string | null = null;
-      if (activeTab === 'watched') statusName = 'Просмотрено';
+      let statusName: string | string[] | null = null;
+      if (activeTab === 'watched') statusName = ['Просмотрено', 'Пересмотрено'];
       else if (activeTab === 'wantToWatch') statusName = 'Хочу посмотреть';
       else if (activeTab === 'dropped') statusName = 'Брошено';
 
@@ -341,8 +342,9 @@ export default function MyMoviesClient({
 
     try {
       // Получаем актуальные данные для новой вкладки
-      let statusName: string | null = null;
-      if (newTab === 'watched') statusName = 'Просмотрено';
+      // Для watched показываем и "Просмотрено" и "Пересмотрено"
+      let statusName: string | string[] | null = null;
+      if (newTab === 'watched') statusName = ['Просмотрено', 'Пересмотрено'];
       else if (newTab === 'wantToWatch') statusName = 'Хочу посмотреть';
       else if (newTab === 'dropped') statusName = 'Брошено';
 

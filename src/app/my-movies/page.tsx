@@ -22,8 +22,9 @@ export default async function MyMoviesPage() {
   const userId = session.user.id;
 
   // Загружаем первые страницы для всех вкладок (с сортировкой по рейтингу по умолчанию)
+  // Для watched показываем и "Просмотрено" и "Пересмотрено"
   const [watchedData, wantToWatchData, droppedData, hiddenData, counts] = await Promise.all([
-    fetchMoviesByStatus(userId, 'Просмотрено', false, 1, 'rating', 'desc'),
+    fetchMoviesByStatus(userId, ['Просмотрено', 'Пересмотрено'], false, 1, 'rating', 'desc'),
     fetchMoviesByStatus(userId, 'Хочу посмотреть', false, 1, 'rating', 'desc'),
     fetchMoviesByStatus(userId, 'Брошено', false, 1, 'rating', 'desc'),
     fetchMoviesByStatus(userId, null, true, 1, 'rating', 'desc'),
