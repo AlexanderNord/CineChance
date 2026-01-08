@@ -540,7 +540,7 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
           
           <div 
             ref={posterRef}
-            className={`relative w-full aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 rounded-b-lg overflow-hidden shadow-lg transition-all duration-300 ${
+            className={`relative w-full aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 rounded-none overflow-hidden shadow-lg transition-all duration-300 ${
               restoreView || isBlacklisted 
                 ? 'opacity-60 grayscale hover:opacity-80 hover:grayscale-0' 
                 : isHovered && !showOverlay ? 'shadow-xl' : ''
@@ -568,7 +568,7 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
           {showOverlay && (
             <div 
               ref={overlayRef}
-              className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-2 sm:p-3 z-50 rounded-lg"
+              className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-2 sm:p-3 z-50 rounded-t-lg"
               onMouseLeave={handleOverlayMouseLeave}
             >
               <div className="w-full max-w-[140px] sm:max-w-[150px] space-y-1">

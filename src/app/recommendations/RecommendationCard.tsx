@@ -1,4 +1,3 @@
-// src/app/recommendations/RecommendationCard.tsx
 'use client';
 
 import { useState } from 'react';
@@ -97,6 +96,10 @@ export default function RecommendationCard({
   const typeLabel = isAnime ? 'Аниме' : (movie.media_type === 'movie' ? 'Фильм' : 'Сериал');
   const typeColor = isAnime ? 'bg-[#9C40FE]' : (movie.media_type === 'movie' ? 'bg-green-500' : 'bg-blue-500');
 
+  const handleCardInfoClick = () => {
+    setIsInfoModalOpen(true);
+  };
+
   return (
     <>
       <div className="max-w-xs mx-auto animate-in fade-in duration-300">
@@ -105,10 +108,10 @@ export default function RecommendationCard({
           {typeLabel}
         </div>
         
-        {/* Постер - кликабельный */}
-        <button
+        {/* Постер */}
+        <div 
           onClick={() => setIsInfoModalOpen(true)}
-          className={`relative w-full aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 rounded-b-lg overflow-hidden shadow-lg mb-3 cursor-pointer hover:opacity-95 transition-opacity`}
+          className={`relative w-full aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden shadow-lg cursor-pointer`}
         >
           {movie.poster_path ? (
             <Image
@@ -126,12 +129,12 @@ export default function RecommendationCard({
           
           {/* Иконка статуса в правом верхнем углу */}
           {getStatusIcon(userStatus)}
-        </button>
+        </div>
 
-        {/* Информация под постером - кликабельный блок */}
-        <button
-          onClick={() => setIsInfoModalOpen(true)}
-          className="block w-full mt-1 mb-4 text-left hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors"
+        {/* Информация под постером - прозрачный фон */}
+<div 
+          className="cursor-pointer rounded-b-lg"
+          onClick={handleCardInfoClick}
         >
           {/* Заголовок с названием фильма и годом в одной строке */}
           <div className={`flex items-center justify-between gap-2 text-white`}>
@@ -149,13 +152,13 @@ export default function RecommendationCard({
           
           {/* Блок с "Подробнее" и рейтингом */}
           <div className="flex items-center justify-between mt-1 w-full">
-            {/* Кнопка "Подробнее" слева */}
-            <div className="text-sm py-1 text-gray-400">
+            {/* Кнопка "Подробнее" слева - без отступов */}
+            <div className="text-sm py-1 text-gray-400 pl-0">
               Подробнее
             </div>
             
-            {/* Рейтинг справа */}
-            <div className="flex items-center bg-gray-800/50 rounded text-sm relative">
+            {/* Рейтинг справа - без отступов */}
+            <div className="flex items-center rounded text-sm relative pr-0"> {/* Убрал bg-gray-800/50 */}
               <div className="w-5 h-5 relative mx-1">
                   <Image 
                       src="/images/logo_mini_lgt_pls_tmdb.png" 
@@ -164,15 +167,15 @@ export default function RecommendationCard({
                       className="object-contain" 
                   />
               </div>
-              <span className="text-gray-200 font-medium pr-1">
+              <span className="text-gray-200 font-medium">
                 {movie.vote_average.toFixed(1)}
               </span>
             </div>
           </div>
-        </button>
+        </div>
 
         {/* Кнопки действий */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-3">
           {/* Не хочу! Следующий */}
           <button
             onClick={onSkip}
