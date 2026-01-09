@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import RecommendationInfoModal from './RecommendationInfoModal';
 
@@ -33,6 +33,12 @@ interface RecommendationCardProps {
   actionLoading: boolean;
   onSkip: () => void;
   onAccept: () => void;
+  cineChanceRating: number | null;
+  cineChanceVoteCount: number;
+  userRating: number | null;
+  watchCount: number;
+  onResetFilters?: () => void;
+  onBack?: () => void;
 }
 
 // Получение года из даты
@@ -88,13 +94,36 @@ export default function RecommendationCard({
   actionLoading,
   onSkip,
   onAccept,
+  cineChanceRating,
+  cineChanceVoteCount,
+  userRating,
+  watchCount,
+  onResetFilters,
 }: RecommendationCardProps) {
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Определяем мобильное устройство
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Определяем отображаемый тип контента
   const displayType = isAnime ? 'anime' : (movie.media_type === 'movie' ? 'movie' : 'tv');
   const typeLabel = isAnime ? 'Аниме' : (movie.media_type === 'movie' ? 'Фильм' : 'Сериал');
   const typeColor = isAnime ? 'bg-[#9C40FE]' : (movie.media_type === 'movie' ? 'bg-green-500' : 'bg-blue-500');
+
+  // Формируем данные для модального окна
+  const title = movie.title || movie.name;
+  const releaseDate = movie.release_date || movie.first_air_date;
+  const genres = movie.genres?.map(g => g.name) || [];
+  const productionCountries = movie.production_countries?.map(c => c.name) || [];
+  const combinedRating = movie.vote_average; // В контексте рекомендаций используем TMDB рейтинг как общий
 
   const handleCardInfoClick = () => {
     setIsInfoModalOpen(true);
@@ -200,14 +229,42 @@ export default function RecommendationCard({
             </div>
           </button>
         </div>
+
+        {/* Кнопка сброса фильтров */}
+        {onResetFilters && (
+          <button
+            onClick={onResetFilters}
+            disabled={actionLoading}
+            className="w-full mt-2 py-2 px-3 bg-gray-700/50 border border-gray-600/30 text-gray-400 text-sm rounded-lg font-medium hover:bg-gray-700 hover:text-white transition disabled:opacity-50 cursor-pointer"
+          >
+            Сбросить фильтры
+          </button>
+        )}
       </div>
 
       {/* Модальное окно с подробной информацией */}
       <RecommendationInfoModal
         isOpen={isInfoModalOpen}
         onClose={() => setIsInfoModalOpen(false)}
-        movie={movie}
+        title={title}
+        tmdbRating={movie.vote_average}
+        tmdbVoteCount={movie.vote_count}
+        cineChanceRating={cineChanceRating}
+        cineChanceVoteCount={cineChanceVoteCount}
+        combinedRating={combinedRating}
+        overview={movie.overview}
+        releaseDate={releaseDate || undefined}
+        genres={genres}
+        runtime={movie.runtime}
+        productionCountries={productionCountries}
+        mediaType={displayType}
         isAnime={isAnime}
+        isMobile={isMobile}
+        tmdbId={movie.id}
+        userRating={userRating}
+        watchCount={watchCount}
+        currentStatus={userStatus}
+        movie={movie}
       />
     </>
   );

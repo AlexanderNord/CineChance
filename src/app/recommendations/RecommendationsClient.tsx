@@ -32,6 +32,10 @@ interface RecommendationResponse {
   movie: MovieData | null;
   logId: string | null;
   userStatus: 'want' | 'watched' | 'dropped' | 'rewatched' | null;
+  cineChanceRating: number | null;
+  cineChanceVoteCount: number;
+  userRating: number | null;
+  watchCount: number;
   message?: string;
 }
 
@@ -48,6 +52,14 @@ interface RecommendationsClientProps {
 type ContentType = 'movie' | 'tv' | 'anime';
 type ListType = 'want' | 'watched';
 
+interface AdditionalFilters {
+  minRating: number;
+  maxRating: number;
+  yearFrom: string;
+  yearTo: string;
+  selectedGenres: number[];
+}
+
 type ViewState = 'filters' | 'loading' | 'result' | 'error';
 
 export default function RecommendationsClient({ userId }: RecommendationsClientProps) {
@@ -57,10 +69,15 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   const [logId, setLogId] = useState<string | null>(null);
   const [userStatus, setUserStatus] = useState<'want' | 'watched' | 'dropped' | 'rewatched' | null>(null);
   const [isAnime, setIsAnime] = useState(false);
+  const [cineChanceRating, setCineChanceRating] = useState<number | null>(null);
+  const [cineChanceVoteCount, setCineChanceVoteCount] = useState(0);
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [watchCount, setWatchCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noAvailable, setNoAvailable] = useState(false);
   const [progress, setProgress] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   
   const fetchStartTime = useRef<number>(0);
 
@@ -71,7 +88,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   };
 
   // Получение рекомендации с фильтрами
-  const fetchRecommendation = useCallback(async (types: ContentType[], lists: ListType[]) => {
+  const fetchRecommendation = useCallback(async (types: ContentType[], lists: ListType[], additionalFilters?: AdditionalFilters) => {
     const isFirstCall = !fetchStartTime.current;
     if (isFirstCall) {
       fetchStartTime.current = Date.now();
@@ -84,12 +101,35 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
     setMovie(null);
     setUserStatus(null);
     setIsAnime(false);
+    setCineChanceRating(null);
+    setCineChanceVoteCount(0);
+    setUserRating(null);
+    setWatchCount(0);
 
     try {
       // Формируем URL с параметрами фильтров
       const params = new URLSearchParams();
       params.set('types', types.join(','));
       params.set('lists', lists.join(','));
+      
+      // Добавляем дополнительные фильтры
+      if (additionalFilters) {
+        if (additionalFilters.minRating > 0) {
+          params.set('minRating', additionalFilters.minRating.toString());
+        }
+        if (additionalFilters.maxRating < 10) {
+          params.set('maxRating', additionalFilters.maxRating.toString());
+        }
+        if (additionalFilters.yearFrom) {
+          params.set('yearFrom', additionalFilters.yearFrom);
+        }
+        if (additionalFilters.yearTo) {
+          params.set('yearTo', additionalFilters.yearTo);
+        }
+        if (additionalFilters.selectedGenres.length > 0) {
+          params.set('genres', additionalFilters.selectedGenres.join(','));
+        }
+      }
       
       const res = await fetch(`/api/recommendations/random?${params.toString()}`);
       const data: RecommendationResponse = await res.json();
@@ -100,6 +140,10 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
         setMovie(data.movie);
         setLogId(data.logId);
         setUserStatus(data.userStatus);
+        setCineChanceRating(data.cineChanceRating);
+        setCineChanceVoteCount(data.cineChanceVoteCount);
+        setUserRating(data.userRating);
+        setWatchCount(data.watchCount);
         
         // Проверка на аниме
         const isAnimeCheck = (data.movie.genre_ids?.includes(16) || data.movie.genres?.some(g => g.id === 16)) && 
@@ -130,7 +174,12 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       } else {
         // Нет доступных рекомендаций
         setErrorMessage(data.message || 'Не удалось получить рекомендацию');
-        if (data.message?.includes('Нет доступных рекомендаций') || data.message?.includes('пуст')) {
+        if (data.message?.includes('Нет доступных рекомендаций') || 
+            data.message?.includes('пуст') ||
+            data.message?.includes('были показаны за последнюю неделю') ||
+            data.message?.includes('показаны за последнюю неделю') ||
+            data.message?.includes('Все фильмы из вашего списка') ||
+            data.message?.includes('Все доступные рекомендации')) {
           setNoAvailable(true);
         }
         setProgress(100);
@@ -146,7 +195,12 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
 
   // Сброс логов рекомендаций
   const handleResetLogs = async () => {
-    if (!confirm('Вы уверены? Это удалит всю историю показов рекомендаций.')) return;
+    setIsResetConfirmOpen(true);
+  };
+
+  // Подтверждение сброса истории
+  const confirmResetLogs = async () => {
+    setIsResetConfirmOpen(false);
 
     try {
       const res = await fetch('/api/recommendations/reset-logs', {
@@ -154,7 +208,6 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       });
 
       if (res.ok) {
-        alert('История рекомендаций очищена! Теперь можно получить новые рекомендации.');
         fetchStartTime.current = 0;
         setViewState('filters');
       } else {
@@ -174,6 +227,10 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
     setLogId(null);
     setUserStatus(null);
     setIsAnime(false);
+    setCineChanceRating(null);
+    setCineChanceVoteCount(0);
+    setUserRating(null);
+    setWatchCount(0);
   };
 
   // Записать действие пользователя
@@ -243,7 +300,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
         {/* Состояние: Фильтры */}
         {viewState === 'filters' && (
           <FilterForm
-            onSubmit={(types, lists) => fetchRecommendation(types as ContentType[], lists as ListType[])}
+            onSubmit={(types, lists, additionalFilters) => fetchRecommendation(types as ContentType[], lists as ListType[], additionalFilters)}
             isLoading={false}
           />
         )}
@@ -259,6 +316,26 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
               />
             </div>
             <p className="text-gray-500 text-sm">Идёт подбор...</p>
+          </div>
+        )}
+
+        {/* Состояние: Результат */}
+        {viewState === 'result' && movie && (
+          <div className="max-w-4xl mx-auto">
+            <RecommendationCard
+              movie={movie}
+              userStatus={userStatus}
+              isAnime={isAnime}
+              cineChanceRating={cineChanceRating}
+              cineChanceVoteCount={cineChanceVoteCount}
+              userRating={userRating}
+              watchCount={watchCount}
+              onSkip={handleSkip}
+              onAccept={handleAccept}
+              onBack={handleBackToFilters}
+              onResetFilters={handleBackToFilters}
+              actionLoading={actionLoading}
+            />
           </div>
         )}
 
@@ -301,17 +378,41 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
           </div>
         )}
 
-        {/* Состояние: Результат */}
-        {viewState === 'result' && movie && (
-          <div className="animate-in fade-in duration-300">
-            <RecommendationCard
-              movie={movie}
-              userStatus={userStatus}
-              isAnime={isAnime}
-              actionLoading={actionLoading}
-              onSkip={handleSkip}
-              onAccept={handleAccept}
-            />
+        {/* Модальное окно подтверждения сброса истории */}
+        {isResetConfirmOpen && (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div className="bg-[#0a0e17] border border-gray-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="text-center">
+                {/* Иконка предупреждения */}
+                <div className="w-16 h-16 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                </div>
+                
+                <h3 className="text-lg font-bold text-white mb-2">Сбросить историю?</h3>
+                <p className="text-gray-400 text-sm mb-6">
+                  Это удалит всю историю показов рекомендаций. После этого вы снова сможете получать рекомендации из всех фильмов.
+                </p>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsResetConfirmOpen(false)}
+                    className="flex-1 py-2.5 px-3 bg-gray-700/50 border border-gray-600/30 text-gray-300 text-sm rounded-lg font-medium hover:bg-gray-700 hover:text-white transition cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={confirmResetLogs}
+                    className="flex-1 py-2.5 px-3 bg-yellow-600 text-white text-sm rounded-lg font-medium hover:bg-yellow-500 transition cursor-pointer"
+                  >
+                    Сбросить
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -6,8 +6,16 @@ import { useState } from 'react';
 type ContentType = 'movie' | 'tv' | 'anime';
 type ListType = 'want' | 'watched';
 
+interface AdditionalFilters {
+  minRating: number;
+  maxRating: number;
+  yearFrom: string;
+  yearTo: string;
+  selectedGenres: number[];
+}
+
 interface FilterFormProps {
-  onSubmit: (types: ContentType[], lists: ListType[]) => void;
+  onSubmit: (types: ContentType[], lists: ListType[], additionalFilters?: AdditionalFilters) => void;
   isLoading: boolean;
 }
 
@@ -34,14 +42,42 @@ const LIST_OPTIONS: { value: ListType; label: string; description: string; icon:
   },
 ];
 
+const GENRES = [
+  { id: 28, name: 'Боевик' },
+  { id: 12, name: 'Приключения' },
+  { id: 16, name: 'Анимация' },
+  { id: 35, name: 'Комедия' },
+  { id: 80, name: 'Криминал' },
+  { id: 18, name: 'Драма' },
+  { id: 10751, name: 'Семейный' },
+  { id: 14, name: 'Фэнтези' },
+  { id: 36, name: 'История' },
+  { id: 27, name: 'Ужасы' },
+  { id: 10402, name: 'Музыка' },
+  { id: 9648, name: 'Детектив' },
+  { id: 10749, name: 'Мелодрама' },
+  { id: 878, name: 'Фантастика' },
+  { id: 53, name: 'Триллер' },
+  { id: 10752, name: 'Военный' },
+];
+
+const defaultAdditionalFilters: AdditionalFilters = {
+  minRating: 0,
+  maxRating: 10,
+  yearFrom: '',
+  yearTo: '',
+  selectedGenres: [],
+};
+
 export default function FilterForm({ onSubmit, isLoading }: FilterFormProps) {
   const [selectedTypes, setSelectedTypes] = useState<ContentType[]>(['movie', 'tv', 'anime']);
-  const [selectedLists, setSelectedLists] = useState<ListType[]>(['want']);
+  const [selectedLists, setSelectedLists] = useState<ListType[]>(['want', 'watched']);
+  const [isAdditionalExpanded, setIsAdditionalExpanded] = useState(false);
+  const [additionalFilters, setAdditionalFilters] = useState<AdditionalFilters>(defaultAdditionalFilters);
 
   const handleTypeToggle = (type: ContentType) => {
     setSelectedTypes(prev => {
       if (prev.includes(type)) {
-        // Если это последний выбранный тип - не снимаем
         if (prev.length === 1) return prev;
         return prev.filter(t => t !== type);
       }
@@ -59,9 +95,28 @@ export default function FilterForm({ onSubmit, isLoading }: FilterFormProps) {
     });
   };
 
+  const toggleGenre = (genreId: number) => {
+    setAdditionalFilters(prev => ({
+      ...prev,
+      selectedGenres: prev.selectedGenres.includes(genreId)
+        ? prev.selectedGenres.filter(id => id !== genreId)
+        : [...prev.selectedGenres, genreId],
+    }));
+  };
+
+  const resetAdditionalFilters = () => {
+    setAdditionalFilters(defaultAdditionalFilters);
+  };
+
+  const hasActiveAdditionalFilters = additionalFilters.minRating > 0 ||
+    additionalFilters.maxRating < 10 ||
+    additionalFilters.yearFrom ||
+    additionalFilters.yearTo ||
+    additionalFilters.selectedGenres.length > 0;
+
   const handleSubmit = () => {
     if (selectedTypes.length > 0 && selectedLists.length > 0) {
-      onSubmit(selectedTypes, selectedLists);
+      onSubmit(selectedTypes, selectedLists, additionalFilters);
     }
   };
 
@@ -107,7 +162,7 @@ export default function FilterForm({ onSubmit, isLoading }: FilterFormProps) {
       </div>
 
       {/* Блок выбора списков */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h3 className="text-sm font-medium text-gray-400 mb-3">
           Источник
         </h3>
@@ -143,6 +198,139 @@ export default function FilterForm({ onSubmit, isLoading }: FilterFormProps) {
           ))}
         </div>
       </div>
+
+      {/* Кнопка Доп. фильтры */}
+      <button
+        type="button"
+        onClick={() => setIsAdditionalExpanded(!isAdditionalExpanded)}
+        className={`
+          w-full py-2 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 mb-4
+          ${hasActiveAdditionalFilters 
+            ? 'bg-blue-600 text-white' 
+            : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}
+        `}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+          />
+        </svg>
+        <span>Доп. фильтры {hasActiveAdditionalFilters && '•'}</span>
+        <svg 
+          width="12" 
+          height="12" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`ml-auto transition-transform ${isAdditionalExpanded ? 'rotate-90' : ''}`}
+        >
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+
+      {/* Раскрывающиеся дополнительные фильтры */}
+      {isAdditionalExpanded && (
+        <div className="mb-4 bg-gray-900/80 rounded-lg p-4 space-y-4 border border-gray-800">
+          {/* Фильтр по году */}
+          <div>
+            <label className="text-xs text-gray-400 block mb-2">Год выпуска</label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                placeholder="От"
+                value={additionalFilters.yearFrom}
+                onChange={(e) => setAdditionalFilters(prev => ({ ...prev, yearFrom: e.target.value }))}
+                className="w-full px-2 py-1.5 rounded bg-gray-800 text-white text-sm border border-gray-700 focus:border-blue-500 outline-none"
+              />
+              <span className="text-gray-500">—</span>
+              <input
+                type="number"
+                placeholder="До"
+                value={additionalFilters.yearTo}
+                onChange={(e) => setAdditionalFilters(prev => ({ ...prev, yearTo: e.target.value }))}
+                className="w-full px-2 py-1.5 rounded bg-gray-800 text-white text-sm border border-gray-700 focus:border-blue-500 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Фильтр по рейтингу */}
+          <div>
+            <label className="text-xs text-gray-400 block mb-2">
+              Моя оценка: {additionalFilters.minRating > 0 || additionalFilters.maxRating < 10 ? `${additionalFilters.minRating} - ${additionalFilters.maxRating}` : 'Любая'}
+            </label>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <span className="text-xs text-gray-500 block mb-1">От</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="1"
+                  value={additionalFilters.minRating}
+                  onChange={(e) => setAdditionalFilters(prev => ({ ...prev, minRating: parseInt(e.target.value) }))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+              </div>
+              <div className="flex-1">
+                <span className="text-xs text-gray-500 block mb-1">До</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="1"
+                  value={additionalFilters.maxRating}
+                  onChange={(e) => setAdditionalFilters(prev => ({ ...prev, maxRating: parseInt(e.target.value) }))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Фильтр по жанрам */}
+          <div>
+            <label className="text-xs text-gray-400 block mb-2">Жанры</label>
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+              {GENRES.map((genre) => (
+                <button
+                  key={genre.id}
+                  type="button"
+                  onClick={() => toggleGenre(genre.id)}
+                  className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap ${
+                    additionalFilters.selectedGenres.includes(genre.id)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {genre.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Кнопка сброса */}
+          {hasActiveAdditionalFilters && (
+            <button
+              type="button"
+              onClick={resetAdditionalFilters}
+              className="w-full py-2 rounded bg-gray-800 text-gray-400 text-sm hover:bg-gray-700 hover:text-gray-300 transition-colors"
+            >
+              Сбросить фильтры
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Кнопка подбора */}
       <button

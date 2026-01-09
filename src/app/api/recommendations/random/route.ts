@@ -15,6 +15,11 @@ type ListType = 'want' | 'watched';
 interface FilterParams {
   types: ContentType[];
   lists: ListType[];
+  minRating?: number;
+  maxRating?: number;
+  yearFrom?: string;
+  yearTo?: string;
+  genres?: number[];
 }
 
 /**
@@ -23,6 +28,11 @@ interface FilterParams {
 function parseFilterParams(url: URL): FilterParams {
   const typesParam = url.searchParams.get('types');
   const listsParam = url.searchParams.get('lists');
+  const minRatingParam = url.searchParams.get('minRating');
+  const maxRatingParam = url.searchParams.get('maxRating');
+  const yearFromParam = url.searchParams.get('yearFrom');
+  const yearToParam = url.searchParams.get('yearTo');
+  const genresParam = url.searchParams.get('genres');
 
   // Парсим типы контента
   let types: ContentType[] = [];
@@ -39,11 +49,18 @@ function parseFilterParams(url: URL): FilterParams {
     lists = requestedLists.filter(t => ['want', 'watched'].includes(t));
   }
 
+  // Парсим дополнительные фильтры
+  const minRating = minRatingParam ? parseInt(minRatingParam) : undefined;
+  const maxRating = maxRatingParam ? parseInt(maxRatingParam) : undefined;
+  const yearFrom = yearFromParam || undefined;
+  const yearTo = yearToParam || undefined;
+  const genres = genresParam ? genresParam.split(',').map(g => parseInt(g)).filter(g => !isNaN(g)) : undefined;
+
   // Значения по умолчанию
   if (types.length === 0) types = ['movie', 'tv', 'anime'];
   if (lists.length === 0) lists = ['want'];
 
-  return { types, lists };
+  return { types, lists, minRating, maxRating, yearFrom, yearTo, genres };
 }
 
 /**
@@ -76,7 +93,7 @@ export async function GET(req: Request) {
 
     const userId = session.user.id as string;
     const url = new URL(req.url);
-    const { types, lists } = parseFilterParams(url);
+    const { types, lists, minRating, maxRating, yearFrom, yearTo, genres } = parseFilterParams(url);
 
     // 1. Получаем настройки пользователя
     const settings = await prisma.recommendationSettings.findUnique({
@@ -119,6 +136,7 @@ export async function GET(req: Request) {
         title: true,
         voteAverage: true,
         addedAt: true,
+        userRating: true,
         status: {
           select: {
             name: true,
@@ -149,6 +167,8 @@ export async function GET(req: Request) {
           isAnime: details ? isAnime(details) : false,
           originalLanguage: details?.original_language,
           genreIds: details?.genres?.map((g: any) => g.id) || [],
+          release_date: details?.release_date || null,
+          first_air_date: details?.first_air_date || null,
         };
       } catch {
         return {
@@ -156,7 +176,9 @@ export async function GET(req: Request) {
           mediaType: item.mediaType,
           isAnime: false,
           originalLanguage: null,
-          genreIds: [],
+          genreIds: [] as number[],
+          release_date: null,
+          first_air_date: null,
         };
       }
     });
@@ -195,20 +217,6 @@ export async function GET(req: Request) {
       return false;
     });
 
-    // Применяем фильтр по рейтингу
-    if (preferHighRating) {
-      filteredItems = filteredItems.filter((item) => item.voteAverage >= MIN_RATING_THRESHOLD);
-    }
-
-    // Если все кандидаты отфильтрованы, возвращаем сообщение
-    if (filteredItems.length === 0) {
-      return NextResponse.json({
-        success: false,
-        message: 'Нет доступных рекомендаций по выбранным фильтрам. Попробуйте изменить настройки.',
-        movie: null,
-      });
-    }
-
     // 6. Получаем историю показов за последние N дней (cooldown)
     const cooldownDate = new Date();
     cooldownDate.setDate(cooldownDate.getDate() - RECOMMENDATION_COOLDOWN_DAYS);
@@ -234,11 +242,50 @@ export async function GET(req: Request) {
       return !excludedIds.has(key);
     });
 
-    // Если все отфильтрованы по cooldown, возвращаем сообщение
+    // Применяем фильтр по рейтингу пользователя (дополнительный фильтр)
+    // Проверяем по списку 'watched', так как рейтинг пользователя есть только у просмотренных фильмов
+    if (lists.includes('watched')) {
+      if (minRating !== undefined || maxRating !== undefined) {
+        candidates = candidates.filter(item => {
+          const rating = item.userRating ?? 0;
+          if (minRating !== undefined && rating < minRating) return false;
+          if (maxRating !== undefined && rating > maxRating) return false;
+          return true;
+        });
+      }
+    }
+
+    // Применяем фильтры по году и жанрам из TMDB данных
+    if (yearFrom || yearTo || (genres && genres.length > 0)) {
+      candidates = candidates.filter(item => {
+        const details = detailsMap.get(item.tmdbId);
+        if (!details) return false;
+
+        // Фильтр по году
+        if (yearFrom || yearTo) {
+          const releaseYear = parseInt((details.release_date || details.first_air_date || '').split('-')[0]);
+          if (!isNaN(releaseYear)) {
+            if (yearFrom && releaseYear < parseInt(yearFrom)) return false;
+            if (yearTo && releaseYear > parseInt(yearTo)) return false;
+          }
+        }
+
+        // Фильтр по жанрам
+        if (genres && genres.length > 0) {
+          const itemGenreIds = details.genreIds || [];
+          const hasMatchingGenre = genres.some(g => itemGenreIds.includes(g));
+          if (!hasMatchingGenre) return false;
+        }
+
+        return true;
+      });
+    }
+
+    // Если все кандидаты отфильтрованы, возвращаем сообщение
     if (candidates.length === 0) {
       return NextResponse.json({
         success: false,
-        message: 'Все доступные рекомендации были показаны за последнюю неделю. Попробуйте изменить фильтры.',
+        message: 'Нет доступных рекомендаций по выбранным фильтрам. Попробуйте изменить настройки.',
         movie: null,
       });
     }
@@ -246,6 +293,33 @@ export async function GET(req: Request) {
     // 7. Случайный выбор
     const randomIndex = Math.floor(Math.random() * candidates.length);
     const selected = candidates[randomIndex];
+
+    // 7.1. Получаем полные данные о выбранном фильме из watchlist (включая рейтинг пользователя)
+    const watchListData = await prisma.watchList.findFirst({
+      where: {
+        userId,
+        tmdbId: selected.tmdbId,
+        mediaType: selected.mediaType,
+      },
+      select: {
+        id: true,
+        userRating: true,
+        watchCount: true,
+        statusId: true,
+      },
+    });
+
+    // 7.2. Получаем количество оценок пользователя для расчёта voteCount
+    const ratingHistoryCount = await prisma.ratingHistory.count({
+      where: {
+        userId,
+        tmdbId: selected.tmdbId,
+        mediaType: selected.mediaType,
+      },
+    });
+
+    const cineChanceRating = watchListData?.userRating || null;
+    const cineChanceVoteCount = ratingHistoryCount;
 
     // 8. Получаем актуальные данные о фильме из TMDB
     const tmdbData = await fetchMediaDetails(selected.tmdbId, selected.mediaType as 'movie' | 'tv');
@@ -306,6 +380,10 @@ export async function GET(req: Request) {
       movie,
       logId: logEntry.id,
       userStatus,
+      cineChanceRating,
+      cineChanceVoteCount,
+      userRating: watchListData?.userRating || null,
+      watchCount: watchListData?.watchCount || 0,
       message: 'Рекомендация получена',
     });
   } catch (error) {
