@@ -106,17 +106,17 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             {mode === 'register' && (
               <>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2 text-purple-400">Никнейм *</label>
+                  <label className="block text-sm font-medium mb-2 text-purple-400">Никнейм</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full p-3 bg-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
-                    required
                     minLength={2}
                     maxLength={30}
-                    placeholder="Придумайте никнейм"
+                    placeholder="Ваше имя или никнейм"
                   />
+                  <p className="text-gray-500 text-xs mt-1">Опционально. Если не указан, будет использоваться ваш email</p>
                 </div>
 
                 <div className="mb-4">
