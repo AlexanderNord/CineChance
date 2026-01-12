@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { User, Settings, Activity } from 'lucide-react';
+import { User, Settings } from 'lucide-react';
 
 export default async function ProfileLayout({
   children,
@@ -23,7 +23,6 @@ export default async function ProfileLayout({
   const navItems = [
     { href: '/profile', label: 'Обзор', icon: User },
     { href: '/profile/settings', label: 'Настройки', icon: Settings },
-    { href: '/profile/monitoring', label: 'Мониторинг', icon: Activity },
   ];
 
   return (

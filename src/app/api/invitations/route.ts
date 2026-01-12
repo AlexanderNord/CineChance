@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { prisma } from "@/auth";
+import { sendInviteEmail } from "@/lib/email";
 import crypto from "crypto";
 
 // Срок действия приглашения по умолчанию - 7 дней
@@ -77,11 +78,21 @@ export async function POST(req: Request) {
     // Формируем ссылку для приглашения
     const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${token}`;
 
-    // TODO: Отправить email с приглашением
-    // В реальном приложении здесь будет отправка письма:
-    // await sendInviteEmail(email, inviteLink);
+    // Получаем имя отправителя для включения в письмо
+    const inviterName = session.user.name || session.user.email || 'Пользователь';
 
-    console.log(`[INVITE] Created invite for ${email}: ${inviteLink}`);
+    // Отправляем email с приглашением
+    const emailSent = await sendInviteEmail({
+      to: email,
+      inviteLink,
+      inviterName,
+    });
+
+    if (!emailSent) {
+      console.warn(`[INVITE] Email не отправлен для ${email}, но приглашение создано`);
+    }
+
+    console.log(`[INVITE] Created invite for ${email}: ${inviteLink} (email sent: ${emailSent})`);
 
     return NextResponse.json(
       {
@@ -91,6 +102,7 @@ export async function POST(req: Request) {
           email: invitation.email,
           expiresAt: invitation.expiresAt,
           inviteLink,
+          emailSent,
         },
       },
       { status: 201 }

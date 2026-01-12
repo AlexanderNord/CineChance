@@ -24,37 +24,42 @@ jobs:
         run: |
           echo "=== Database Connection Debug ==="
           echo "DATABASE_URL is set: ${{ secrets.DATABASE_URL != '' }}"
-          # Показываем только хост для диагностики, без кредов
-          HOST=$(echo "${{ secrets.DATABASE_URL }}" | sed -n 's/.*@\([^/]*\).*/\1/p')
-          echo "Host: $HOST"
+          if [ "${{ secrets.DATABASE_URL }}" != "" ]; then
+            HOST=$(echo "${{ secrets.DATABASE_URL }}" | sed -n 's/.*@\([^/]*\).*/\1/p')
+            echo "Host: $HOST"
+          else
+            echo "WARNING: DATABASE_URL secret is not set!"
+          fi
           echo "================================"
       
       - name: Test database connection
         run: |
+          if [ "${{ secrets.DATABASE_URL }}" == "" ]; then
+            echo "ERROR: DATABASE_URL secret is not set. Please add it to GitHub Actions secrets."
+            exit 1
+          fi
           echo "=== Testing database connection ==="
-          # Пробуем подключиться без выполнения команд
           pg_isready -d "${{ secrets.DATABASE_URL }}" || echo "Connection test returned: $?"
           echo "===================================="
       
       - name: Create database dump
         id: dump
         run: |
+          if [ "${{ secrets.DATABASE_URL }}" == "" ]; then
+            echo "ERROR: Cannot create dump without DATABASE_URL"
+            exit 1
+          fi
+          
           DATE=$(date +%Y%m%d)
           FILENAME="cinechance_backup_${DATE}.sql.gz"
           
           echo "=== Starting dump ==="
           echo "Output file: $FILENAME"
           
-          # Запускаем дамп с максимальной диагностикой
-          set -x
-          pg_dump "${{ secrets.DATABASE_URL }}" 2>&1 | tee /tmp/dump_stdout.log | gzip > "$FILENAME"
-          DUMP_EXIT=${PIPESTATUS[0]}
-          GZIP_EXIT=${PIPESTATUS[1]}
-          set +x
+          # Запускаем дамп
+          pg_dump "${{ secrets.DATABASE_URL }}" 2>&1 | gzip > "$FILENAME"
           
           echo "=== Dump completed ==="
-          echo "pg_dump exit code: $DUMP_EXIT"
-          echo "gzip exit code: $GZIP_EXIT"
           
           if [ -f "$FILENAME" ]; then
             echo "File created: $FILENAME"
@@ -69,10 +74,8 @@ jobs:
             fi
           else
             echo "ERROR: File was not created!"
+            exit 1
           fi
-          
-          cat /tmp/dump_stdout.log | head -20
-          echo "=== End of dump log ==="
           
           echo "file=$FILENAME" >> $GITHUB_OUTPUT
           echo "tag=backup-$DATE" >> $GITHUB_OUTPUT
@@ -82,7 +85,8 @@ jobs:
       
       - name: Configure gh
         run: |
-          echo "${{ secrets.GH_TOKEN }}" | gh auth login --with-token
+          # Используем встроенный GITHUB_TOKEN (автоматически доступен)
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
           gh api user
       
       - name: Create GitHub Release
