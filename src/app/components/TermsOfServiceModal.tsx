@@ -49,7 +49,7 @@ export default function TermsOfServiceModal({ isOpen, onClose }: TermsOfServiceM
 
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center bg-black backdrop-blur-sm transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}
       onClick={handleBackdropClick}
     >
       <div 

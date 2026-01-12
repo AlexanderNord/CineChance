@@ -1,16 +1,31 @@
 'use client';
 
 import { SessionProvider } from "next-auth/react";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AuthModal from './AuthModal';
 
+// Компонент для обработки параметров URL (обёрнут в Suspense)
+function AuthParamsHandler({ onAuthRequired }: { onAuthRequired: () => void }) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const auth = searchParams.get('auth');
+    if (auth === 'required' || auth === 'login') {
+      onAuthRequired();
+      // Очищаем URL параметр после открытия модального окна
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams, onAuthRequired]);
+
+  return null;
+}
+
 export default function LayoutClient({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const searchParams = useSearchParams();
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
@@ -29,16 +44,6 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  // Проверяем параметр auth в URL
-  useEffect(() => {
-    const auth = searchParams.get('auth');
-    if (auth === 'required' || auth === 'login') {
-      setIsAuthModalOpen(true);
-      // Очищаем URL параметр после открытия модального окна
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [searchParams]);
 
   return (
     <SessionProvider
@@ -61,6 +66,11 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
           </main>
         </div>
       </div>
+
+      {/* Обработчик параметров авторизации */}
+      <Suspense fallback={null}>
+        <AuthParamsHandler onAuthRequired={() => setIsAuthModalOpen(true)} />
+      </Suspense>
 
       {/* Модальное окно авторизации */}
       <AuthModal

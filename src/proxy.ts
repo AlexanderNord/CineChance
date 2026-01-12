@@ -16,7 +16,7 @@ const skipRedirectPaths = [
   '/images',
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
   // Проверяем, является ли путь публичным
