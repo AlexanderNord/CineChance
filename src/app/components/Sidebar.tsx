@@ -46,6 +46,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
   const authMenuItems = [
     ['/my-movies', 'Мои фильмы'],
     ['/recommendations', 'Что посмотреть'],
+    ['/admin', 'Управление'],
   ];
 
   // Объединяем меню в зависимости от статуса авторизации
