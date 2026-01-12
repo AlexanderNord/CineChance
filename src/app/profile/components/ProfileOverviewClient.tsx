@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import Link from 'next/link';
-import { FileText } from 'lucide-react';
+import { FileText, Settings } from 'lucide-react';
 import NicknameEditor from './NicknameEditor';
 import TermsOfServiceModal from '@/app/components/TermsOfServiceModal';
 
@@ -76,6 +76,25 @@ export default function ProfileOverviewClient({
         </div>
       </div>
 
+      {/* Настройки параметров аккаунта */}
+      <Link 
+        href="/profile/settings"
+        className="block bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-800 hover:border-gray-700 transition"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Settings className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-white font-medium text-sm md:text-base">Настройки параметров аккаунта</p>
+            <p className="text-gray-500 text-xs md:text-sm">Управление настройками профиля и рекомендаций</p>
+          </div>
+          <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </Link>
+
       {/* Статистика - ВСЕГДА в одну строку (2 колонки) */}
       <div className="grid grid-cols-2 gap-3 md:gap-4">
         <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-800">
@@ -88,47 +107,20 @@ export default function ProfileOverviewClient({
         </div>
       </div>
 
-      {/* Сбор данных */}
-      <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-800">
-        <p className="text-white font-medium text-sm md:text-base">Сбор данных</p>
-        <p className="text-gray-500 text-xs md:text-sm">Разрешён сбор событий взаимодействия</p>
-      </div>
-
-      {/* Пользовательское соглашение */}
+      {/* Сбор данных и Пользовательское соглашение */}
       <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-800">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-white font-medium text-sm md:text-base">Пользовательское соглашение</p>
-            <p className="text-gray-500 text-xs md:text-sm">Просмотр условий использования сервиса</p>
+            <p className="text-white font-medium text-sm md:text-base">Сбор данных</p>
+            <p className="text-gray-500 text-xs md:text-sm">Разрешён сбор событий взаимодействия</p>
           </div>
           <button
             onClick={() => setShowTermsModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm transition"
           >
             <FileText className="w-4 h-4" />
-            Открыть
+            Открыть соглашение
           </button>
-        </div>
-      </div>
-
-      {/* Быстрые ссылки */}
-      <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-800">
-        <h2 className="text-base md:text-lg font-semibold text-white mb-3 md:mb-4">Быстрый доступ</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-          <Link 
-            href="/my-movies"
-            className="p-3 md:p-4 bg-gray-800/50 hover:bg-gray-800 rounded-lg transition text-center block"
-          >
-            <p className="text-white font-medium text-sm md:text-base">Мои фильмы</p>
-            <p className="text-gray-500 text-xs md:text-sm">Управление списком</p>
-          </Link>
-          <Link 
-            href="/profile/settings"
-            className="p-3 md:p-4 bg-gray-800/50 hover:bg-gray-800 rounded-lg transition text-center block"
-          >
-            <p className="text-white font-medium text-sm md:text-base">Настройки</p>
-            <p className="text-gray-500 text-xs md:text-sm">Параметры аккаунта</p>
-          </Link>
         </div>
       </div>
 
