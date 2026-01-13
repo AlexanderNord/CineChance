@@ -37,21 +37,29 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     }
   };
 
+  // ID администратора для доступа к панели управления
+  const ADMIN_USER_ID = 'cmkbc7sn2000104k3xd3zyf2a';
+  const isAdmin = session?.user?.id === ADMIN_USER_ID;
+
   // Базовые пункты меню для всех пользователей
-  const baseMenuItems = [
+  const baseMenuItems: Array<[string, string, boolean?]> = [
     ['/', 'Главная'],
   ];
 
   // Дополнительные пункты меню только для авторизованных пользователей
-  const authMenuItems = [
+  const authMenuItems: Array<[string, string, boolean?]> = [
     ['/my-movies', 'Мои фильмы'],
     ['/recommendations', 'Что посмотреть'],
-    ['/admin', 'Управление'],
   ];
+
+  // Пункт меню админ-панели только для администратора
+  const adminMenuItems: Array<[string, string, boolean]> = isAdmin 
+    ? [['/admin', 'Управление', true]] 
+    : [];
 
   // Объединяем меню в зависимости от статуса авторизации
   const menuItems = session?.user 
-    ? [...baseMenuItems, ...authMenuItems]
+    ? [...baseMenuItems, ...authMenuItems, ...adminMenuItems]
     : baseMenuItems;
 
   return (
@@ -119,17 +127,32 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         {/* Навигация */}
         <nav className="flex-1 px-6 py-4 overflow-y-auto">
           <ul className="space-y-2">
-            {menuItems.map(([href, label]) => (
-              <li key={href}>
-                <Link
-                  href={href}
-                  onClick={() => window.innerWidth < 1024 && toggle()}
-                  className="block py-3 px-4 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition"
-                >
-                  {label}
-                </Link>
-              </li>
-            ))}
+            {menuItems.map((item) => {
+              const href = item[0];
+              const label = item[1];
+              const isAdminItem = item[2] === true;
+              
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    onClick={() => window.innerWidth < 1024 && toggle()}
+                    className={`flex items-center gap-3 py-3 px-4 rounded-lg transition ${
+                      isAdminItem
+                        ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 hover:text-purple-300'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    {isAdminItem && (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                      </svg>
+                    )}
+                    <span className="font-medium">{label}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 

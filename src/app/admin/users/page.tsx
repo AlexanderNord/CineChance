@@ -13,6 +13,12 @@ export default async function UsersAdminPage() {
     redirect("/?auth=required");
   }
 
+  // Проверка доступа только для特定ного пользователя
+  const ADMIN_USER_ID = 'cmkbc7sn2000104k3xd3zyf2a';
+  if (session.user.id !== ADMIN_USER_ID) {
+    redirect('/');
+  }
+
   // Загрузка всех пользователей
   const users = await prisma.user.findMany({
     orderBy: { createdAt: 'desc' },
@@ -34,8 +40,8 @@ export default async function UsersAdminPage() {
 
   // Статистика
   const totalUsers = users.length;
-  const verifiedUsers = users.filter(u => u.emailVerified).length;
-  const newUsers7Days = users.filter(u => {
+  const verifiedUsers = users.filter((u: { emailVerified: Date | null }) => u.emailVerified).length;
+  const newUsers7Days = users.filter((u: { createdAt: Date }) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     return u.createdAt > sevenDaysAgo;
@@ -117,7 +123,7 @@ export default async function UsersAdminPage() {
                   </tr>
                 </thead>
                 <tbody className="text-white">
-                  {users.map((user) => (
+                  {users.map((user: { id: string; name: string | null; email: string; createdAt: Date; emailVerified: Date | null; _count: { watchList: number; recommendationLogs: number } }) => (
                     <tr key={user.id} className="border-b border-gray-700/50 hover:bg-gray-700/20">
                       <td className="py-4 pr-4">
                         <div className="flex items-center gap-3">

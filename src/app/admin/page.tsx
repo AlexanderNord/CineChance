@@ -13,6 +13,12 @@ export default async function AdminDashboardPage() {
     redirect("/?auth=required");
   }
 
+  // Проверка доступа только для特定ного пользователя
+  const ADMIN_USER_ID = 'cmkbc7sn2000104k3xd3zyf2a';
+  if (session.user.id !== ADMIN_USER_ID) {
+    redirect('/');
+  }
+
   // Загрузка статистики
   const [totalUsers, totalInvitations, pendingInvitations, usedInvitations] = await Promise.all([
     prisma.user.count(),
@@ -179,7 +185,7 @@ export default async function AdminDashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {recentInvitations.map((invitation) => (
+                {recentInvitations.map((invitation: { id: string; email: string; createdAt: Date; usedAt: Date | null; expiresAt: Date }) => (
                   <div key={invitation.id} className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                     <div>
                       <p className="text-white font-medium text-sm">{invitation.email}</p>
