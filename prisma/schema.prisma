@@ -195,6 +195,7 @@ model WatchList {
   @@index([userRating])
   @@index([userId, statusId])
   @@index([userId, addedAt])
+  @@index([userId, statusId, addedAt])  // Для сортировки по addedAt в рамках userId и statusId
   @@index([watchCount])
   @@index([recommendationCount])
   @@index([lastRecommendedAt])
@@ -297,6 +298,7 @@ model Blacklist {
   @@index([userId])
   @@index([tmdbId])
   @@index([createdAt])
+  @@index([userId, createdAt])  // Для сортировки по createdAt в рамках userId
 }
 
 // ============================================
