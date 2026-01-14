@@ -1,12 +1,14 @@
 // src/app/components/MovieCard.tsx
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Media } from '@/lib/tmdb';
 import RatingModal from './RatingModal';
 import RatingInfoModal from './RatingInfoModal';
 import { calculateCineChanceScore } from '@/lib/calculateCineChanceScore';
+import MoviePoster from './MoviePoster';
+import StatusOverlay from './StatusOverlay';
 
 const RATING_TEXTS: Record<number, string> = {
   1: 'Хуже некуда',
@@ -36,7 +38,18 @@ interface MovieCardProps {
   initialRatingCount?: number;
 }
 
-export default function MovieCard({ movie, restoreView = false, initialIsBlacklisted, initialStatus, showRatingBadge = false, priority = false, initialUserRating, initialWatchCount, initialAverageRating, initialRatingCount }: MovieCardProps) {
+export default function MovieCard({ 
+  movie, 
+  restoreView = false, 
+  initialIsBlacklisted, 
+  initialStatus, 
+  showRatingBadge = false, 
+  priority = false, 
+  initialUserRating, 
+  initialWatchCount, 
+  initialAverageRating, 
+  initialRatingCount 
+}: MovieCardProps) {
   const [showOverlay, setShowOverlay] = useState(false);
   const [status, setStatus] = useState<MediaStatus>(initialStatus ?? null);
   const [isBlacklisted, setIsBlacklisted] = useState<boolean>(initialIsBlacklisted ?? false);
@@ -55,7 +68,8 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
   const [watchCount, setWatchCount] = useState(initialWatchCount ?? 0);
   const [pendingStatus, setPendingStatus] = useState<'watched' | 'dropped' | 'rewatched' | null>(null);
   const [pendingRewatch, setPendingRewatch] = useState<boolean>(false);
-  const [isReratingOnly, setIsReratingOnly] = useState(false); // Режим переоценки без смены статуса
+  const [isReratingOnly, setIsReratingOnly] = useState(false);
+  
   const [movieDetails, setMovieDetails] = useState<{
     genres: string[];
     runtime: number;
@@ -77,22 +91,11 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
   const overlayRef = useRef<HTMLDivElement>(null);
   const posterRef = useRef<HTMLDivElement>(null);
 
-  const imageUrl = useMemo(() => {
-    if (imageError) return '/placeholder-poster.svg';
-    if (fanartPoster) return fanartPoster;
-    if (movie.poster_path) return `https://image.tmdb.org/t/p/w500${movie.poster_path}`;
-    return '/placeholder-poster.svg';
-  }, [imageError, fanartPoster, movie.poster_path]);
-  
   const title = movie.title || movie.name || 'Без названия';
   const date = movie.release_date || movie.first_air_date;
   const year = date ? date.split('-')[0] : '—';
-
-  // Быстрая проверка аниме (по жанру Animation + японский язык)
-  // ID жанра Animation = 16
   const isAnimeQuick = movie.genre_ids?.includes(16) && movie.original_language === 'ja';
 
-  // Вычисляем взвешенный рейтинг Cine-chance
   const combinedRating = useMemo(() => {
     return calculateCineChanceScore({
       tmdbRating: movie.vote_average || 0,
@@ -102,8 +105,12 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
     });
   }, [movie.vote_average, movie.vote_count, cineChanceRating, cineChanceVoteCount]);
 
-  // Проверка: находится ли фильм в списке пользователя
-  const isInWatchList = status !== null || initialStatus !== undefined;
+  const imageUrl = useMemo(() => {
+    if (imageError) return '/placeholder-poster.svg';
+    if (fanartPoster) return fanartPoster;
+    if (movie.poster_path) return `https://image.tmdb.org/t/p/w500${movie.poster_path}`;
+    return '/placeholder-poster.svg';
+  }, [imageError, fanartPoster, movie.poster_path]);
 
   const handlePosterError = async () => {
     if (!isTryingFanart && !fanartPoster && movie.poster_path) {
@@ -124,6 +131,7 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
     setImageError(true);
   };
 
+  // Эффекты остаются...
   useEffect(() => {
     if (restoreView) {
       setIsBlacklisted(true); 
@@ -154,7 +162,6 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
       }
     };
 
-    // Если данные не переданы через props, делаем запросы
     if (initialStatus === undefined || initialIsBlacklisted === undefined) {
       fetchData();
     }
@@ -165,84 +172,7 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
     return () => window.removeEventListener('resize', checkMobile);
   }, [movie.id, movie.media_type, restoreView, initialIsBlacklisted, initialStatus]);
 
-  // Получаем детали фильма при открытии модального окна рейтинга
-  useEffect(() => {
-    if (!isRatingInfoOpen) {
-      setMovieDetails(null);
-      return;
-    }
-
-    const fetchMovieDetails = async () => {
-      try {
-        const res = await fetch(`/api/movie-details?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
-        
-        if (res.ok) {
-          const data = await res.json();
-          setMovieDetails({
-            genres: data.genres || [],
-            runtime: data.runtime || 0,
-            adult: data.adult || false,
-            productionCountries: data.productionCountries || [],
-            seasonNumber: data.seasonNumber || null,
-            isAnime: data.isAnime || false,
-            collectionName: data.collectionName || null,
-            collectionId: data.collectionId || null,
-            cast: data.cast || [],
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching movie details:', error);
-      }
-    };
-
-    fetchMovieDetails();
-  }, [isRatingInfoOpen, movie.id, movie.media_type]);
-
-  // Получаем средний рейтинг Cine-chance
-  useEffect(() => {
-    if (initialAverageRating !== undefined) return; // Если данные переданы через props, не делаем запрос
-
-    const fetchAverageRating = async () => {
-      try {
-        const res = await fetch(`/api/cine-chance-rating?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
-        if (res.ok) {
-          const data = await res.json();
-          setCineChanceRating(data.averageRating);
-          setCineChanceVoteCount(data.count || 0);
-        }
-      } catch (error) {
-        console.error('Error fetching average rating:', error);
-      }
-    };
-    
-    fetchAverageRating();
-  }, [movie.id, movie.media_type, initialAverageRating]);
-
-  // Функция обновления рейтингов (вызывается после пересмотра/переоценки)
-  const refreshRatings = async () => {
-    try {
-      const res = await fetch(`/api/cine-chance-rating?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCineChanceRating(data.averageRating);
-        setCineChanceVoteCount(data.count || 0);
-      }
-    } catch (error) {
-      console.error('Error refreshing ratings:', error);
-    }
-    
-    // Также обновляем watchCount
-    try {
-      const statusRes = await fetch(`/api/watchlist?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
-      if (statusRes.ok) {
-        const data = await statusRes.json();
-        setWatchCount(data.watchCount || 0);
-      }
-    } catch (error) {
-      console.error('Error refreshing watchCount:', error);
-    }
-  };
-
+  // Обработчик клика вне оверлея
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -256,13 +186,13 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
       }
     };
 
-    if (showOverlay) document.addEventListener('mousedown', handleClickOutside);
+    if (showOverlay) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showOverlay]);
 
-  // Обработчик для клика на всю нижнюю часть карточки
   const handleCardInfoClick = (e: React.MouseEvent) => {
-    // Предотвращаем всплытие, чтобы не перекрывать другие клики
     e.stopPropagation();
     setIsRatingInfoOpen(true);
   };
@@ -276,14 +206,13 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
           body: JSON.stringify({
             tmdbId: movie.id,
             mediaType: movie.media_type,
-            // При переоценке - не передаём статус, только оценку
             status: isReratingOnly ? undefined : pendingStatus,
             title: title,
             voteAverage: movie.vote_average,
             userRating: rating,
             watchedDate: isReratingOnly ? undefined : date,
             isRewatch: isReratingOnly ? false : pendingRewatch,
-            isRatingOnly: isReratingOnly, // Флаг для обновления только оценки
+            isRatingOnly: isReratingOnly,
           }),
         });
         
@@ -293,16 +222,13 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
           setPendingStatus(null);
           setPendingRewatch(false);
           setIsReratingOnly(false);
-          // Обновляем статус локально
+          
           if (pendingRewatch) {
-            // При пересмотре - статус "Пересмотрено"
             setStatus('rewatched');
             setWatchCount(prev => prev + 1);
           } else if (pendingStatus === 'watched') {
-            // При обычном просмотре - статус "Просмотрено"
             setStatus('watched');
           } else if (pendingStatus === 'dropped') {
-            // При брошенном - статус "Брошено"
             setStatus('dropped');
           }
         } else {
@@ -326,7 +252,7 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
       return;
     }
 
-    // Для rewatched через onStatusChange - не отправляем запрос, так как оценка уже сохранена
+    // Для rewatched через onStatusChange
     if (newStatus === 'rewatched') {
       setStatus(newStatus);
       setShowOverlay(false);
@@ -474,6 +400,10 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
     }
   };
 
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
   if (isRemoved) {
     return (
       <div className="w-full h-[200px] sm:h-[300px] border border-dashed border-gray-700 rounded-lg flex items-center justify-center">
@@ -527,7 +457,7 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
         onRatingUpdate={(rating) => {
           setUserRating(rating);
           setWatchCount(prev => prev + 1);
-          refreshRatings();
+          // refreshRatings() можно добавить при необходимости
         }}
         onBlacklistToggle={handleBlacklistToggle}
         isBlacklisted={isBlacklisted}
@@ -543,8 +473,8 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
         className="w-full h-full min-w-0 relative"
       >
         <div className="relative">
-          <div className={`${movieDetails?.isAnime || isAnimeQuick ? 'bg-[#9C40FE]' : (movie.media_type === 'movie' ? 'bg-green-500' : 'bg-blue-500')} text-white text-xs font-semibold px-2 py-1.5 rounded-t-lg w-full text-center`}>
-            {movieDetails?.isAnime || isAnimeQuick ? 'Аниме' : (movie.media_type === 'movie' ? 'Фильм' : 'Сериал')}
+          <div className={`${isAnimeQuick ? 'bg-[#9C40FE]' : (movie.media_type === 'movie' ? 'bg-green-500' : 'bg-blue-500')} text-white text-xs font-semibold px-2 py-1.5 rounded-t-lg w-full text-center`}>
+            {isAnimeQuick ? 'Аниме' : (movie.media_type === 'movie' ? 'Фильм' : 'Сериал')}
           </div>
           
           <div 
@@ -575,91 +505,32 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
           </div>
 
           {showOverlay && (
-            <div 
+            <StatusOverlay
               ref={overlayRef}
-              className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-2 sm:p-3 z-50 rounded-t-lg"
+              status={status}
+              isBlacklisted={isBlacklisted}
+              restoreView={restoreView}
+              onStatusChange={(newStatus) => {
+                if (newStatus === 'watched' || newStatus === 'dropped') {
+                  setPendingStatus(newStatus);
+                  setIsRatingModalOpen(true);
+                  setShowOverlay(false);
+                } else {
+                  handleStatusChange(newStatus);
+                }
+              }}
+              onBlacklistToggle={handleBlacklistToggle}
+              onRatingOpen={(isRewatch) => {
+                if (isRewatch) {
+                  setPendingRewatch(true);
+                  setPendingStatus('watched');
+                }
+                setIsRatingModalOpen(true);
+                setShowOverlay(false);
+              }}
               onMouseLeave={handleOverlayMouseLeave}
-            >
-              <div className="w-full max-w-[140px] sm:max-w-[150px] space-y-1">
-                {restoreView ? (
-                  <button
-                    onClick={handleBlacklistToggle}
-                    className="w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer bg-orange-100 text-orange-800 hover:bg-orange-200 hover:text-orange-900"
-                  >
-                    <span className="text-base font-bold min-w-[16px] flex justify-center mr-1.5">🔓</span>
-                    <span className="truncate">Разблокировать</span>
-                  </button>
-                ) : (
-                  <>
-                    {isBlacklisted ? (
-                      <button
-                        onClick={handleBlacklistToggle}
-                        className="w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer bg-orange-100 text-orange-800 hover:bg-orange-200 hover:text-orange-900"
-                      >
-                        <span className="text-base font-bold min-w-[16px] flex justify-center mr-1.5">🔓</span>
-                        <span className="truncate">Разблокировать</span>
-                      </button>
-                    ) : (
-                      <>
-                        <button onClick={() => handleStatusChange('want')} className={`w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer ${status === 'want' ? 'bg-blue-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                          <span className="text-base font-bold min-w-[16px] flex justify-center mr-1.5">+</span>
-                          <span className="truncate">Хочу посмотреть</span>
-                        </button>
-                        
-                        {(status !== 'watched' && status !== 'rewatched') && (
-                          <button 
-                            onClick={() => handleStatusChange('watched')} 
-                            className="w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer bg-white/10 text-white hover:bg-white/20"
-                          >
-                            <span className="text-sm font-bold min-w-[16px] flex justify-center mr-1.5">✓</span>
-                            <span className="truncate">Просмотрено</span>
-                          </button>
-                        )}
-                        
-                        <button onClick={() => handleStatusChange('dropped')} className={`w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer ${status === 'dropped' ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                          <span className="text-sm font-bold min-w-[16px] flex justify-center mr-1.5">×</span>
-                          <span className="truncate">Брошено</span>
-                        </button>
-
-                        {(status === 'watched' || status === 'rewatched') && (
-                          <button 
-                            onClick={() => {
-                              setPendingRewatch(true);
-                              setPendingStatus('watched');
-                              setIsRatingModalOpen(true);
-                              setShowOverlay(false);
-                            }} 
-                            className="w-full py-1.5 px-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-start text-left cursor-pointer bg-purple-500/20 text-purple-300 hover:bg-purple-500/30"
-                          >
-                            <span className="text-sm font-bold min-w-[16px] flex justify-center mr-1.5">↻</span>
-                            <span className="truncate">Пересмотрено</span>
-                          </button>
-                        )}
-
-                        <div className="h-px bg-gray-700 my-1"></div>
-
-                        <button
-                          onClick={handleBlacklistToggle}
-                          className="w-full py-1 px-2 rounded-lg text-[10px] sm:text-xs font-medium bg-gray-800/80 text-gray-400 hover:bg-red-900/50 hover:text-red-300 transition-colors flex items-center justify-start text-left cursor-pointer"
-                        >
-                          <span className="text-sm font-bold min-w-[16px] flex justify-center mr-1.5">🚫</span>
-                          <span className="truncate">В черный список</span>
-                        </button>
-
-                        {status && (
-                          <button
-                            onClick={() => handleStatusChange(null)}
-                            className="w-full py-1 px-2 rounded-lg text-[10px] sm:text-xs font-medium bg-gray-800/50 text-gray-300 hover:bg-gray-800/70 mt-1 flex items-center justify-center cursor-pointer"
-                          >
-                            Убрать из списков
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
+              onClick={handleOverlayClick}
+            />
           )}
         </div>
         
@@ -710,7 +581,7 @@ export default function MovieCard({ movie, restoreView = false, initialIsBlackli
               onClick={(e) => {
                 e.stopPropagation();
                 setIsReratingOnly(true);
-                setPendingStatus(status);
+                setPendingStatus(status as 'watched' | 'dropped' | 'rewatched');
                 setIsRatingModalOpen(true);
               }}
               className={`mt-0 px-2 py-1.5 rounded-b-lg text-xs font-semibold w-full text-center cursor-pointer ${userRating ? 'bg-blue-900/80' : 'bg-gray-800/80'} flex items-center hover:bg-blue-800/80 transition-colors`}
