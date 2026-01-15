@@ -39,6 +39,7 @@ interface MovieCardProps {
   initialWatchCount?: number;
   initialAverageRating?: number | null;
   initialRatingCount?: number;
+  skipIndividualFetch?: boolean; // Skip individual API calls when batch loading
 }
 
 export default function MovieCard({ 
@@ -51,7 +52,8 @@ export default function MovieCard({
   initialUserRating, 
   initialWatchCount, 
   initialAverageRating, 
-  initialRatingCount 
+  initialRatingCount,
+  skipIndividualFetch = false,
 }: MovieCardProps) {
   const [showOverlay, setShowOverlay] = useState(false);
   const [status, setStatus] = useState<MediaStatus>(initialStatus ?? null);
@@ -152,7 +154,8 @@ export default function MovieCard({
 
     const fetchData = async () => {
       try {
-        if (initialStatus === undefined) {
+        // Skip individual fetching when in batch mode
+        if (initialStatus === undefined && !skipIndividualFetch) {
           const statusRes = await fetch(`/api/watchlist?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
           if (statusRes.ok) {
             const data = await statusRes.json();
@@ -168,7 +171,8 @@ export default function MovieCard({
       }
     };
 
-    if (initialStatus === undefined) {
+    // Only fetch individually if not in batch mode and initialStatus is undefined
+    if (initialStatus === undefined && !skipIndividualFetch) {
       fetchData();
     }
     

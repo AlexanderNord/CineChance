@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+const TermsOfServiceModal = dynamic(() => import('@/app/components/TermsOfServiceModal'), { ssr: false });
 import { FileText, Settings } from 'lucide-react';
 import NicknameEditor from './NicknameEditor';
-import TermsOfServiceModal from '@/app/components/TermsOfServiceModal';
 
 interface UserData {
   id: string;

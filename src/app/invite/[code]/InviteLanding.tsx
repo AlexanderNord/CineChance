@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import AuthModal from '@/app/components/AuthModal';
+import dynamic from 'next/dynamic';
+const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false });
 
 interface InviteLandingProps {
   email: string;
@@ -11,11 +12,15 @@ interface InviteLandingProps {
 export default function InviteLanding({ email, inviteCode }: InviteLandingProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [AuthModal, setAuthModal] = useState<typeof import('@/app/components/AuthModal').default | null>(null);
 
   useEffect(() => {
-    // Открываем модальное окно после монтирования на клиенте
+    // Загружаем модальное окно и открываем его
     setIsClient(true);
-    setIsModalOpen(true);
+    import('@/app/components/AuthModal').then(module => {
+      setAuthModal(() => module.default);
+      setIsModalOpen(true);
+    });
   }, []);
 
   const handleClose = () => {
@@ -113,12 +118,14 @@ export default function InviteLanding({ email, inviteCode }: InviteLandingProps)
       </div>
 
       {/* Модальное окно регистрации */}
-      <AuthModal
-        isOpen={isModalOpen}
-        onClose={handleClose}
-        initialEmail={email}
-        inviteCode={inviteCode}
-      />
+      {AuthModal && (
+        <AuthModal
+          isOpen={isModalOpen}
+          onClose={handleClose}
+          initialEmail={email}
+          inviteCode={inviteCode}
+        />
+      )}
     </div>
   );
 }

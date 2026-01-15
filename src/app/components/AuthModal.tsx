@@ -2,7 +2,8 @@
 
 import { signIn } from 'next-auth/react';
 import { useState, useEffect } from 'react';
-import TermsOfServiceModal from './TermsOfServiceModal';
+import dynamic from 'next/dynamic';
+const TermsOfServiceModal = dynamic(() => import('./TermsOfServiceModal'), { ssr: false });
 import { logger } from '@/lib/logger';
 
 type AuthModalProps = {

@@ -2,6 +2,8 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
+import dynamic from 'next/dynamic';
+const RatingModal = dynamic(() => import('../components/RatingModal'), { ssr: false });
 import MovieCard from '../components/MovieCard';
 import { MovieCardErrorBoundary } from '../components/ErrorBoundary';
 import Loader from '../components/Loader';
@@ -9,7 +11,6 @@ import FilmFilters, { FilmFilterState, SortState, AdditionalFilters } from './Fi
 import { MovieWithStatus, fetchMoviesByStatus, getMoviesCounts, getUserGenres, updateWatchStatus } from './actions';
 import { getUserTags } from '../actions/tagsActions';
 import { Media } from '@/lib/tmdb';
-import RatingModal from '../components/RatingModal';
 
 interface MyMoviesClientProps {
   initialWatched: MovieWithStatus[];

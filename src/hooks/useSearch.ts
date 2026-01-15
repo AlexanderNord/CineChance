@@ -4,7 +4,7 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Media } from '@/lib/tmdb';
 
-interface SearchParams {
+export interface SearchParams {
   q: string;
   type?: string;
   yearFrom?: string;
@@ -25,13 +25,12 @@ interface SearchResults {
 }
 
 const ITEMS_PER_PAGE = 20;
-const INITIAL_ITEMS = 30;
 
 const buildSearchParams = (params: SearchParams, page: number) => {
   const searchParams = new URLSearchParams({
     q: params.q,
     page: String(page),
-    limit: page === 1 ? String(INITIAL_ITEMS) : String(ITEMS_PER_PAGE),
+    limit: String(ITEMS_PER_PAGE),
   });
 
   if (params.type && params.type !== 'all') {
@@ -50,9 +49,7 @@ const buildSearchParams = (params: SearchParams, page: number) => {
   return searchParams.toString();
 };
 
-const fetchSearchResults = async ({ pageParam = 1, queryKey }: { pageParam: number; queryKey: readonly [string, SearchParams] }): Promise<SearchResults> => {
-  const [_, params] = queryKey;
-  
+const fetchSearchResults = async (params: SearchParams, pageParam: number): Promise<SearchResults> => {
   if (!params.q && !params.type && !params.yearFrom && !params.yearTo && !params.genres && (params.ratingFrom ?? 0) === 0 && (params.ratingTo ?? 10) === 10 && params.listStatus === 'all') {
     return { results: [], totalPages: 1, totalResults: 0 };
   }
@@ -72,7 +69,7 @@ export const useSearch = (params: SearchParams, blacklistedIds: number[]) => {
 
   const query = useInfiniteQuery({
     queryKey: ['search', params] as const,
-    queryFn: fetchSearchResults,
+    queryFn: ({ pageParam }) => fetchSearchResults(params, pageParam),
     getNextPageParam: (lastPage, allPages) => {
       const currentPage = allPages.length;
       if (lastPage.results.length === 0) return undefined;
@@ -80,44 +77,38 @@ export const useSearch = (params: SearchParams, blacklistedIds: number[]) => {
       return currentPage + 1;
     },
     initialPageParam: 1,
-    staleTime: 60 * 1000, // 1 minute
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    placeholderData: (previousData) => previousData,
   });
 
-  // Filter and deduplicate results from all pages
+  // Simple filter without complex deduplication
   const filteredResults = query.data?.pages.flatMap(page => {
     if (!page.results) return [];
     
     const blacklistedSet = new Set(blacklistedIds);
-    const seen = new Set<string>();
     
     return page.results.filter((item: Media) => {
-      const key = `${item.media_type}_${item.id}`;
-      // Filter out blacklisted items, movies with no rating, and duplicates
-      if (seen.has(key) || blacklistedSet.has(item.id) || (item.vote_average ?? 0) <= 0) {
+      // Filter out blacklisted items and movies with no rating
+      if (blacklistedSet.has(item.id) || (item.vote_average ?? 0) <= 0) {
         return false;
       }
-      seen.add(key);
       return true;
     });
   }) ?? [];
 
   const totalResults = query.data?.pages[0]?.totalResults ?? 0;
 
-  // Prefetch next page when user hovers on load more button
-  const prefetchNextPage = () => {
-    if (query.hasNextPage && !query.isFetchingNextPage) {
-      query.fetchNextPage();
-    }
-  };
-
   return {
     ...query,
     results: filteredResults,
     totalResults,
-    prefetchNextPage,
-    // Refetch with new filters
-    refetchWithFilters: (newParams: SearchParams) => {
+    prefetchNextPage: () => {
+      if (query.hasNextPage && !query.isFetchingNextPage) {
+        query.fetchNextPage();
+      }
+    },
+    refetchWithFilters: () => {
       queryClient.invalidateQueries({ queryKey: ['search'] });
     },
   };

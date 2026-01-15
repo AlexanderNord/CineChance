@@ -1,14 +1,12 @@
 // src/app/search/SearchClient.tsx
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import MovieCard from '../components/MovieCard';
-import { MovieCardErrorBoundary } from '../components/ErrorBoundary';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import MovieList from './MovieList';
 import Loader from '../components/Loader';
-import { Media } from '@/lib/tmdb';
 import SearchFilters, { FilterState } from './SearchFilters';
-import { useSearch, useBatchData, useInvalidateBatchData } from '@/hooks';
+import { useSearch, useBatchData } from '@/hooks';
+import { Media } from '@/lib/tmdb';
 
 interface SearchClientProps {
   initialQuery: string;
@@ -16,81 +14,78 @@ interface SearchClientProps {
 }
 
 export default function SearchClient({ initialQuery, blacklistedIds }: SearchClientProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  
   // Filter state
   const [currentFilters, setCurrentFilters] = useState<FilterState | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  
+  // Scroll tracking
+  const scrollYRef = useRef(0);
+  const batchDataRef = useRef<Record<string, any>>({});
 
-  // Memoized search params - recreates when filters change
-  const searchParamsMemo = useMemo(() => {
+  // Build search params
+  const buildSearchParams = () => {
     const filters = currentFilters;
-    const type = filters
-      ? (filters.showMovies ? 'movie' : '') +
-        (filters.showTv ? ',tv' : '') +
-        (filters.showAnime ? ',anime' : '')
-          .split(',')
-          .filter(Boolean)
-          .join(',') || 'all'
-      : 'all';
+    
+    let typeValue = 'all';
+    if (filters) {
+      const types: string[] = [];
+      if (filters.showMovies) types.push('movie');
+      if (filters.showTv) types.push('tv');
+      if (filters.showAnime) types.push('anime');
+      typeValue = types.length > 0 ? types.join(',') : 'all';
+    }
 
     const genresString = filters?.genres && filters.genres.length > 0 
       ? filters.genres.join(',') 
-      : undefined;
+      : '';
 
     return {
       q: initialQuery,
-      type: type === 'all' ? undefined : type,
+      type: typeValue !== 'all' ? typeValue : undefined,
       yearFrom: filters?.yearFrom,
       yearTo: filters?.yearTo,
       quickYear: filters?.quickYear,
-      genres: genresString,
-      ratingFrom: filters?.ratingFrom ?? 0,
-      ratingTo: filters?.ratingTo ?? 10,
+      genres: genresString || undefined,
+      ratingFrom: filters?.ratingFrom,
+      ratingTo: filters?.ratingTo && filters.ratingTo < 10 ? filters.ratingTo : undefined,
       sortBy: filters?.sortBy,
       sortOrder: filters?.sortOrder,
-      listStatus: filters?.listStatus,
+      listStatus: filters?.listStatus && filters.listStatus !== 'all' ? filters.listStatus : undefined,
     };
-  }, [initialQuery, currentFilters]);
+  };
 
-  // Use React Query for search
-  const searchQuery = useSearch(searchParamsMemo, blacklistedIds);
+  // Search query
+  const searchQuery = useSearch(buildSearchParams(), blacklistedIds);
   
-  // Invalidate batch data when search results change
-  const invalidateBatchData = useInvalidateBatchData();
+  // Batch data - only for new movies
+  const batchQuery = useBatchData(searchQuery.results, batchDataRef.current);
+
+  // Update batch data ref
   useEffect(() => {
-    if (searchQuery.data) {
-      invalidateBatchData();
+    if (batchQuery.data) {
+      batchDataRef.current = { ...batchDataRef.current, ...batchQuery.data };
     }
-  }, [searchQuery.data, invalidateBatchData]);
+  }, [batchQuery.data]);
 
-  // Use React Query for batch data
-  const batchQuery = useBatchData(searchQuery.results);
+  // Fetch next page handler
+  const handleFetchNextPage = useCallback(() => {
+    if (searchQuery.hasNextPage && !searchQuery.isFetchingNextPage) {
+      scrollYRef.current = window.scrollY;
+      searchQuery.fetchNextPage();
+    }
+  }, [searchQuery.hasNextPage, searchQuery.isFetchingNextPage, searchQuery.fetchNextPage]);
 
-  // Handle filter changes
-  const handleFiltersChange = useCallback((filters: FilterState) => {
-    setCurrentFilters(filters);
-    // The useSearch hook will automatically refetch when buildSearchParams changes
-  }, []);
-
-  // Handle scroll to top button visibility
+  // Scroll to top button
   useEffect(() => {
     const handleScroll = () => {
       setShowScrollTop(window.scrollY > 300);
     };
-
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Determine loading state
+  // Loading state
   const isLoading = searchQuery.isLoading || searchQuery.isFetching;
-  const isLoadingMore = searchQuery.isFetchingNextPage;
 
   if (!initialQuery) {
     return (
@@ -103,65 +98,28 @@ export default function SearchClient({ initialQuery, blacklistedIds }: SearchCli
   return (
     <>
       <SearchFilters 
-        onFiltersChange={handleFiltersChange} 
+        onFiltersChange={setCurrentFilters} 
         totalResults={searchQuery.totalResults} 
       />
 
-      {isLoading ? (
+      {isLoading && searchQuery.results.length === 0 ? (
         <Loader text="Загрузка..." />
       ) : searchQuery.results.length > 0 ? (
         <>
-          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
-            {searchQuery.results.map((item, index) => {
-              const key = `${item.id}-${item.media_type}`;
-              const batch = batchQuery.data?.[key] || {};
-              
-              return (
-                <div
-                  key={`${item.media_type}_${item.id}`}
-                  className="w-full min-w-0 p-1"
-                >
-                  <MovieCardErrorBoundary>
-                    <MovieCard 
-                      movie={item} 
-                      priority={index < 6}
-                      initialStatus={batch.status as 'want' | 'watched' | 'dropped' | 'rewatched' | null | undefined}
-                      initialIsBlacklisted={batch.isBlacklisted}
-                      initialUserRating={batch.userRating}
-                      initialWatchCount={batch.watchCount}
-                      initialAverageRating={batch.averageRating}
-                      initialRatingCount={batch.ratingCount}
-                    />
-                  </MovieCardErrorBoundary>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Кнопка "Ещё" */}
-          {searchQuery.hasNextPage && (
-            <div className="flex justify-center mt-6">
-              <button
-                onClick={() => searchQuery.fetchNextPage()}
-                disabled={isLoadingMore}
-                className="px-6 py-2 rounded-lg bg-gray-800 text-white text-sm hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {isLoadingMore ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-gray-400 border-t-white rounded-full animate-spin"></div>
-                    Загрузка...
-                  </>
-                ) : (
-                  'Ещё...'
-                )}
-              </button>
-            </div>
-          )}
+          <MovieList
+            movies={searchQuery.results as Media[]}
+            batchData={batchDataRef.current}
+            hasNextPage={searchQuery.hasNextPage}
+            isFetchingNextPage={searchQuery.isFetchingNextPage}
+            onFetchNextPage={handleFetchNextPage}
+            initialScrollY={scrollYRef.current}
+            onScrollYChange={(y) => { scrollYRef.current = y; }}
+          />
 
           {/* Кнопка "Наверх" */}
           {showScrollTop && (
             <button
-              onClick={scrollToTop}
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               className="fixed bottom-6 right-6 w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors z-50"
               aria-label="Наверх"
             >

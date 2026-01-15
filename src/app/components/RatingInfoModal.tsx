@@ -3,6 +3,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+const RatingModal = dynamic(() => import('./RatingModal'), { ssr: false });
 import { 
   getMovieTags, 
   addTagsToMovie, 
@@ -12,7 +14,6 @@ import {
   updateMovieNote,
   TagData 
 } from '@/app/actions/tagsActions';
-import RatingModal from './RatingModal';
 import { logger } from '@/lib/logger';
 
 type MediaStatus = 'want' | 'watched' | 'dropped' | 'rewatched' | null;
@@ -799,11 +800,13 @@ export default function RatingInfoModal({
                             {lastSaved.toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         )}
-                        <button
+                        <div
                           onClick={saveNote}
-                          disabled={!hasUnsavedChanges || isSavingNote || isLoadingNote}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => e.key === 'Enter' && saveNote()}
                           className={`
-                            px-3 py-0.5 rounded-lg text-xs font-medium transition-all duration-200 flex-shrink-0
+                            px-3 py-0.5 rounded-lg text-xs font-medium transition-all duration-200 flex-shrink-0 cursor-pointer
                             ${hasUnsavedChanges && !isSavingNote
                               ? 'bg-blue-500 text-white hover:bg-blue-600'
                               : 'bg-gray-700/50 text-gray-500 cursor-not-allowed'}
@@ -811,7 +814,7 @@ export default function RatingInfoModal({
                           `}
                         >
                           {isSavingNote ? 'Сохранение...' : 'Сохранить'}
-                        </button>
+                        </div>
                       </div>
                     )}
                   </button>

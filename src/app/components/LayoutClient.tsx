@@ -2,9 +2,10 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
+const AuthModal = dynamic(() => import('./AuthModal'), { ssr: false });
 import Sidebar from './Sidebar';
 import Header from './Header';
-import AuthModal from './AuthModal';
 import Providers from '../providers';
 
 // Компонент для обработки параметров URL (обёрнут в Suspense)
