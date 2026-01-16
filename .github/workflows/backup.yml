@@ -1,236 +1,39 @@
-name: Database Backup to Yandex Disk
+name: Test Yandex Disk
 
 on:
-  schedule:
-    # Run daily at 03:00 UTC
-    - cron: '0 3 * * *'
-  workflow_dispatch:
+  workflow_dispatch
 
 jobs:
-  backup:
+  test-yandex-disk:
     runs-on: ubuntu-latest
-    name: Create Database Backup for Emergency Recovery
 
     steps:
-      # Checkout repository
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Install rclone
+        run: curl -fsSL https://rclone.org/install.sh | sudo bash
 
-      # Install PostgreSQL 17 client and rclone for Yandex Disk
-      - name: Install Dependencies
+      - name: Configure rclone for Yandex Disk
         run: |
-          # Add PostgreSQL repository for version 17.x (compatible with Neon 17.7)
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg2 lsb-release curl
-          wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
-          echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-17 gzip
-
-          # Install rclone for Yandex Disk upload
-          curl -fsSL https://rclone.org/install.sh | sudo bash
-
-          # Verify pg_dump version
-          echo "=== PostgreSQL Version Check ==="
-          /usr/lib/postgresql/17/bin/pg_dump --version
-          echo "================================"
-
-      # Debug: Check database connection
-      - name: Debug Database Connection
-        run: |
-          echo "=== Database Connection Debug ==="
-          echo "DATABASE_URL is set: ${{ secrets.DATABASE_URL != '' }}"
-          if [ "${{ secrets.DATABASE_URL }}" != "" ]; then
-            HOST=$(echo "${{ secrets.DATABASE_URL }}" | sed -n 's/.*@\([^/]*\).*/\1/p')
-            echo "Host: $HOST"
-          else
-            echo "WARNING: DATABASE_URL secret is not set!"
-          fi
-          echo "================================"
-
-      # Test database connection
-      - name: Test Database Connection
-        run: |
-          if [ "${{ secrets.DATABASE_URL }}" == "" ]; then
-            echo "ERROR: DATABASE_URL secret is not set. Please add it to GitHub Actions secrets."
-            exit 1
-          fi
-          echo "=== Testing database connection ==="
-          /usr/lib/postgresql/17/bin/pg_isready -d "${{ secrets.DATABASE_URL }}" || echo "Connection test returned: $?"
-          echo "===================================="
-
-      # Create database backup with timestamp for point-in-time recovery
-      - name: Create Database Backup
-        id: create-backup
-        run: |
-          if [ "${{ secrets.DATABASE_URL }}" == "" ]; then
-            echo "ERROR: Cannot create dump without DATABASE_URL"
-            exit 1
-          fi
-
-          # Use timestamp for unique backup files (keeps all backups)
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          FILENAME="cinechance_backup_${TIMESTAMP}.sql.gz"
-
-          echo "=== Starting Database Backup ==="
-          echo "Timestamp: $TIMESTAMP"
-          echo "Output file: $FILENAME"
-          echo "Purpose: Emergency data recovery"
-          echo "================================"
-
-          # Create database dump using EXPLICIT PATH to pg_dump 17
-          /usr/lib/postgresql/17/bin/pg_dump "${{ secrets.DATABASE_URL }}" \
-            --clean \
-            --if-exists \
-            --no-owner \
-            --no-privileges \
-            2>&1 | gzip > "$FILENAME"
-
-          echo "================================"
-          echo "=== Backup completed ==="
-
-          if [ -f "$FILENAME" ]; then
-            echo "✓ File created: $FILENAME"
-            ls -lh "$FILENAME"
-            FILE_SIZE=$(stat -c%s "$FILENAME")
-            echo "✓ File size: $FILE_SIZE bytes"
-
-            if [ $FILE_SIZE -gt 100 ]; then
-              echo "✓ Backup file size is valid (>100 bytes)"
-            else
-              echo "⚠ WARNING: File too small, might be empty or error page"
-            fi
-          else
-            echo "ERROR: Backup file was not created!"
-            exit 1
-          fi
-
-          # Save filename for next steps
-          echo "backup_file=$FILENAME" >> $GITHUB_OUTPUT
-          echo "backup_size=$FILE_SIZE" >> $GITHUB_OUTPUT
-          echo "backup_timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
-
-      # Upload backup to Yandex Disk
-      - name: Upload to Yandex Disk
-        run: |
-          echo "=== Yandex Disk Upload ==="
-          echo "YANDEX_DISK_TOKEN is set: ${{ secrets.YANDEX_DISK_TOKEN != '' }}"
-
-          if [ "${{ secrets.YANDEX_DISK_TOKEN }}" == "" ]; then
-            echo "⚠ YANDEX_DISK_TOKEN not configured. Skipping Yandex Disk upload."
-            echo "To enable Yandex Disk backup, add YANDEX_DISK_TOKEN secret."
-            exit 0
-          fi
-
-          FILENAME="${{ steps.create-backup.outputs.backup_file }}"
-          TIMESTAMP="${{ steps.create-backup.outputs.backup_timestamp }}"
-          TOKEN="${{ secrets.YANDEX_DISK_TOKEN }}"
-
-          echo "File: $FILENAME"
-          echo "Timestamp: $TIMESTAMP"
-          echo ""
-
-          # Configure rclone for Yandex Disk
           mkdir -p ~/.config/rclone
-
-          # Create rclone config with proper Yandex Disk settings
           cat > ~/.config/rclone/rclone.conf << EOF
           [yandex]
           type = webdav
           url = https://webdav.yandex.ru
           vendor = other
           user = oauth
-          pass = ${TOKEN}
+          pass = ${{ secrets.YANDEX_DISK_TOKEN }}
           EOF
 
-          echo "Rclone config created successfully"
-          echo ""
+      - name: Create folder on Yandex Disk
+        run: rclone mkdir yandex:/CineChanceTest
 
-          # Test rclone configuration
-          echo "Testing rclone configuration..."
-          rclone listremotes
-          echo ""
-
-          # Create folder on Yandex Disk if it doesn't exist
-          echo "Creating folder CineChanceBackups on Yandex Disk..."
-          rclone mkdir yandex:/CineChanceBackups 2>/dev/null || echo "Folder may already exist"
-          echo ""
-
-          # Upload backup to Yandex Disk with verbose output
-          echo "Uploading backup to Yandex Disk..."
-          rclone copy "$FILENAME" yandex:/CineChanceBackups/ --verbose --stats-one-line --stats 5s
-          UPLOAD_EXIT=$?
-
-          echo ""
-          if [ $UPLOAD_EXIT -eq 0 ]; then
-            echo "✓ Backup uploaded to Yandex Disk successfully!"
-            echo "✓ Location: Yandex Disk / CineChanceBackups / $FILENAME"
-
-            # Verify upload
-            echo ""
-            echo "Verifying upload..."
-            rclone ls yandex:/CineChanceBackups/ | grep "$FILENAME" && echo "✓ File found on Yandex Disk" || echo "⚠ File NOT found on Yandex Disk"
-          else
-            echo "⚠ Upload may have failed with exit code: $UPLOAD_EXIT"
-          fi
-          echo "================================"
-
-      # Create detailed backup report
-      - name: Generate Backup Report
+      - name: Create test file
         run: |
-          TIMESTAMP="${{ steps.create-backup.outputs.backup_timestamp }}"
-          FILENAME="${{ steps.create-backup.outputs.backup_file }}"
-          FILE_SIZE="${{ steps.create-backup.outputs.backup_size }}"
-          DATE_TIME=$(date '+%Y-%m-%d %H:%M:%S UTC')
+          echo "Test backup from GitHub Actions - $(date)" > test_file.txt
+          echo "Filename: test_file.txt" >> test_file.txt
+          echo "Timestamp: $(date +%Y%m%d_%H%M%S)" >> test_file.txt
 
-          # Create backup report
-          cat > "backup_report_${TIMESTAMP}.txt" << EOF
-          ============================================
-          CINE CHANCE DATABASE BACKUP REPORT
-          ============================================
+      - name: Upload test file to Yandex Disk
+        run: rclone copy test_file.txt yandex:/CineChanceTest/ --verbose
 
-          Backup Date: $DATE_TIME
-          Backup Timestamp: $TIMESTAMP
-          File Name: $FILENAME
-          File Size: $FILE_SIZE bytes
-
-          Backup Purpose: Emergency Data Recovery
-
-          Database: PostgreSQL 17 (Neon)
-
-          Backup Status: SUCCESS
-
-          Storage Locations:
-          - Yandex Disk: /CineChanceBackups/$FILENAME
-          - GitHub Artifacts: 90 days retention
-
-          Recovery Instructions:
-          1. Download $FILENAME from Yandex Disk
-          2. Decompress: gunzip $FILENAME
-          3. Restore database: psql \$DATABASE_URL < ${FILENAME%.gz}
-
-          For partial restore, use psql with --clean --if-exists options
-
-          ============================================
-          Generated: $DATE_TIME
-          ============================================
-          EOF
-
-          echo "✓ Backup report created"
-          cat "backup_report_${TIMESTAMP}.txt"
-
-      # Upload backup as GitHub artifact (fallback storage - 90 days)
-      - name: Upload Backup to GitHub Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cinechance-backup-${{ steps.create-backup.outputs.backup_timestamp }}
-          path: cinechance_backup_*.sql.gz
-          retention-days: 90
-
-      # Upload report to artifacts
-      - name: Upload Backup Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: backup-report-${{ steps.create-backup.outputs.backup_timestamp }}
-          path: backup_report_*.txt
-          retention-days: 30
+      - name: Verify upload
+        run: rclone ls yandex:/CineChanceTest/
