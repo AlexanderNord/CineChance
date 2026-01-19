@@ -60,8 +60,7 @@ export async function PUT(req: Request) {
   }
 }
 
-export async function GET() {
-  const req = new Request('GET');
+export async function GET(req: Request) {
   const { success } = await rateLimit(req, '/api/user');
   if (!success) {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });

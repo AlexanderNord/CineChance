@@ -34,11 +34,25 @@ const MoviePoster = memo(({
   onClick,
   children
 }: MoviePosterProps) => {
+  // Сбрасываем состояние при каждом монтировании (новый фильм = новый постер)
   const [imageError, setImageError] = useState(false);
   const [fanartPoster, setFanartPoster] = useState<string | null>(null);
   const [isTryingFanart, setIsTryingFanart] = useState(false);
 
+  // При изменении movie сбрасываем все состояния загрузки
+  useEffect(() => {
+    setImageError(false);
+    setFanartPoster(null);
+    setIsTryingFanart(false);
+  }, [movie.id, movie.poster_path]);
+
   const handlePosterError = async () => {
+    logger.warn('Poster load failed, trying fanart.tv fallback', { 
+      tmdbId: movie.id, 
+      mediaType: movie.media_type,
+      hasPosterPath: !!movie.poster_path 
+    });
+    
     if (!isTryingFanart && !fanartPoster && movie.poster_path) {
       setIsTryingFanart(true);
       try {
@@ -46,6 +60,7 @@ const MoviePoster = memo(({
         if (res.ok) {
           const data = await res.json();
           if (data.poster) {
+            logger.info('Fanart.tv poster found', { tmdbId: movie.id, posterUrl: data.poster });
             setFanartPoster(data.poster);
             return;
           }
@@ -54,6 +69,8 @@ const MoviePoster = memo(({
         logger.error('Failed to fetch Fanart.tv poster', { tmdbId: movie.id, mediaType: movie.media_type, error });
       }
     }
+    
+    logger.warn('All poster sources failed, showing placeholder', { tmdbId: movie.id });
     setImageError(true);
     onError?.();
   };
@@ -76,6 +93,7 @@ const MoviePoster = memo(({
       {children}
 
       <Image
+        key={`${movie.id}-${fanartPoster ? 'fanart' : 'tmdb'}`}
         src={imageUrl}
         alt={movie.title || movie.name || 'Poster'}
         fill

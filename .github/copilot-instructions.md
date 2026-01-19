@@ -1,72 +1,131 @@
-```md
 # Copilot / AI-инструкции для проекта CineChance
 
-Коротко и по делу — что важно знать, чтобы быстро вносить изменения в этот репозиторием.
+**CineChance** — кинотрекер на Next.js 16+ с персонализированными рекомендациями, интеграцией TMDB и рейтинговой системой.
 
-- **Архитектура:** Next.js (app router) + React (TypeScript). Серверные и клиентские части находятся в `src/app/` — используются Server Components и Route Handlers. БД — Postgres с Prisma (Neon adapter).
+## Архитектура (Big Picture)
 
-- **Ключевые файлы и точки входа:**
-  - `src/app/layout.tsx`, `src/app/page.tsx` — основной UI и провайдеры.
-  - `src/app/api/` — Route Handlers (создавайте `route.ts` и экспортируйте `GET/POST`). Пример: `src/app/api/auth/[...nextauth]/route.ts`.
-  - `src/lib/prisma.ts` — единый экспорт `prisma`; импортируйте его всегда отсюда.
-  - `src/auth.ts` — конфигурация `authOptions` для NextAuth и helper `getServerAuthSession()`.
-  - `src/lib/tmdb.ts` — TMDB helper (проверка `TMDB_API_KEY`, обработка ошибок).
-  - `prisma/schema.prisma` и `prisma/migrations/` — схема и миграции.
+- **Tech stack:** Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS
+- **Database:** PostgreSQL (Neon) + Prisma 7.2 (адаптер `@prisma/adapter-neon`)
+- **Auth:** NextAuth 4.24 с CredentialsProvider (JWT стратегия, макс 30 дней)
+- **Внешние API:** TMDB (поиск/тренды с ISR кэшированием 1 час), Upstash Redis (rate limiting)
+- **Структура кода:** Server Components по умолчанию; клиентские компоненты помечаются `'use client'` на вершине файла
 
-- **Запуск и основные команды:**
-  - `npm run dev` — запуск в dev режиме (Next).
-  - `npm run build` — сборка.
-  - `npm run start` — запуск продакшн.
-  - `postinstall` выполняет `prisma generate` (см. `package.json`).
+## Ключевые файлы и точки входа
 
-- **Обязательные переменные окружения:**
-  - `DATABASE_URL` (Neon / Postgres)
-  - `NEXTAUTH_SECRET`
-  - `NEXTAUTH_URL`
-  # Copilot / AI-инструкции для проекта CineChance
+| Файл | Назначение |
+|------|-----------|
+| `src/app/layout.tsx` | Root layout с React Query провайдером (LayoutClient) |
+| `src/app/page.tsx` | Главная страница, использует Server Components для данных |
+| `src/app/api/*/route.ts` | Route Handlers (экспортируйте `GET`, `POST`, `DELETE` и т.п.) |
+| `src/lib/prisma.ts` | **Единственный** Prisma singleton (Neon адаптер) |
+| `src/auth.ts` | NextAuth конфиг, `authOptions`, `getServerAuthSession()` |
+| `src/lib/tmdb.ts` | TMDB обёртки: `fetchTrendingMovies()`, `searchMedia()` и др. |
+| `prisma/schema.prisma` | Данные модели: User, WatchList, RecommendationLog, Invitation и т.п. |
+| `src/lib/movieStatus.ts` | Логика статусов контента (want/watched/dropped) |
+| `src/middleware/rateLimit.ts` | Rate limiting для API через Upstash Redis |
 
-  Кратко и практично — что важно знать, чтобы быстро вносить изменения в этом репозитории.
+## Обязательные переменные окружения
 
-  - **Big picture:** приложение — Next.js (App Router) + React + TypeScript. UI и маршруты находятся в `src/app/`. Серверный код реализован в Server Components и Route Handlers; клиентские компоненты помечаются `'use client'`. БД — Postgres + Prisma; внешняя интеграция — TMDB (через `src/lib/tmdb.ts`).
+```
+DATABASE_URL=postgresql://...       # Neon PostgreSQL
+NEXTAUTH_SECRET=<random-32-chars>   # JWT signing key (обязателен!)
+NEXTAUTH_URL=http://localhost:3000  # Для локальной разработки
+TMDB_API_KEY=...                    # TMDB v3 API key (может отсутствовать в dev)
+```
 
-  - **Ключевые файлы / точки входа:**
-    - `src/app/layout.tsx`, `src/app/page.tsx` — глобальные провайдеры и корневой рендеринг.
-    - `src/app/api/` — Route Handlers: создавайте `route.ts` и экспортируйте `GET`, `POST` и т.п. Примеры: `src/app/api/auth/[...nextauth]/route.ts`, `src/app/api/search/route.ts`.
-    - `src/lib/prisma.ts` — единственный экземпляр Prisma (импортируйте его везде; не создавайте новый `PrismaClient`).
-    - `src/auth.ts` — конфигурация NextAuth и `getServerAuthSession()`.
-    - `src/lib/tmdb.ts` — обёртки для TMDB API (проверка `TMDB_API_KEY`, централизованная обработка ошибок).
-    - `prisma/schema.prisma`, `prisma/migrations/` и `prisma/seed.ts` — схема, миграции и сиды.
+## Критические конвенции кодирования
 
-  - **Конвенции и паттерны (важно):**
-    - По умолчанию Server Components в `src/app/`; если нужен клиентский код — добавьте `'use client'` на вершину файла.
-    - API-эндпоинты делают простую проверку и возвращают `NextResponse`/`Response`. Смотрите шаблоны в `src/app/api/*/route.ts`.
-    - Не создавайте новые экземпляры Prisma: всегда `import { prisma } from 'src/lib/prisma'`.
-    - Аутентификация: NextAuth с CredentialsProvider. Пароли хранятся как `User.hashedPassword`, сравнение — `bcryptjs`. Серверную сессию получайте через `getServerAuthSession()`.
-    - Повторное использование логики: общие утилиты в `src/lib/*`, UI-компоненты в `src/app/components/`.
+1. **Prisma**: Всегда `import { prisma } from '@/lib/prisma'` — никогда не создавайте новый `PrismaClient()`
+2. **Auth**: Проверяйте сессию в Route Handlers через `const session = await getServerAuthSession(authOptions)`
+3. **API эндпоинты**: 
+   - Возвращают `NextResponse.json()` или `NextResponse(..., { status: 401 })`
+   - Применяют rate limiting: `const { success } = await rateLimit(request, '/api/path')`
+   - Проверяют возраст через `isUnder18()` для adult контента в `src/app/api/search/route.ts`
+4. **TMDB**: Вызовы в `src/lib/tmdb.ts`, используют ISR кэширование (теги: `trending-movies`, `home-page`), код обрабатывает отсутствие `TMDB_API_KEY`
+5. **Компоненты**: Server Components хранят логику (поиск, фильтрация, БД запросы), малые клиентские компоненты только для интерактивности
 
-  - **Добавление функциональности — практический пример:**
-    1. Новый API: создайте папку `src/app/api/<name>/` и файл `route.ts`, экспортируйте нужные HTTP-методы.
-    2. Используйте `prisma` из `src/lib/prisma.ts` и `getServerAuthSession()` при необходимости проверять пользователя.
-    3. Для внешних данных — добавьте/вызовите функции в `src/lib/tmdb.ts`.
+## Основные модели данных
 
-  - **Рабочие команды и CI/developers workflow:**
-    - Dev сервер: `npm run dev` (Next). Логи видны в терминале.
-    - Сборка: `npm run build`; запуск prod: `npm run start`.
-    - После изменений в Prisma схеме: `npx prisma generate` и локальные миграции `npx prisma migrate dev`.
-    - `postinstall` в `package.json` запускает `prisma generate` — учтите это на CI.
+- **User**: `id`, `email`, `hashedPassword` (bcryptjs), `birthDate` (для age-gating), `agreedToTerms`, `recommendationStats`, `preferencesSnapshot`
+- **WatchList**: статусы фильмов (want/watched/dropped), оценки, метаданные
+- **RecommendationLog**: источник правды о взаимодействиях с рекомендациями
+- **Tag**: пользовательские теги для фильмов
+- **RatingHistory**: история оценок
+- **Invitation**: система приглашений с токенами и сроком действия
 
-  - **Переменные окружения (обязательные):**
-    - `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `TMDB_API_KEY`.
+## Быстрый старт: добавление функциональности
 
-  - **Интеграции и точки внимания:**
-    - TMDB: все вызовы централизованы в `src/lib/tmdb.ts`. Код ожидает, что `TMDB_API_KEY` может отсутствовать — обработайте этот кейс.
-    - Auth: `src/app/api/auth/[...nextauth]/*` и `src/auth.ts` вместе формируют поток логина/сидов/сессий.
-    - Watchlist / movie status: логика работы со статусами фильмов находится в `src/lib/movieStatus.ts` и API-эндпоинте `src/app/api/watchlist/route.ts`.
+**Пример нового Route Handler:**
 
-  - **Практические рекомендации для ИИ-агента:**
-    - Изменения в серверной логике лучше оформлять через Route Handlers в `src/app/api/`.
-    - Для UI-изменений следуйте текущей структуре компонентов в `src/app/components/` и `src/app/*/page.tsx` (Server Component → небольшие клиентские части при необходимости).
-    - Проверяйте `src/lib/*` на наличие общих функций перед созданием новых утилит.
-    - При изменениях в модели данных обновите `prisma/schema.prisma`, выполните `npx prisma generate` и добавьте миграцию в `prisma/migrations/`.
+```typescript
+// src/app/api/my-feature/route.ts
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/auth';
+import { prisma } from '@/lib/prisma';
+import { rateLimit } from '@/middleware/rateLimit';
 
-  Если хотите, могу дополнить инструкцию примерами кода для создания Route Handler, использования `prisma` и вызова TMDB. Напишите, какие примеры предпочитаете.
+export async function GET(request: Request) {
+  const { success } = await rateLimit(request, '/api/my-feature');
+  if (!success) {
+    return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+  }
+
+  const session = await getServerAuthSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({ 
+    where: { id: session.user.id },
+    include: { watchList: true }
+  });
+
+  return NextResponse.json(user);
+}
+```
+
+## Рабочие команды
+
+```bash
+npm run dev              # Next.js dev сервер (port 3000)
+npm run build            # Production build
+npm run start            # Запуск production сервера
+npm run seed             # Seeding БД (ts-node prisma/seed.ts)
+npm run lint             # ESLint проверка
+
+# Prisma команды (важно!)
+npx prisma generate     # После изменения schema.prisma (выполняется в postinstall)
+npx prisma migrate dev --name <name>  # Создать локальную миграцию
+npx prisma db push      # Применить schema без создания миграции (dev только!)
+```
+
+## Интеграции и критические потоки
+
+### TMDB интеграция
+- Все вызовы в `src/lib/tmdb.ts` с централизованной обработкой ошибок
+- ISR кэширование 1 час для trending/popular фильмов
+- Код ожидает `TMDB_API_KEY` может отсутствовать — обработайте gracefully
+
+### Auth flow
+- `src/app/api/auth/[...nextauth]/` ← Next.js auto-route для NextAuth
+- `src/auth.ts` ← конфиг с CredentialsProvider, JWT callbacks
+- Пароли: `bcryptjs.hash()` при регистрации, `bcryptjs.compare()` при логине
+- Сессия: `getServerAuthSession()` в Server Components/Route Handlers
+
+### Rate limiting
+- `src/middleware/rateLimit.ts` использует Upstash Redis
+- Вызывайте в начале Route Handlers: `const { success } = await rateLimit(request, '/api/path')`
+- Возвращайте `{ status: 429 }` если rate limited
+
+### Watchlist / статусы фильмов
+- `src/lib/movieStatus.ts` текущая логика статусов
+- `src/app/api/watchlist/` обработка add/remove/update
+
+## Практические рекомендации для AI-агентов
+
+- **Server-side logic:** Route Handlers в `src/app/api/` для всех серверных операций
+- **UI changes:** Следуйте структуре компонентов в `src/app/components/` и `src/app/[feature]/page.tsx`
+- **Переиспользование:** Проверьте `src/lib/*` на наличие общих функций перед созданием новых утилит
+- **DB changes:** Обновите `prisma/schema.prisma` → `npx prisma generate` → `npx prisma migrate dev --name desc`
+- **New features:** Смотрите на примеры в `src/app/api/search/route.ts` для структуры error handling + auth checks

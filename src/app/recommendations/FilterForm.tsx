@@ -8,7 +8,6 @@ type ListType = 'want' | 'watched';
 
 interface AdditionalFilters {
   minRating: number;
-  maxRating: number;
   yearFrom: string;
   yearTo: string;
   selectedGenres: number[];
@@ -20,6 +19,7 @@ interface FilterFormProps {
   onTypeChange?: (types: ContentType[]) => void;
   onListChange?: (lists: ListType[]) => void;
   onAdditionalFilterChange?: (filters: AdditionalFilters) => void;
+  initialMinRating?: number; // Начальное значение minRating из настроек пользователя
 }
 
 const CONTENT_TYPE_OPTIONS: { value: ContentType; label: string; icon: string; color: string }[] = [
@@ -66,17 +66,21 @@ const GENRES = [
 
 const defaultAdditionalFilters: AdditionalFilters = {
   minRating: 0,
-  maxRating: 10,
   yearFrom: '',
   yearTo: '',
   selectedGenres: [],
 };
 
-export default function FilterForm({ onSubmit, isLoading, onTypeChange, onListChange, onAdditionalFilterChange }: FilterFormProps) {
+export default function FilterForm({ onSubmit, isLoading, onTypeChange, onListChange, onAdditionalFilterChange, initialMinRating = 0 }: FilterFormProps) {
   const [selectedTypes, setSelectedTypes] = useState<ContentType[]>(['movie', 'tv', 'anime']);
   const [selectedLists, setSelectedLists] = useState<ListType[]>(['want', 'watched']);
   const [isAdditionalExpanded, setIsAdditionalExpanded] = useState(false);
-  const [additionalFilters, setAdditionalFilters] = useState<AdditionalFilters>(defaultAdditionalFilters);
+  
+  // Используем initialMinRating для инициализации, если он больше 0
+  const [additionalFilters, setAdditionalFilters] = useState<AdditionalFilters>({
+    ...defaultAdditionalFilters,
+    minRating: initialMinRating > 0 ? initialMinRating : 0,
+  });
 
   const handleTypeToggle = (type: ContentType) => {
     setSelectedTypes(prev => {
@@ -133,14 +137,6 @@ export default function FilterForm({ onSubmit, isLoading, onTypeChange, onListCh
     }
   };
 
-  const updateMaxRating = (value: number) => {
-    const newFilters = { ...additionalFilters, maxRating: value };
-    setAdditionalFilters(newFilters);
-    if (onAdditionalFilterChange) {
-      onAdditionalFilterChange(newFilters);
-    }
-  };
-
   const updateYearFrom = (value: string) => {
     const newFilters = { ...additionalFilters, yearFrom: value };
     setAdditionalFilters(newFilters);
@@ -165,7 +161,6 @@ export default function FilterForm({ onSubmit, isLoading, onTypeChange, onListCh
   };
 
   const hasActiveAdditionalFilters = additionalFilters.minRating > 0 ||
-    additionalFilters.maxRating < 10 ||
     additionalFilters.yearFrom ||
     additionalFilters.yearTo ||
     additionalFilters.selectedGenres.length > 0;
@@ -324,33 +319,21 @@ export default function FilterForm({ onSubmit, isLoading, onTypeChange, onListCh
           {/* Фильтр по рейтингу */}
           <div>
             <label className="text-xs text-gray-400 block mb-2">
-              Моя оценка: {additionalFilters.minRating > 0 || additionalFilters.maxRating < 10 ? `${additionalFilters.minRating} - ${additionalFilters.maxRating}` : 'Любая'}
+              Минимальный рейтинг: {additionalFilters.minRating > 0 ? `от ${additionalFilters.minRating}` : 'любой'}
             </label>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <span className="text-xs text-gray-500 block mb-1">От</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="1"
-                  value={additionalFilters.minRating}
-                  onChange={(e) => updateMinRating(parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-              </div>
-              <div className="flex-1">
-                <span className="text-xs text-gray-500 block mb-1">До</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="1"
-                  value={additionalFilters.maxRating}
-                  onChange={(e) => updateMaxRating(parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-              </div>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="0.5"
+              value={additionalFilters.minRating}
+              onChange={(e) => updateMinRating(parseFloat(e.target.value))}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            />
+            <div className="flex justify-between mt-2 text-xs text-gray-500">
+              <span>0</span>
+              <span>5</span>
+              <span>10</span>
             </div>
           </div>
 

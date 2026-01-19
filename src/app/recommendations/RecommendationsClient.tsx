@@ -1,7 +1,7 @@
 // src/app/recommendations/RecommendationsClient.tsx
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import RecommendationCard from './RecommendationCard';
 import FilterForm from './FilterForm';
@@ -9,6 +9,7 @@ import SessionTracker from './SessionTracker';
 import FilterStateManager from './FilterStateManager';
 import { useSessionTracking } from './useSessionTracking';
 import { logger } from '@/lib/logger';
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 // Типы данных
 interface MovieData {
@@ -58,7 +59,6 @@ type ListType = 'want' | 'watched';
 
 interface AdditionalFilters {
   minRating: number;
-  maxRating: number;
   yearFrom: string;
   yearTo: string;
   selectedGenres: number[];
@@ -92,12 +92,38 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   const [progress, setProgress] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [userMinRating, setUserMinRating] = useState<number>(6.0); // Настройка minRating пользователя
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true); // Флаг загрузки настроек
   const fetchStartTime = useRef<number>(0);
   const [currentFilters, setCurrentFilters] = useState<{
     types: ContentType[];
     lists: ListType[];
     additionalFilters?: AdditionalFilters;
   } | null>(null);
+
+  // Загружаем настройки пользователя при монтировании
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      setIsLoadingSettings(true);
+      try {
+        const response = await fetch('/api/user/settings');
+        if (response.ok) {
+          const data = await response.json();
+          // API возвращает 5.0 если значение null или undefined
+          if (data.minRating !== undefined && data.minRating !== null) {
+            setUserMinRating(data.minRating);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch user settings:', error);
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+    fetchUserSettings();
+  }, []);
 
   // Получение года из даты
   const getYear = (movieData: MovieData) => {
@@ -163,9 +189,6 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       if (additionalFilters) {
         if (additionalFilters.minRating > 0) {
           params.set('minRating', additionalFilters.minRating.toString());
-        }
-        if (additionalFilters.maxRating < 10) {
-          params.set('maxRating', additionalFilters.maxRating.toString());
         }
         if (additionalFilters.yearFrom) {
           params.set('yearFrom', additionalFilters.yearFrom);
@@ -256,21 +279,29 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   // Подтверждение сброса истории
   const confirmResetLogs = async () => {
     setIsResetConfirmOpen(false);
+    setIsResetting(true);
+    setResetMessage(null);
 
     try {
       const res = await fetch('/api/recommendations/reset-logs', {
         method: 'POST',
       });
 
+      const data = await res.json();
+
       if (res.ok) {
+        setResetMessage({ type: 'success', text: data.message || 'История рекомендаций очищена' });
         fetchStartTime.current = 0;
         setViewState('filters');
+        setTimeout(() => setResetMessage(null), 3000);
       } else {
-        alert('Ошибка при очистке истории');
+        setResetMessage({ type: 'error', text: data.error || 'Ошибка при очистке истории' });
       }
     } catch (err) {
       logger.error('Failed to reset recommendation logs', { error: err });
-      alert('Ошибка при очистке истории');
+      setResetMessage({ type: 'error', text: 'Ошибка соединения' });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -385,17 +416,29 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
 
                   {/* Состояние: Фильтры */}
                   {viewState === 'filters' && (
-                    <FilterForm
-                      onSubmit={(types, lists, additionalFilters) =>
-                        fetchRecommendation(types as ContentType[], lists as ListType[], additionalFilters, tracking)
-                      }
-                      isLoading={false}
-                      onTypeChange={(types) => updateFilter('types', types)}
-                      onListChange={(lists) => updateFilter('lists', lists)}
-                      onAdditionalFilterChange={(additionalFilters) => {
-                        updateFilter('additionalFilters', additionalFilters);
-                      }}
-                    />
+                    <>
+                      {isLoadingSettings ? (
+                        <div className="flex items-center justify-center min-h-[200px]">
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>Загрузка настроек...</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <FilterForm
+                          onSubmit={(types, lists, additionalFilters) =>
+                            fetchRecommendation(types as ContentType[], lists as ListType[], additionalFilters, tracking)
+                          }
+                          isLoading={false}
+                          initialMinRating={userMinRating}
+                          onTypeChange={(types) => updateFilter('types', types)}
+                          onListChange={(lists) => updateFilter('lists', lists)}
+                          onAdditionalFilterChange={(additionalFilters) => {
+                            updateFilter('additionalFilters', additionalFilters);
+                          }}
+                        />
+                      )}
+                    </>
                   )}
 
                   {/* Состояние: Загрузка */}
@@ -450,9 +493,21 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                         <div className="flex gap-2 flex-wrap justify-center">
                           <button
                             onClick={handleResetLogs}
-                            className="px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg font-medium hover:bg-yellow-500 transition cursor-pointer"
+                            disabled={isResetting}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg font-medium transition ${
+                              isResetting
+                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                : 'bg-yellow-600 text-white hover:bg-yellow-500 cursor-pointer'
+                            }`}
                           >
-                            Сбросить историю
+                            {isResetting ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Очистка...
+                              </>
+                            ) : (
+                              'Сбросить историю'
+                            )}
                           </button>
                           <button
                             onClick={handleBackToFilters}
@@ -468,6 +523,22 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                         >
                           Изменить фильтры
                         </button>
+                      )}
+
+                      {/* Сообщение о результате сброса */}
+                      {resetMessage && (
+                        <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 text-sm max-w-xs ${
+                          resetMessage.type === 'success'
+                            ? 'bg-green-900/30 text-green-400'
+                            : 'bg-red-900/30 text-red-400'
+                        }`}>
+                          {resetMessage.type === 'success' ? (
+                            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          )}
+                          <span>{resetMessage.text}</span>
+                        </div>
                       )}
                     </div>
                   )}

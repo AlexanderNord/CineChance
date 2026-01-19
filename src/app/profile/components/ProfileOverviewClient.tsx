@@ -30,12 +30,15 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<string[]>([]);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Загружаем данные пользователя клиентски для актуальности
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         setIsLoading(true);
+        setErrorDetails([]);
 
         // Параллельная загрузка всех данных
         const [profileResponse, watchlistResponse, blacklistResponse] = await Promise.all([
@@ -43,6 +46,9 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           fetch('/api/watchlist/count'),
           fetch('/api/user/blacklist/count'),
         ]);
+
+        let hasError = false;
+        let errors: string[] = [];
 
         if (profileResponse.ok) {
           const data = await profileResponse.json();
@@ -55,26 +61,51 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
               createdAt: new Date(data.user.createdAt),
             });
           }
+        } else {
+          hasError = true;
+          const errorText = await profileResponse.text().catch(() => 'Unknown error');
+          errors.push(`Профиль: ${profileResponse.status} - ${errorText}`);
+          console.error('Profile API error:', profileResponse.status, errorText);
         }
 
         if (watchlistResponse.ok) {
           const data = await watchlistResponse.json();
           setWatchListCount(data.count || 0);
+        } else {
+          const errorText = await watchlistResponse.text().catch(() => 'Unknown error');
+          errors.push(`Watchlist: ${watchlistResponse.status}`);
+          console.error('Watchlist API error:', watchlistResponse.status, errorText);
         }
 
         if (blacklistResponse.ok) {
           const data = await blacklistResponse.json();
           setBlacklistCount(data.count || 0);
+        } else {
+          const errorText = await blacklistResponse.text().catch(() => 'Unknown error');
+          errors.push(`Blacklist: ${blacklistResponse.status}`);
+          console.error('Blacklist API error:', blacklistResponse.status, errorText);
+        }
+
+        setErrorDetails(errors);
+
+        // Если произошла ошибка и данных нет, пробуем повторить через 3 секунды
+        if (hasError && !userData && retryCount < 3) {
+          console.warn(`Profile data failed to load, will retry (attempt ${retryCount + 1}/3)...`);
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => {
+            fetchUserData();
+          }, 3000);
         }
       } catch (error) {
         console.error('Failed to fetch user data', error);
+        setErrorDetails(['Ошибка сети: ' + (error instanceof Error ? error.message : 'Unknown error')]);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUserData();
-  }, [userId]);
+  }, [userId, retryCount]);
 
   // Определяем мобильное устройство
   useEffect(() => {
@@ -101,7 +132,27 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
     return (
       <div className="space-y-4 md:space-y-6 px-4 sm:px-0">
         <div className="bg-red-900/30 border border-red-700 rounded-lg p-6">
-          <p className="text-red-300">Не удалось загрузить данные профиля</p>
+          <p className="text-red-300 font-medium mb-2">Не удалось загрузить данные профиля</p>
+          
+          {errorDetails.length > 0 && (
+            <div className="mt-3 space-y-1">
+              {errorDetails.map((error, index) => (
+                <p key={index} className="text-red-400 text-sm font-mono">
+                  {error}
+                </p>
+              ))}
+            </div>
+          )}
+          
+          <button
+            onClick={() => {
+              setRetryCount(0);
+              setErrorDetails([]);
+            }}
+            className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition"
+          >
+            Повторить загрузку
+          </button>
         </div>
       </div>
     );

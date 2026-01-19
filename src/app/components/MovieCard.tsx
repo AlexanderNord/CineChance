@@ -58,10 +58,6 @@ export default function MovieCard({
   const [isRemoved, setIsRemoved] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [fanartPoster, setFanartPoster] = useState<string | null>(null);
-  const [isTryingFanart, setIsTryingFanart] = useState(false);
-  
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [isRatingInfoOpen, setIsRatingInfoOpen] = useState(false);
   const [cineChanceRating, setCineChanceRating] = useState<number | null>(initialAverageRating ?? null);
@@ -116,33 +112,6 @@ export default function MovieCard({
     });
   }, [movie.vote_average, movie.vote_count, cineChanceRating, cineChanceVoteCount]);
 
-  const imageUrl = useMemo(() => {
-    if (imageError) return '/placeholder-poster.svg';
-    if (fanartPoster) return fanartPoster;
-    if (movie.poster_path) return `https://image.tmdb.org/t/p/w500${movie.poster_path}`;
-    return '/placeholder-poster.svg';
-  }, [imageError, fanartPoster, movie.poster_path]);
-
-  const handlePosterError = async () => {
-    if (!isTryingFanart && !fanartPoster && movie.poster_path) {
-      setIsTryingFanart(true);
-      try {
-        const res = await fetch(`/api/fanart-poster?tmdbId=${movie.id}&mediaType=${movie.media_type}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.poster) {
-            setFanartPoster(data.poster);
-            return;
-          }
-        }
-      } catch (error) {
-        logger.error('Failed to fetch Fanart.tv poster', { tmdbId: movie.id, mediaType: movie.media_type, error });
-      }
-    }
-    setImageError(true);
-  };
-
-  // Эффекты остаются...
   useEffect(() => {
     if (restoreView) {
       setIsBlacklisted(true); 
@@ -577,16 +546,17 @@ export default function MovieCard({
             
             {getStatusIcon()}
 
-            <Image
-              src={imageUrl}
-              alt={title}
-              fill
-              className={`object-cover transition-transform duration-500 ${
-                isHovered && !showOverlay ? 'scale-105' : ''
-              }`}
-              sizes="(max-width: 640px) 48vw, (max-width: 768px) 31vw, (max-width: 1024px) 23vw, (max-width: 1280px) 19vw, 15vw"
-              loading={priority ? "eager" : "lazy"}
-              onError={handlePosterError}
+            <MoviePoster
+              key={movie.id}
+              movie={movie}
+              priority={priority}
+              isBlacklisted={isBlacklisted}
+              restoreView={restoreView}
+              isHovered={isHovered && !showOverlay}
+              showOverlay={showOverlay}
+              onClick={handlePosterClick}
+              onMouseEnter={handlePosterMouseEnter}
+              onMouseLeave={handlePosterMouseLeave}
             />
           </div>
 

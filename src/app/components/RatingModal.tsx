@@ -109,7 +109,6 @@ export default function RatingModal({ isOpen, onClose, onSave, title, releaseDat
     }
   };
 
-
   const renderStars = () => {
     const stars = [];
     const val = rating / 2;
@@ -117,11 +116,11 @@ export default function RatingModal({ isOpen, onClose, onSave, title, releaseDat
     for (let i = 0; i < 5; i++) {
       let StarComponent;
       if (val >= i + 1) {
-        StarComponent = <div className="text-yellow-400"><StarFull /></div>;
+        StarComponent = <div className="text-yellow-400"><StarFull size={48} /></div>;
       } else if (val >= i + 0.5) {
-        StarComponent = <div className="text-yellow-400"><StarHalf /></div>;
+        StarComponent = <div className="text-yellow-400"><StarHalf size={48} /></div>;
       } else {
-        StarComponent = <div className="text-gray-600"><StarEmpty /></div>;
+        StarComponent = <div className="text-gray-600"><StarEmpty size={48} /></div>;
       }
 
       stars.push(
