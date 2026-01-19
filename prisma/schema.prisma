@@ -111,6 +111,7 @@ model RecommendationLog {
 // Фундамент для персонализации алгоритма подбора
 model RecommendationSettings {
   userId             String   @id
+  minRating          Float    @default(5.0)    // Минимальный рейтинг для рекомендаций
   preferHighRating   Boolean  @default(true)   // Предпочитать фильмы с высоким рейтингом
   avoidRewatches     Boolean  @default(false)  // Исключать пересмотры из рекомендаций
   preferUnwatched    Boolean  @default(true)   // Приоритет непросмотренного контента

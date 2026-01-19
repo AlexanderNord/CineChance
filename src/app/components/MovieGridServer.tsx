@@ -1,5 +1,5 @@
 // src/app/components/MovieGridServer.tsx
-import MovieCard from './MovieCard';
+import LazyMovieCard from './LazyMovieCard';
 import { fetchTrendingMovies } from '@/lib/tmdb';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
@@ -59,11 +59,11 @@ export default async function MovieGridServer() {
         
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 sm:gap-6">
           {displayMovies.map((movie, index) => (
-            <MovieCard 
+            <LazyMovieCard 
               key={movie.id} 
               movie={movie} 
+              index={index}
               priority={index < 6}
-              initialIsBlacklisted={blacklistedIds.has(movie.id)}
             />
           ))}
         </div>

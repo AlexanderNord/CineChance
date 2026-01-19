@@ -8,7 +8,6 @@ type ListType = 'want' | 'watched';
 
 interface AdditionalFilters {
   minRating: number;
-  maxRating: number;
   yearFrom: string;
   yearTo: string;
   selectedGenres: number[];
@@ -37,7 +36,6 @@ const defaultFilters: FilterState = {
   lists: ['want', 'watched'],
   additionalFilters: {
     minRating: 0,
-    maxRating: 10,
     yearFrom: '',
     yearTo: '',
     selectedGenres: [],
@@ -85,7 +83,6 @@ export default function FilterStateManager({
       const additional = value as AdditionalFilters;
       const defaultAdditional = defaultValue as AdditionalFilters;
       return additional.minRating !== defaultAdditional.minRating ||
-             additional.maxRating !== defaultAdditional.maxRating ||
              additional.yearFrom !== defaultAdditional.yearFrom ||
              additional.yearTo !== defaultAdditional.yearTo ||
              additional.selectedGenres.length !== defaultAdditional.selectedGenres.length;

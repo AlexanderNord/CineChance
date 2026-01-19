@@ -6,6 +6,7 @@ import { fetchMediaDetails } from '@/lib/tmdb';
 import { shouldFilterAdult } from '@/lib/age-utils';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
+import { calculateCineChanceScore } from '@/lib/calculateCineChanceScore';
 import {
   FiltersSnapshot,
   CandidatePoolMetrics,
@@ -26,7 +27,6 @@ interface FilterParams {
   types: ContentType[];
   lists: ListType[];
   minRating?: number;
-  maxRating?: number;
   yearFrom?: string;
   yearTo?: string;
   genres?: number[];
@@ -39,7 +39,6 @@ function parseFilterParams(url: URL): FilterParams {
   const typesParam = url.searchParams.get('types');
   const listsParam = url.searchParams.get('lists');
   const minRatingParam = url.searchParams.get('minRating');
-  const maxRatingParam = url.searchParams.get('maxRating');
   const yearFromParam = url.searchParams.get('yearFrom');
   const yearToParam = url.searchParams.get('yearTo');
   const genresParam = url.searchParams.get('genres');
@@ -60,8 +59,7 @@ function parseFilterParams(url: URL): FilterParams {
   }
 
   // Парсим дополнительные фильтры
-  const minRating = minRatingParam ? parseInt(minRatingParam) : undefined;
-  const maxRating = maxRatingParam ? parseInt(maxRatingParam) : undefined;
+  const minRating = minRatingParam ? parseFloat(minRatingParam) : undefined;
   const yearFrom = yearFromParam || undefined;
   const yearTo = yearToParam || undefined;
   const genres = genresParam ? genresParam.split(',').map(g => parseInt(g)).filter(g => !isNaN(g)) : undefined;
@@ -70,7 +68,7 @@ function parseFilterParams(url: URL): FilterParams {
   if (types.length === 0) types = ['movie', 'tv', 'anime'];
   if (lists.length === 0) lists = ['want'];
 
-  return { types, lists, minRating, maxRating, yearFrom, yearTo, genres };
+  return { types, lists, minRating, yearFrom, yearTo, genres };
 }
 
 /**
@@ -169,7 +167,6 @@ function createFiltersSnapshot(
   types: ContentType[],
   lists: ListType[],
   minRating?: number,
-  maxRating?: number,
   yearFrom?: string,
   yearTo?: string,
   genres?: number[]
@@ -186,7 +183,6 @@ function createFiltersSnapshot(
     },
     additionalFilters: {
       minRating,
-      maxRating,
       yearFrom,
       yearTo,
       selectedGenres: genres && genres.length > 0 ? genres : undefined,
@@ -220,7 +216,7 @@ export async function GET(req: Request) {
 
     const userId = session.user.id as string;
     const url = new URL(req.url);
-    const { types, lists, minRating, maxRating, yearFrom, yearTo, genres } = parseFilterParams(url);
+    const { types, lists, minRating, yearFrom, yearTo, genres } = parseFilterParams(url);
 
     // 1. Получаем настройки пользователя
     const settings = await prisma.recommendationSettings.findUnique({
@@ -311,6 +307,7 @@ export async function GET(req: Request) {
             release_date: null,
             first_air_date: null,
             adult: true,
+            vote_count: 0,
           };
         }
         
@@ -323,6 +320,7 @@ export async function GET(req: Request) {
           release_date: details?.release_date || null,
           first_air_date: details?.first_air_date || null,
           adult: details?.adult || false,
+          vote_count: details?.vote_count || 0,
         };
       } catch {
         return {
@@ -334,6 +332,7 @@ export async function GET(req: Request) {
           release_date: null,
           first_air_date: null,
           adult: false,
+          vote_count: 0,
         };
       }
     });
@@ -404,18 +403,44 @@ export async function GET(req: Request) {
 
     const afterCooldown = candidates.length;
 
-    // Применяем фильтр по рейтингу пользователя (дополнительный фильтр)
-    // Проверяем по списку 'watched', так как рейтинг пользователя есть только у просмотренных фильмов
-    if (lists.includes('watched')) {
-      if (minRating !== undefined || maxRating !== undefined) {
-        candidates = candidates.filter(item => {
-          const rating = item.userRating ?? 0;
-          if (minRating !== undefined && rating < minRating) return false;
-          if (maxRating !== undefined && rating > maxRating) return false;
-          return true;
-        });
-      }
-    }
+    // 7. Применяем фильтр по minRating из настроек пользователя
+    // Используем комбинированный рейтинг (CineChance score) вместо TMDB voteAverage
+    const userMinRating = settings?.minRating ?? 5.0;
+    
+    // Получаем TMDB данные для расчёта комбинированного рейтинга
+    const candidatesWithRatings = await Promise.all(candidates.map(async (item) => {
+      const details = detailsMap.get(item.tmdbId);
+      const tmdbRating = item.voteAverage ?? 0;
+      const tmdbVotes = details?.vote_count ?? 0;
+      const cineChanceRating = item.userRating ?? null;
+      
+      // Для расчёта CineChance score нам нужно количество оценок пользователя
+      const cineChanceVotes = await prisma.ratingHistory.count({
+        where: {
+          userId,
+          tmdbId: item.tmdbId,
+          mediaType: item.mediaType,
+        },
+      });
+      
+      // Рассчитываем комбинированный рейтинг
+      const combinedRating = calculateCineChanceScore({
+        tmdbRating,
+        tmdbVotes,
+        cineChanceRating,
+        cineChanceVotes,
+      });
+      
+      return {
+        ...item,
+        combinedRating,
+      };
+    }));
+    
+    // Фильтруем по комбинированному рейтингу
+    candidates = candidatesWithRatings.filter(item => {
+      return item.combinedRating >= userMinRating;
+    });
 
     // Применяем фильтры по году и жанрам из TMDB данных
     if (yearFrom || yearTo || (genres && genres.length > 0)) {
@@ -546,7 +571,7 @@ export async function GET(req: Request) {
     const userStatus = userStatusMap[selected.status.name] || null;
 
     // 9. Формируем контекстные данные для записи
-    const filtersSnapshot = createFiltersSnapshot(types, lists, minRating, maxRating, yearFrom, yearTo, genres);
+    const filtersSnapshot = createFiltersSnapshot(types, lists, minRating, yearFrom, yearTo, genres);
     const candidatePoolMetrics = calculateCandidatePoolMetrics(
       initialCount,
       afterTypeFilter,
@@ -597,14 +622,27 @@ export async function GET(req: Request) {
       },
     });
 
-    // 11. Формируем ответ
+    // 11. Формируем ответ с комбинированным рейтингом
+    // Рассчитываем финальный комбинированный рейтинг для отображения
+    const finalTmdbRating = tmdbData?.vote_average || selected.voteAverage;
+    const finalTmdbVotes = tmdbData?.vote_count || 0;
+    const finalCineChanceRating = watchListData?.userRating || null;
+    const finalCineChanceVotes = ratingHistoryCount;
+    
+    const finalCombinedRating = calculateCineChanceScore({
+      tmdbRating: finalTmdbRating,
+      tmdbVotes: finalTmdbVotes,
+      cineChanceRating: finalCineChanceRating,
+      cineChanceVotes: finalCineChanceVotes,
+    });
+
     const movie = {
       id: selected.tmdbId,
       media_type: displayMediaType,
       title: tmdbData?.title || selected.title,
       name: tmdbData?.name || selected.title,
       poster_path: tmdbData?.poster_path || null,
-      vote_average: tmdbData?.vote_average || selected.voteAverage,
+      vote_average: finalCombinedRating, // Используем комбинированный рейтинг
       vote_count: tmdbData?.vote_count || 0,
       release_date: tmdbData?.release_date || tmdbData?.first_air_date || null,
       first_air_date: tmdbData?.first_air_date || null,
