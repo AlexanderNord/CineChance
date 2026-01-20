@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import MovieCard from './MovieCard';
-import Loader from './Loader';
+import MovieCardSkeleton from './MovieCardSkeleton';
 import { fetchTrendingMovies, Media } from '@/lib/tmdb';
 import { BlacklistProvider } from './BlacklistContext';
 
@@ -25,12 +25,10 @@ export default function HorizontalMovieGrid() {
     return (
       <div className="py-8">
         <div className="container mx-auto px-4">
-          <h2 className="text-2xl font-bold text-white mb-6">Загружается...</h2>
+          <div className="h-8 w-48 bg-gray-800 rounded skeleton-shimmer mb-6" />
           <div className="flex space-x-4 overflow-x-auto pb-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="w-48 p-2">
-                <Loader size="small" />
-              </div>
+              <MovieCardSkeleton key={i} variant="horizontal" />
             ))}
           </div>
         </div>

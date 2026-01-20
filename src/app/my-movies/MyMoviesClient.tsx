@@ -675,8 +675,8 @@ export default function MyMoviesClient({
                         initialStatus={movie.statusName ? STATUS_MAP[movie.statusName] || null : null}
                         initialIsBlacklisted={movie.isBlacklisted}
                         initialUserRating={movie.userRating}
-                        initialAverageRating={batch.averageRating}
-                        initialRatingCount={batch.ratingCount}
+                        initialAverageRating={movie.averageRating ?? batch.averageRating}
+                        initialRatingCount={movie.ratingCount ?? batch.ratingCount}
                       />
                     </MovieCardErrorBoundary>
                   </div>

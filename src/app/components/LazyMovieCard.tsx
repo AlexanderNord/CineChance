@@ -1,11 +1,12 @@
 // src/app/components/LazyMovieCard.tsx
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Media } from '@/lib/tmdb';
 import { logger } from '@/lib/logger';
 import { useBlacklist } from './BlacklistContext';
 import MovieCard from './MovieCard';
+import MovieCardSkeleton from './MovieCardSkeleton';
 
 interface LazyMovieCardProps {
   movie: Media;
@@ -75,20 +76,20 @@ export default function LazyMovieCard({ movie, index, priority = false }: LazyMo
     }
   }, [priority]);
 
-  // Показываем скелетон пока данные загружаются
+  // Показываем скелетон пока карточка не в области видимости
   if (!shouldRender) {
     return (
-      <div ref={cardRef} className="w-full h-[300px] bg-gray-800/50 rounded-lg animate-pulse" />
+      <div ref={cardRef} className="w-full">
+        <MovieCardSkeleton />
+      </div>
     );
   }
 
-  // Показываем лоадер пока загружаем данные карточки
+  // Показываем скелетон пока загружаем данные карточки
   if (!dataLoaded && !priority) {
     return (
       <div ref={cardRef} className="w-full">
-        <div className="w-full aspect-[2/3] bg-gray-800 rounded-lg animate-pulse mb-1" />
-        <div className="h-4 bg-gray-800 rounded animate-pulse mb-1" />
-        <div className="h-3 bg-gray-800/50 rounded animate-pulse" />
+        <MovieCardSkeleton />
       </div>
     );
   }

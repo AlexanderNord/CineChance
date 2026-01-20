@@ -24,6 +24,8 @@ interface MovieCardData {
   isBlacklisted: boolean;
   status: 'want' | 'watched' | 'dropped' | 'rewatched' | null;
   userRating: number | null;
+  averageRating: number | null;
+  ratingCount: number;
 }
 
 // Enable ISR with 1 hour revalidation
@@ -93,17 +95,49 @@ export default async function HorizontalMovieGridServer() {
   }
   
   const displayMovies = filteredMovies.slice(0, 20);
+  
+  // Загружаем CineChance рейтинги для отображаемых фильмов
+  const displayTmdbIds = displayMovies.map(m => m.id);
+  let cineChanceRatings: Map<number, { averageRating: number; count: number }> = new Map();
+  
+  if (displayTmdbIds.length > 0) {
+    try {
+      const ratingRecords = await prisma.watchList.groupBy({
+        by: ['tmdbId'],
+        _avg: { userRating: true },
+        _count: { userRating: true },
+        where: { 
+          tmdbId: { in: displayTmdbIds },
+          userRating: { not: null },
+        },
+      });
+      
+      ratingRecords.forEach(record => {
+        if (record._avg.userRating && record._count.userRating > 0) {
+          cineChanceRatings.set(record.tmdbId, {
+            averageRating: record._avg.userRating,
+            count: record._count.userRating,
+          });
+        }
+      });
+    } catch (error) {
+      console.error("Failed to fetch CineChance ratings", error);
+    }
+  }
 
   // Подготавливаем данные для MovieCard
   const moviesWithData: MovieCardData[] = displayMovies.map((movie) => {
     const watchlistKey = `${movie.media_type}_${movie.id}`;
     const watchlistData = watchlistMap.get(watchlistKey);
+    const cineChanceData = cineChanceRatings.get(movie.id);
     
     return {
       movie,
       isBlacklisted: blacklistedIds.has(movie.id),
       status: watchlistData ? (STATUS_FROM_DB[watchlistData.status || ''] || null) : null,
       userRating: watchlistData?.userRating || null,
+      averageRating: cineChanceData?.averageRating || null,
+      ratingCount: cineChanceData?.count || 0,
     };
   });
 
@@ -136,6 +170,8 @@ export default async function HorizontalMovieGridServer() {
               initialIsBlacklisted={data.isBlacklisted}
               initialStatus={data.status}
               initialUserRating={data.userRating}
+              initialAverageRating={data.averageRating}
+              initialRatingCount={data.ratingCount}
             />
           </div>
         ))}

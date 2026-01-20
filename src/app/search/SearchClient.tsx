@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import MovieList from './MovieList';
-import Loader from '../components/Loader';
+import SearchSkeleton from './SearchSkeleton';
 import SearchFilters, { FilterState } from './SearchFilters';
 import { useSearch, useBatchData } from '@/hooks';
 import { Media } from '@/lib/tmdb';
@@ -132,7 +132,7 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
       />
 
       {isLoading && searchQuery.results.length === 0 ? (
-        <Loader text="Загрузка..." />
+        <SearchSkeleton />
       ) : searchQuery.results.length > 0 ? (
         <>
           <MovieList

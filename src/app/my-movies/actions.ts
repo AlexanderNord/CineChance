@@ -54,6 +54,8 @@ export interface MovieWithStatus {
   original_language: string;
   statusName?: string;
   combinedRating?: number;
+  averageRating?: number | null; // Средняя оценка CineChance
+  ratingCount?: number; // Количество оценок CineChance
   addedAt?: string;
   userRating?: number | null;
   isBlacklisted?: boolean;
@@ -149,6 +151,8 @@ export async function fetchMoviesByStatus(
         original_language: tmdbData?.original_language || '',
         statusName: record.status.name,
         combinedRating,
+        averageRating: cineChanceRating,
+        ratingCount: cineChanceVotes,
         addedAt: record.addedAt?.toISOString() || '',
         userRating: record.userRating,
         tags: record.tags || [],
@@ -206,6 +210,8 @@ export async function fetchMoviesByStatus(
           genre_ids: tmdbData?.genres?.map((g: any) => g.id) || [],
           original_language: tmdbData?.original_language || '',
           combinedRating,
+          averageRating: cineChanceRating,
+          ratingCount: cineChanceVotes,
           addedAt: record.createdAt?.toISOString() || '',
           userRating: null,
           isBlacklisted: true,
