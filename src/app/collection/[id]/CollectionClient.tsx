@@ -129,26 +129,44 @@ export default function CollectionClient({ collectionId }: { collectionId: strin
     <BlacklistProvider>
       <div className="min-h-screen bg-gray-950 py-3 sm:py-4">
         <div className="container mx-auto px-2 sm:px-3">
-          {/* Заголовок и информация */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <button
-                onClick={() => router.back()}
-                className="text-gray-400 hover:text-white transition-colors text-sm"
-              >
-                ← Назад
-              </button>
-            </div>
-            
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {collection.name}
-            </h1>
-            
-            {collection.overview && (
-              <p className="text-gray-400 text-sm max-w-3xl">
-                {collection.overview}
-              </p>
+          {/* Навигация назад */}
+          <div className="mb-4">
+            <button
+              onClick={() => router.back()}
+              className="text-gray-400 hover:text-white transition-colors text-sm flex items-center gap-1"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+              Назад
+            </button>
+          </div>
+
+          {/* Информация о коллекции */}
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-6">
+            {/* Постер коллекции */}
+            {collection.poster_path && (
+              <div className="flex-shrink-0 mx-auto sm:mx-0">
+                <img
+                  src={`https://image.tmdb.org/t/p/w300${collection.poster_path}`}
+                  alt={collection.name}
+                  className="w-32 h-48 sm:w-44 sm:h-66 object-cover rounded-lg shadow-lg"
+                />
+              </div>
             )}
+            
+            {/* Название и описание */}
+            <div className="flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+                {collection.name}
+              </h1>
+              
+              {collection.overview && (
+                <p className="text-gray-400 text-sm max-w-3xl">
+                  {collection.overview}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Список фильмов */}

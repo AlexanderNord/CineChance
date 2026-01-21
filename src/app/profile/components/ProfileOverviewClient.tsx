@@ -7,11 +7,27 @@ import { ru } from 'date-fns/locale';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 const TermsOfServiceModal = dynamic(() => import('@/app/components/TermsOfServiceModal'), { ssr: false });
-import { FileText, Settings, Users, ArrowRight } from 'lucide-react';
+import { FileText, Settings, Users, ArrowRight, Eye, Clock, Star, TrendingUp, Monitor, Tv, Film } from 'lucide-react';
 import NicknameEditor from './NicknameEditor';
 import Loader from '@/app/components/Loader';
 
-export interface UserData {
+interface UserStats {
+  total: {
+    watched: number;
+    wantToWatch: number;
+    dropped: number;
+    hidden: number;
+  };
+  typeBreakdown: {
+    movie: number;
+    tv: number;
+    anime: number;
+  };
+  averageRating: number | null;
+  ratedCount: number;
+}
+
+interface UserStatsData {
   id: string;
   name: string | null;
   email: string | null;
@@ -19,19 +35,30 @@ export interface UserData {
   createdAt: Date;
 }
 
-export interface ProfileOverviewClientProps {
+interface CollectionAchievement {
+  id: number;
+  name: string;
+  poster_path: string | null;
+  total_movies: number;
+  added_movies: number;
+  watched_movies: number;
+  progress_percent: number;
+}
+
+interface ProfileOverviewClientProps {
   userId: string;
 }
 
 export default function ProfileOverviewClient({ userId }: ProfileOverviewClientProps) {
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [watchListCount, setWatchListCount] = useState(0);
-  const [blacklistCount, setBlacklistCount] = useState(0);
+  const [userData, setUserData] = useState<UserStatsData | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [errorDetails, setErrorDetails] = useState<string[]>([]);
   const [retryCount, setRetryCount] = useState(0);
+  const [collections, setCollections] = useState<CollectionAchievement[]>([]);
+  const [collectionsLoading, setCollectionsLoading] = useState(true);
 
   // Загружаем данные пользователя клиентски для актуальности
   useEffect(() => {
@@ -41,10 +68,10 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
         setErrorDetails([]);
 
         // Параллельная загрузка всех данных
-        const [profileResponse, watchlistResponse, blacklistResponse] = await Promise.all([
+        const [profileResponse, statsResponse, collectionsResponse] = await Promise.all([
           fetch('/api/user/profile'),
-          fetch('/api/watchlist/count'),
-          fetch('/api/user/blacklist/count'),
+          fetch('/api/user/stats'),
+          fetch('/api/user/achievements'),
         ]);
 
         let hasError = false;
@@ -68,23 +95,37 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           console.error('Profile API error:', profileResponse.status, errorText);
         }
 
-        if (watchlistResponse.ok) {
-          const data = await watchlistResponse.json();
-          setWatchListCount(data.count || 0);
+        if (statsResponse.ok) {
+          const data = await statsResponse.json();
+          setStats({
+            total: {
+              watched: data.total?.watched || 0,
+              wantToWatch: data.total?.wantToWatch || 0,
+              dropped: data.total?.dropped || 0,
+              hidden: data.total?.hidden || 0,
+            },
+            typeBreakdown: {
+              movie: data.typeBreakdown?.movie || 0,
+              tv: data.typeBreakdown?.tv || 0,
+              anime: data.typeBreakdown?.anime || 0,
+            },
+            averageRating: data.averageRating || null,
+            ratedCount: data.ratedCount || 0,
+          });
         } else {
-          const errorText = await watchlistResponse.text().catch(() => 'Unknown error');
-          errors.push(`Watchlist: ${watchlistResponse.status}`);
-          console.error('Watchlist API error:', watchlistResponse.status, errorText);
+          const errorText = await statsResponse.text().catch(() => 'Unknown error');
+          errors.push(`Stats: ${statsResponse.status}`);
+          console.error('Stats API error:', statsResponse.status, errorText);
         }
 
-        if (blacklistResponse.ok) {
-          const data = await blacklistResponse.json();
-          setBlacklistCount(data.count || 0);
+        if (collectionsResponse.ok) {
+          const data = await collectionsResponse.json();
+          console.log('Collections API response:', data);
+          setCollections(Array.isArray(data) ? data.slice(0, 10) : []);
         } else {
-          const errorText = await blacklistResponse.text().catch(() => 'Unknown error');
-          errors.push(`Blacklist: ${blacklistResponse.status}`);
-          console.error('Blacklist API error:', blacklistResponse.status, errorText);
+          console.error('Collections API error:', collectionsResponse.status);
         }
+        setCollectionsLoading(false);
 
         setErrorDetails(errors);
 
@@ -210,17 +251,249 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
         </div>
       </Link>
 
-      {/* Статистика - ВСЕГДА в одну строку (2 колонки) */}
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
-        <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-800">
-          <p className="text-gray-400 text-xs md:text-sm mb-1">Фильмов в списке</p>
-          <p className="text-2xl md:text-3xl font-bold text-white">{watchListCount}</p>
+      {/* Статистика профиля - Дашборд */}
+      <div className="space-y-4">
+        {/* Заголовок секции */}
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-blue-400" />
+          <h2 className="text-lg font-semibold text-white">Статистика</h2>
         </div>
-        <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-800">
-          <p className="text-gray-400 text-xs md:text-sm mb-1">Скрыто фильмов</p>
-          <p className="text-2xl md:text-3xl font-bold text-white">{blacklistCount}</p>
+
+        {/* Основные метрики - сетка 2x2 на мобильных, 4 колонки на десктопе */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          {/* Всего просмотрено */}
+          <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+            <div className="flex items-center gap-2 mb-2">
+              <Eye className="w-4 h-4 text-green-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Просмотрено</p>
+            </div>
+            <p className="text-2xl md:text-3xl font-bold text-white">
+              {stats?.total.watched || 0}
+            </p>
+          </div>
+
+          {/* Всего отложено */}
+          <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-blue-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Отложено</p>
+            </div>
+            <p className="text-2xl md:text-3xl font-bold text-white">
+              {stats?.total.wantToWatch || 0}
+            </p>
+          </div>
+
+          {/* Всего брошено */}
+          <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-4 h-4 text-red-400 text-xs font-bold">×</span>
+              <p className="text-gray-400 text-xs md:text-sm">Брошено</p>
+            </div>
+            <p className="text-2xl md:text-3xl font-bold text-white">
+              {stats?.total.dropped || 0}
+            </p>
+          </div>
+
+          {/* Всего заблокировано */}
+          <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-4 h-4 text-gray-500 text-xs font-bold">⛔</span>
+              <p className="text-gray-400 text-xs md:text-sm">Заблокировано</p>
+            </div>
+            <p className="text-2xl md:text-3xl font-bold text-white">
+              {stats?.total.hidden || 0}
+            </p>
+          </div>
+        </div>
+
+        {/* Вторая строка: Типы контента и Средняя оценка */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+          {/* Соотношение типов контента */}
+          <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+            <div className="flex items-center gap-2 mb-4">
+              <Monitor className="w-4 h-4 text-purple-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Типы контента</p>
+            </div>
+            <div className="space-y-3">
+              {/* Фильмы */}
+              <div className="flex items-center gap-3">
+                <Film className="w-5 h-5 text-green-400 flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-gray-300 text-sm">Фильмы</span>
+                    <span className="text-white font-medium">{stats?.typeBreakdown.movie || 0}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-green-500 rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${stats && stats.total.watched > 0 
+                          ? (stats.typeBreakdown.movie / stats.total.watched) * 100 
+                          : 0}%` 
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* Сериалы */}
+              <div className="flex items-center gap-3">
+                <Tv className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-gray-300 text-sm">Сериалы</span>
+                    <span className="text-white font-medium">{stats?.typeBreakdown.tv || 0}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${stats && stats.total.watched > 0 
+                          ? (stats.typeBreakdown.tv / stats.total.watched) * 100 
+                          : 0}%` 
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* Аниме */}
+              <div className="flex items-center gap-3">
+                <span className="w-5 h-5 text-purple-400 text-sm font-bold">あ</span>
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-gray-300 text-sm">Аниме</span>
+                    <span className="text-white font-medium">{stats?.typeBreakdown.anime || 0}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${stats && stats.total.watched > 0 
+                          ? (stats.typeBreakdown.anime / stats.total.watched) * 100 
+                          : 0}%` 
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Средняя оценка */}
+          <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+            <div className="flex items-center gap-2 mb-4">
+              <Star className="w-4 h-4 text-yellow-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Средняя оценка</p>
+            </div>
+            <div className="flex items-end gap-3">
+              <span className="text-4xl md:text-5xl font-bold text-white">
+                {stats?.averageRating?.toFixed(1) || '-'}
+              </span>
+              <div className="flex-1 pb-1">
+                <div className="flex gap-0.5 mb-1">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                    <Star 
+                      key={star}
+                      className={`w-4 h-4 ${
+                        (stats?.averageRating || 0) >= star 
+                          ? 'text-yellow-400 fill-yellow-400' 
+                          : 'text-gray-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-gray-500 text-xs">
+                  {stats?.ratedCount || 0} оценённых
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Кинофраншизы */}
+      {collections.length > 0 && (
+        <div className="space-y-4">
+          {/* Заголовок секции */}
+          <div className="flex items-center gap-2">
+            <Film className="w-5 h-5 text-purple-400" />
+            <h2 className="text-lg font-semibold text-white">Кинофраншизы</h2>
+          </div>
+
+          {/* Постеры коллекций - горизонтальный ряд */}
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            {collections
+              .sort((a, b) => b.progress_percent - a.progress_percent)
+              .map((collection) => {
+                // Рассчитываем opacity на основе прогресса
+                const overlayOpacity = (100 - collection.progress_percent) / 100;
+                
+                return (
+                  <Link
+                    key={collection.id}
+                    href={`/collection/${collection.id}`}
+                    className="flex-shrink-0 group relative"
+                  >
+                    <div className="relative w-28 sm:w-36">
+                      {/* Постер */}
+                      <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 border border-gray-700 group-hover:border-purple-500/50 transition-all relative">
+                        {collection.poster_path ? (
+                          <img
+                            src={`https://image.tmdb.org/t/p/w300${collection.poster_path}`}
+                            alt={collection.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-600">
+                            <Film className="w-8 h-8" />
+                          </div>
+                        )}
+                        
+                        {/* Оверлей прогресса - с important в классе для переопределения */}
+                        <div 
+                          className="absolute inset-0 bg-gray-900 transition-opacity duration-300 group-hover:!opacity-0"
+                          style={{ 
+                            opacity: overlayOpacity,
+                            transition: 'opacity 300ms !important'
+                          }}
+                        />
+                        
+                        {/* Прогресс просмотра */}
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-800">
+                          <div 
+                            className="h-full bg-purple-500"
+                            style={{ width: `${collection.progress_percent}%` }}
+                          />
+                        </div>
+                        
+                        {/* Процент просмотра */}
+                        <div className="absolute top-2 right-2 bg-purple-600/90 text-white text-xs font-medium px-2 py-1 rounded">
+                          {collection.progress_percent}%
+                        </div>
+                      </div>
+                      
+                      {/* Название */}
+                      <p className="mt-2 text-gray-300 text-xs sm:text-sm truncate group-hover:text-purple-400 transition-colors">
+                        {collection.name.replace(/\s*\(Коллекция\)\s*$/i, '')}
+                      </p>
+                      <p className="text-gray-500 text-xs">
+                        {collection.watched_movies} / {collection.total_movies} фильмов
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
+          </div>
+
+          {/* Кнопка показать все */}
+          <Link
+            href="/profile/collections"
+            className="flex items-center justify-center gap-2 w-full py-3 bg-gray-900 hover:bg-gray-800 rounded-lg border border-gray-800 hover:border-gray-700 transition text-gray-400 hover:text-white text-sm"
+          >
+            <span>Показать все коллекции</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
 
       {/* Приглашение друзей */}
       <Link 
