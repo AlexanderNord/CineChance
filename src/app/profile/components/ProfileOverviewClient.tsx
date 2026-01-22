@@ -45,6 +45,7 @@ interface CollectionAchievement {
   added_movies: number;
   watched_movies: number;
   progress_percent: number;
+  average_rating: number | null;
 }
 
 interface ActorAchievement {
@@ -200,7 +201,10 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
         setUserDataLoading(false);
       }
     };
-    fetchUserData();
+    
+    // Небольшая задержка для избежания rate limiting
+    const timer = setTimeout(fetchUserData, 50);
+    return () => clearTimeout(timer);
   }, [userId]);
 
   // Загружаем статистику (быстрый запрос)
@@ -232,7 +236,10 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
         setStatsLoading(false);
       }
     };
-    fetchStats();
+    
+    // Небольшая задержка для избежания rate limiting
+    const timer = setTimeout(fetchStats, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Загружаем коллекции (медленный запрос - делаем в фоне)
@@ -364,7 +371,10 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           ) : stats ? (
             <>
               {/* Всего просмотрено */}
-              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+              <Link
+                href="/my-movies?tab=watched"
+                className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-green-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-7 h-7 bg-green-400/20 rounded-full flex items-center justify-center flex-shrink-0">
                     <CheckIcon className="w-4 h-4 text-green-400" />
@@ -374,10 +384,13 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 <p className="text-2xl md:text-3xl font-bold text-white pl-10">
                   {stats.total.watched}
                 </p>
-              </div>
+              </Link>
 
               {/* Всего отложено */}
-              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+              <Link
+                href="/my-movies?tab=want_to_watch"
+                className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-7 h-7 bg-blue-400/20 rounded-full flex items-center justify-center flex-shrink-0">
                     <PlusIcon className="w-4 h-4 text-blue-400" />
@@ -387,10 +400,13 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 <p className="text-2xl md:text-3xl font-bold text-white pl-10">
                   {stats.total.wantToWatch}
                 </p>
-              </div>
+              </Link>
 
               {/* Всего брошено */}
-              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+              <Link
+                href="/my-movies?tab=dropped"
+                className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-red-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-7 h-7 bg-red-400/20 rounded-full flex items-center justify-center flex-shrink-0">
                     <XIcon className="w-4 h-4 text-red-400" />
@@ -400,10 +416,13 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 <p className="text-2xl md:text-3xl font-bold text-white pl-10">
                   {stats.total.dropped}
                 </p>
-              </div>
+              </Link>
 
               {/* Всего заблокировано */}
-              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+              <Link
+                href="/my-movies?tab=hidden"
+                className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-gray-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-7 h-7 bg-gray-500/20 rounded-full flex items-center justify-center flex-shrink-0">
                     <BanIcon className="w-4 h-4 text-gray-400" />
@@ -413,7 +432,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 <p className="text-2xl md:text-3xl font-bold text-white pl-10">
                   {stats.total.hidden}
                 </p>
-              </div>
+              </Link>
             </>
           ) : null}
         </div>
@@ -545,7 +564,26 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           {/* Постеры коллекций - горизонтальный ряд */}
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {collections
-              .sort((a, b) => b.progress_percent - a.progress_percent)
+              .sort((a, b) => {
+                // Сначала по рейтингу (desc), null в конце
+                if (a.average_rating !== null && b.average_rating !== null) {
+                  if (b.average_rating !== a.average_rating) {
+                    return b.average_rating - a.average_rating;
+                  }
+                } else if (a.average_rating === null && b.average_rating !== null) {
+                  return 1;
+                } else if (a.average_rating !== null && b.average_rating === null) {
+                  return -1;
+                }
+                
+                // Если рейтинги равны или оба null, сортируем по прогрессу (desc)
+                if (b.progress_percent !== a.progress_percent) {
+                  return b.progress_percent - a.progress_percent;
+                }
+                
+                // Если и прогресс одинаковый, сортируем по алфавиту (asc)
+                return a.name.localeCompare(b.name, 'ru');
+              })
               .map((collection) => {
                 // Рассчитываем grayscale и saturate на основе прогресса
                 const grayscaleValue = 100 - collection.progress_percent;
@@ -598,9 +636,26 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                       <p className="mt-2 text-gray-300 text-xs sm:text-sm truncate group-hover:text-purple-400 transition-colors">
                         {collection.name.replace(/\s*\(Коллекция\)\s*$/i, '')}
                       </p>
-                      <p className="text-gray-500 text-xs">
-                        {collection.watched_movies} / {collection.total_movies} фильмов
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-gray-500 text-xs">
+                          {collection.watched_movies} / {collection.total_movies} фильмов
+                        </p>
+                        {collection.average_rating !== null && (
+                          <div className="flex items-center bg-gray-800/50 rounded text-xs flex-shrink-0">
+                            <div className="w-4 h-4 relative mx-0.5">
+                              <Image 
+                                src="/images/logo_mini_lgt.png" 
+                                alt="CineChance Logo" 
+                                fill 
+                                className="object-contain" 
+                              />
+                            </div>
+                            <span className="text-gray-200 font-medium pr-1.5">
+                              {collection.average_rating.toFixed(1)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </Link>
                 );
@@ -632,7 +687,26 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           {/* Постеры актеров - горизонтальный ряд */}
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {actors
-              .sort((a, b) => b.watched_movies - a.watched_movies)
+              .sort((a, b) => {
+                // Первичная сортировка по средней оценке (null в конце)
+                if (a.average_rating !== null && b.average_rating !== null) {
+                  if (b.average_rating !== a.average_rating) {
+                    return b.average_rating - a.average_rating;
+                  }
+                } else if (a.average_rating === null && b.average_rating !== null) {
+                  return 1;
+                } else if (a.average_rating !== null && b.average_rating === null) {
+                  return -1;
+                }
+                
+                // Вторичная сортировка по проценту заполнения
+                if (b.progress_percent !== a.progress_percent) {
+                  return b.progress_percent - a.progress_percent;
+                }
+                
+                // Третичная сортировка по алфавиту
+                return a.name.localeCompare(b.name, 'ru');
+              })
               .map((actor) => {
                 // Используем progress_percent из API
                 const progressPercent = actor.progress_percent || 0;
@@ -687,9 +761,26 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                       <p className="mt-2 text-gray-300 text-xs sm:text-sm truncate group-hover:text-amber-400 transition-colors">
                         {actor.name}
                       </p>
-                      <p className="text-gray-500 text-xs">
-                        {actor.watched_movies} / {actor.total_movies} фильмов
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-gray-500 text-xs">
+                          {actor.watched_movies} / {actor.total_movies} фильмов
+                        </p>
+                        {actor.average_rating !== null && (
+                          <div className="flex items-center bg-gray-800/50 rounded text-xs flex-shrink-0">
+                            <div className="w-4 h-4 relative mx-0.5">
+                              <Image 
+                                src="/images/logo_mini_lgt.png" 
+                                alt="CineChance Logo" 
+                                fill 
+                                className="object-contain" 
+                              />
+                            </div>
+                            <span className="text-gray-200 font-medium pr-1.5">
+                              {actor.average_rating.toFixed(1)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </Link>
                 );

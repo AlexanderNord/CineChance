@@ -122,7 +122,28 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
     <>
       {/* Сетка актеров */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {visibleActors.map((actor) => {
+        {visibleActors
+          .sort((a, b) => {
+            // Первичная сортировка по средней оценке (null в конце)
+            if (a.average_rating !== null && b.average_rating !== null) {
+              if (b.average_rating !== a.average_rating) {
+                return b.average_rating - a.average_rating;
+              }
+            } else if (a.average_rating === null && b.average_rating !== null) {
+              return 1;
+            } else if (a.average_rating !== null && b.average_rating === null) {
+              return -1;
+            }
+            
+            // Вторичная сортировка по проценту заполнения
+            if (b.progress_percent !== a.progress_percent) {
+              return b.progress_percent - a.progress_percent;
+            }
+            
+            // Третичная сортировка по алфавиту
+            return a.name.localeCompare(b.name, 'ru');
+          })
+          .map((actor) => {
           const progressPercent = actor.progress_percent || 0;
           const grayscaleValue = 100 - progressPercent;
           const saturateValue = progressPercent;
@@ -171,12 +192,29 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
                   {actor.name}
                 </h3>
                 
-                <p className="text-gray-500 text-xs">
-                  <span className="text-green-400">{actor.watched_movies}</span>
-                  {' / '}
-                  <span>{actor.total_movies}</span>
-                  {' фильмов'}
-                </p>
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-gray-500 text-xs">
+                    <span className="text-green-400">{actor.watched_movies}</span>
+                    {' / '}
+                    <span>{actor.total_movies}</span>
+                    {' фильмов'}
+                  </p>
+                  {actor.average_rating !== null && (
+                    <div className="flex items-center bg-gray-800/50 rounded text-sm flex-shrink-0">
+                      <div className="w-5 h-5 relative mx-1">
+                        <Image 
+                          src="/images/logo_mini_lgt.png" 
+                          alt="CineChance Logo" 
+                          fill 
+                          className="object-contain" 
+                        />
+                      </div>
+                      <span className="text-gray-200 font-medium pr-2">
+                        {actor.average_rating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </Link>
           );

@@ -15,6 +15,7 @@ interface CollectionAchievement {
   added_movies: number;
   watched_movies: number;
   progress_percent: number;
+  average_rating: number | null;
 }
 
 interface CollectionsClientProps {
@@ -123,7 +124,26 @@ export default function CollectionsClient({ userId }: CollectionsClientProps) {
       {/* Сетка коллекций */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {visibleCollections
-          .sort((a, b) => b.progress_percent - a.progress_percent)
+          .sort((a, b) => {
+            // Сначала по рейтингу (desc), null в конце
+            if (a.average_rating !== null && b.average_rating !== null) {
+              if (b.average_rating !== a.average_rating) {
+                return b.average_rating - a.average_rating;
+              }
+            } else if (a.average_rating === null && b.average_rating !== null) {
+              return 1;
+            } else if (a.average_rating !== null && b.average_rating === null) {
+              return -1;
+            }
+            
+            // Если рейтинги равны или оба null, сортируем по прогрессу (desc)
+            if (b.progress_percent !== a.progress_percent) {
+              return b.progress_percent - a.progress_percent;
+            }
+            
+            // Если и прогресс одинаковый, сортируем по алфавиту (asc)
+            return a.name.localeCompare(b.name, 'ru');
+          })
           .map((collection) => {
             const grayscaleValue = 100 - collection.progress_percent;
             const saturateValue = collection.progress_percent;
@@ -172,12 +192,29 @@ export default function CollectionsClient({ userId }: CollectionsClientProps) {
                     {collection.name.replace(/\s*\(Коллекция\)\s*$/i, '')}
                   </h3>
                   
-                  <p className="text-gray-500 text-xs">
-                    <span className="text-green-400">{collection.watched_movies}</span>
-                    {' / '}
-                    <span>{collection.total_movies}</span>
-                    {' фильмов'}
-                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-gray-500 text-xs">
+                      <span className="text-green-400">{collection.watched_movies}</span>
+                      {' / '}
+                      <span>{collection.total_movies}</span>
+                      {' фильмов'}
+                    </p>
+                    {collection.average_rating !== null && (
+                      <div className="flex items-center bg-gray-800/50 rounded text-sm flex-shrink-0">
+                        <div className="w-5 h-5 relative mx-1">
+                          <Image 
+                            src="/images/logo_mini_lgt.png" 
+                            alt="CineChance Logo" 
+                            fill 
+                            className="object-contain" 
+                          />
+                        </div>
+                        <span className="text-gray-200 font-medium pr-2">
+                          {collection.average_rating.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Link>
             );

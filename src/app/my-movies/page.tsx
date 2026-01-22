@@ -7,11 +7,15 @@ import MyMoviesClient from './MyMoviesClient';
 import { fetchMoviesByStatus, getMoviesCounts } from './actions';
 import LoaderSkeleton from '@/app/components/LoaderSkeleton';
 
-function MyMoviesContent() {
-  return <MyMoviesClientWrapper />;
+interface PageProps {
+  searchParams: Promise<{ tab?: string }>;
 }
 
-async function MyMoviesClientWrapper() {
+function MyMoviesContent({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  return <MyMoviesClientWrapper searchParams={searchParams} />;
+}
+
+async function MyMoviesClientWrapper({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -37,6 +41,11 @@ async function MyMoviesClientWrapper() {
     getMoviesCounts(userId),
   ]);
 
+  // Получаем параметр tab из URL
+  const { tab } = await searchParams;
+  const validTabs = ['watched', 'wantToWatch', 'dropped', 'hidden'];
+  const initialTab = validTabs.includes(tab || '') ? tab as 'watched' | 'wantToWatch' | 'dropped' | 'hidden' : undefined;
+
   return (
     <MyMoviesClient
       initialWatched={watchedData.movies}
@@ -45,14 +54,15 @@ async function MyMoviesClientWrapper() {
       initialHidden={hiddenData.movies}
       counts={counts}
       userId={userId}
+      initialTab={initialTab}
     />
   );
 }
 
-export default function MyMoviesPage() {
+export default async function MyMoviesPage({ searchParams }: PageProps) {
   return (
     <Suspense fallback={<LoaderSkeleton variant="full" text="Загрузка списка фильмов..." />}>
-      <MyMoviesContent />
+      <MyMoviesContent searchParams={searchParams} />
     </Suspense>
   );
 }

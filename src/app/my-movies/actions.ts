@@ -87,7 +87,7 @@ export async function fetchMoviesByStatus(
   const skip = (page - 1) * limit;
   const take = limit + 1; // Запрашиваем на 1 больше для проверки hasMore
 
-  // 1. Загружаем ВСЕ записи WatchList для корректной сортировки
+  // Оптимизация: сначала считаем общее количество, затем загружаем только нужную страницу
   const whereClause: any = { userId };
   if (statusName) {
     if (Array.isArray(statusName)) {
@@ -97,7 +97,11 @@ export async function fetchMoviesByStatus(
     }
   }
 
-  // Оптимизированный запрос - выбираем только необходимые поля
+  // 1. Сначала считаем общее количество (быстрый запрос)
+  const totalCount = await prisma.watchList.count({ where: whereClause });
+  const hasMore = skip + ITEMS_PER_PAGE < totalCount;
+
+  // 2. Загружаем ТОЛЬКО нужную страницу из БД
   const watchListRecords = await prisma.watchList.findMany({
     where: whereClause,
     select: {
@@ -112,16 +116,15 @@ export async function fetchMoviesByStatus(
       tags: { select: { id: true, name: true } },
     },
     orderBy: { addedAt: 'desc' },
+    skip: skip,
+    take: take,
   });
 
-  const totalCount = watchListRecords.length;
-  const hasMore = skip + ITEMS_PER_PAGE < totalCount;
+  // 3. Загружаем рейтинги CineChance только для текущей страницы
+  const pageTmdbIds = watchListRecords.map(r => r.tmdbId);
+  const cineChanceRatings = await fetchCineChanceRatings(pageTmdbIds);
 
-  // 2. Загружаем рейтинги для всех записей
-  const allTmdbIds = watchListRecords.map(r => r.tmdbId);
-  const cineChanceRatings = await fetchCineChanceRatings(allTmdbIds);
-
-  // 3. Получаем детали TMDB для всех записей
+  // 4. Получаем детали TMDB только для текущей страницы
   const moviesWithStatus = await Promise.all(
     watchListRecords.map(async (record: any) => {
       const tmdbData = await fetchMediaDetails(record.tmdbId, record.mediaType);
@@ -160,25 +163,27 @@ export async function fetchMoviesByStatus(
     })
   );
 
-  // 4. Сортируем ВСЕ записи на сервере
+  // 5. Сортируем только полученные записи
   const sortedMovies = sortMoviesOnServer(moviesWithStatus, sortBy, sortOrder);
+  const paginatedMovies = sortedMovies;
 
-  // 5. Применяем пагинацию ПОСЛЕ сортировки
-  const paginatedMovies = sortedMovies.slice(skip, skip + ITEMS_PER_PAGE);
-
-  // 5. Загружаем hidden фильмы если нужно
+  // 6. Загружаем hidden фильмы если нужно (только на первой странице)
   let hiddenMovies: MovieWithStatus[] = [];
   let hiddenTotalCount = 0;
 
   if (includeHidden && page === 1) {
-    // Оптимизированный запрос - выбираем только необходимые поля
+    // Сначала считаем
+    hiddenTotalCount = await prisma.blacklist.count({ where: { userId } });
+
+    // Загружаем только нужную страницу
     const blacklistRecords = await prisma.blacklist.findMany({
       where: { userId },
       select: { tmdbId: true, mediaType: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
+      skip: skip,
+      take: take,
     });
 
-    hiddenTotalCount = blacklistRecords.length;
     const blacklistTmdbIds = blacklistRecords.map(r => r.tmdbId);
     const blacklistRatings = await fetchCineChanceRatings(blacklistTmdbIds);
 
@@ -219,7 +224,6 @@ export async function fetchMoviesByStatus(
       })
     );
 
-    // Сортируем hidden фильмы
     hiddenMovies = sortMoviesOnServer(hiddenMovies, sortBy, sortOrder);
   }
 

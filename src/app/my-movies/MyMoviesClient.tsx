@@ -25,6 +25,7 @@ interface MyMoviesClientProps {
     hidden: number;
   };
   userId: string;
+  initialTab?: 'watched' | 'wantToWatch' | 'dropped' | 'hidden';
 }
 
 interface AcceptedRecommendation {
@@ -51,6 +52,7 @@ export default function MyMoviesClient({
   initialHidden,
   counts,
   userId,
+  initialTab,
 }: MyMoviesClientProps) {
   const fetchBatchData = async (movies: Media[]) => {
     if (movies.length === 0) return;
@@ -70,7 +72,9 @@ export default function MyMoviesClient({
       console.error('Error fetching batch data:', error);
     }
   };
-  const [activeTab, setActiveTab] = useState<'watched' | 'wantToWatch' | 'dropped' | 'hidden'>('watched');
+  const [activeTab, setActiveTab] = useState<'watched' | 'wantToWatch' | 'dropped' | 'hidden'>(
+    initialTab || 'watched'
+  );
   const [filmFilters, setFilmFilters] = useState<FilmFilterState>({
     showMovies: true,
     showTv: true,

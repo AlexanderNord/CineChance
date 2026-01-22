@@ -174,14 +174,14 @@ export async function GET(request: Request) {
 
       // Небольшая пауза между батчами для избежания rate limiting
       if (i + BATCH_SIZE < watchedMoviesData.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
 
-    // Берем топ-100 актеров для запроса их фильмографии
+    // Берем топ-50 актеров для запроса их фильмографии
     const topActors = Array.from(actorMap.entries())
       .sort((a, b) => b[1].watchedIds.size - a[1].watchedIds.size)
-      .slice(0, 100);
+      .slice(0, 50);
 
     // Запрашиваем полную фильмографию для каждого топ-актера
     const achievements: ActorProgress[] = [];
@@ -214,18 +214,24 @@ export async function GET(request: Request) {
       });
 
       // Пауза между запросами для избежания rate limiting
-      await new Promise(resolve => setTimeout(resolve, 25));
+      await new Promise(resolve => setTimeout(resolve, 15));
     }
 
     // Сортируем по:
-    // 1. Количество просмотренных фильмов (убывание)
+    // 1. Средняя оценка (убывание), null в конец
     // 2. Процент заполнения (убывание)
-    // 3. Средняя оценка (убывание)
+    // 3. Алфавит (возрастание)
     const result = achievements
       .sort((a, b) => {
-        // Первичная сортировка по количеству просмотренных фильмов
-        if (b.watched_movies !== a.watched_movies) {
-          return b.watched_movies - a.watched_movies;
+        // Первичная сортировка по средней оценке (null в конце)
+        if (a.average_rating !== null && b.average_rating !== null) {
+          if (b.average_rating !== a.average_rating) {
+            return b.average_rating - a.average_rating;
+          }
+        } else if (a.average_rating === null && b.average_rating !== null) {
+          return 1;
+        } else if (a.average_rating !== null && b.average_rating === null) {
+          return -1;
         }
         
         // Вторичная сортировка по проценту заполнения
@@ -233,13 +239,10 @@ export async function GET(request: Request) {
           return b.progress_percent - a.progress_percent;
         }
         
-        // Третичная сортировка по средней оценке
-        if (a.average_rating === null && b.average_rating === null) return 0;
-        if (a.average_rating === null) return 1; // null в конец
-        if (b.average_rating === null) return -1;
-        return b.average_rating - a.average_rating;
+        // Третичная сортировка по алфавиту
+        return a.name.localeCompare(b.name, 'ru');
       })
-      .slice(0, 100);
+      .slice(0, 50);
 
     return NextResponse.json(result);
 
