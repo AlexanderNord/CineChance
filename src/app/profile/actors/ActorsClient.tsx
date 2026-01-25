@@ -1,28 +1,17 @@
 // src/app/profile/actors/ActorsClient.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { User } from 'lucide-react';
 import '@/app/profile/components/AchievementCards.css';
-
-interface ActorAchievement {
-  id: number;
-  name: string;
-  profile_path: string | null;
-  watched_movies: number;
-  total_movies: number;
-  progress_percent: number;
-  average_rating: number | null;
-}
+import { useActors } from '@/hooks/useActors';
+import { ActorAchievement } from '@/hooks/useActors';
 
 interface ActorsClientProps {
   userId: string;
 }
-
-const ITEMS_PER_PAGE = 12;
-const INITIAL_ITEMS = 24;
 
 // Skeleton для карточки актера
 function ActorCardSkeleton() {
@@ -48,29 +37,67 @@ function PageSkeleton() {
 }
 
 export default function ActorsClient({ userId }: ActorsClientProps) {
-  const [allActors, setAllActors] = useState<ActorAchievement[]>([]);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_ITEMS);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use our optimized hook for infinite query
+  const actorsQuery = useActors();
+  
+  // Loading states
+  const isLoading = actorsQuery.isLoading;
+  const isFetchingNextPage = actorsQuery.isFetchingNextPage;
+  const hasNextPage = actorsQuery.hasNextPage ?? false;
+  const actors = actorsQuery.actors;
+  
+  // Sentinel for infinite scroll
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const previousCountRef = useRef(actors.length);
+  const isFetchingRef = useRef(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  // Scroll position restoration
   useEffect(() => {
-    const fetchActors = async () => {
-      try {
-        const res = await fetch('/api/user/achiev_actors');
-        if (!res.ok) throw new Error('Failed to fetch actors');
-        const data = await res.json();
-        setAllActors(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to fetch actors:', err);
-        setError('Не удалось загрузить актеров');
-      } finally {
-        setLoading(false);
+    if (actors.length > previousCountRef.current) {
+      // New items were added
+    }
+    previousCountRef.current = actors.length;
+    // Reset fetching flag when actors change
+    isFetchingRef.current = false;
+  }, [actors.length]);
+
+  // Fetch next page handler with safeguards
+  const handleFetchNextPage = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage && !isFetchingRef.current) {
+      isFetchingRef.current = true;
+      actorsQuery.fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, actorsQuery]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const sentinel = entries[0];
+        if (sentinel.isIntersecting && hasNextPage && !isFetchingNextPage && !isFetchingRef.current) {
+          isFetchingRef.current = true;
+          actorsQuery.fetchNextPage();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '400px',
+        threshold: 0.1,
+      }
+    );
+
+    const currentSentinel = sentinelRef.current;
+    if (currentSentinel) {
+      observer.observe(currentSentinel);
+    }
+
+    return () => {
+      if (currentSentinel) {
+        observer.unobserve(currentSentinel);
       }
     };
-
-    fetchActors();
-  }, [userId]);
+  }, [hasNextPage, isFetchingNextPage, actorsQuery]);
 
   // Scroll to top button
   useEffect(() => {
@@ -81,15 +108,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const loadMore = () => {
-    setVisibleCount(prev => prev + ITEMS_PER_PAGE);
-  };
-
-  const visibleActors = allActors.slice(0, visibleCount);
-  const hasMore = visibleCount < allActors.length;
-  const isLoadingMore = false;
-
-  if (loading) {
+  if (isLoading && actors.length === 0) {
     return (
       <div className="space-y-4">
         {/* Skeleton заголовка */}
@@ -100,15 +119,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-red-900/30 border border-red-700 rounded-lg p-6">
-        <p className="text-red-300">{error}</p>
-      </div>
-    );
-  }
-
-  if (allActors.length === 0) {
+  if (actors.length === 0 && !isLoading) {
     return (
       <div className="bg-gray-900 rounded-lg md:rounded-xl p-6 border border-gray-800">
         <p className="text-gray-400 text-center py-10">
@@ -122,28 +133,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
     <>
       {/* Сетка актеров */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {visibleActors
-          .sort((a, b) => {
-            // Первичная сортировка по средней оценке (null в конце)
-            if (a.average_rating !== null && b.average_rating !== null) {
-              if (b.average_rating !== a.average_rating) {
-                return b.average_rating - a.average_rating;
-              }
-            } else if (a.average_rating === null && b.average_rating !== null) {
-              return 1;
-            } else if (a.average_rating !== null && b.average_rating === null) {
-              return -1;
-            }
-            
-            // Вторичная сортировка по проценту заполнения
-            if (b.progress_percent !== a.progress_percent) {
-              return b.progress_percent - a.progress_percent;
-            }
-            
-            // Третичная сортировка по алфавиту
-            return a.name.localeCompare(b.name, 'ru');
-          })
-          .map((actor) => {
+        {actors.map((actor) => {
           const progressPercent = actor.progress_percent || 0;
           const grayscaleValue = 100 - progressPercent;
           const saturateValue = progressPercent;
@@ -220,14 +210,17 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
         })}
       </div>
 
-      {hasMore && (
+      <div ref={sentinelRef} className="h-4" />
+
+      {/* Кнопка "Ещё" */}
+      {hasNextPage && (
         <div className="flex justify-center mt-6">
           <button
-            onClick={loadMore}
-            disabled={isLoadingMore}
+            onClick={handleFetchNextPage}
+            disabled={isFetchingNextPage}
             className="px-6 py-2 rounded-lg bg-gray-800 text-white text-sm hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            {isLoadingMore ? (
+            {isFetchingNextPage ? (
               <>
                 <div className="w-4 h-4 border-2 border-gray-400 border-t-white rounded-full animate-spin"></div>
                 Загрузка...
@@ -239,8 +232,14 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
         </div>
       )}
 
+      {isFetchingNextPage && !hasNextPage && (
+        <div className="flex justify-center mt-6">
+          <div className="w-6 h-6 border-2 border-gray-400 border-t-white rounded-full animate-spin"></div>
+        </div>
+      )}
+
       <p className="text-gray-500 text-sm text-center pt-4">
-        Показано {visibleActors.length} из {allActors.length} актеров
+        Показано {actors.length} из {actorsQuery.totalCount} актеров
       </p>
 
       {showScrollTop && (
