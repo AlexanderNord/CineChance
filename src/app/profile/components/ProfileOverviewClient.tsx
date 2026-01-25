@@ -246,10 +246,10 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
   useEffect(() => {
     const fetchCollections = async () => {
       try {
-        const res = await fetch('/api/user/achiev_collection');
+        const res = await fetch('/api/user/collections');
         if (res.ok) {
           const data = await res.json();
-          setCollections(Array.isArray(data) ? data.slice(0, 5) : []);
+          setCollections(Array.isArray(data.collections) ? data.collections : []);
         }
       } catch (error) {
         console.error('Failed to fetch collections:', error);
@@ -267,10 +267,10 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
   useEffect(() => {
     const fetchActors = async () => {
       try {
-        const res = await fetch('/api/user/achiev_actors');
+        const res = await fetch('/api/user/actors');
         if (res.ok) {
           const data = await res.json();
-          setActors(Array.isArray(data) ? data.slice(0, 5) : []);
+          setActors(Array.isArray(data.actors) ? data.actors : []);
         }
       } catch (error) {
         console.error('Failed to fetch actors:', error);
