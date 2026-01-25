@@ -50,7 +50,7 @@ async function fetchMovieCredits(tmdbId: number): Promise<TMDBMovieCredits | nul
 
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
-      next: { revalidate: 86400 },
+      next: { revalidate: 86400, tags: ['movie-credits'] },
     });
 
     if (!response.ok) {
@@ -59,7 +59,6 @@ async function fetchMovieCredits(tmdbId: number): Promise<TMDBMovieCredits | nul
 
     return await response.json();
   } catch (error) {
-    console.error(`Error fetching credits for movie ${tmdbId}:`, error);
     return null;
   }
 }
@@ -73,7 +72,7 @@ async function fetchPersonCredits(actorId: number): Promise<TMDBPersonCredits | 
 
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
-      next: { revalidate: 86400 },
+      next: { revalidate: 86400, tags: ['person-credits'] },
     });
 
     if (!response.ok) {
@@ -82,22 +81,10 @@ async function fetchPersonCredits(actorId: number): Promise<TMDBPersonCredits | 
 
     return await response.json();
   } catch (error) {
-    console.error(`Error fetching credits for actor ${actorId}:`, error);
     return null;
   }
 }
 
-/**
- * API-эндпоинт для получения достижений пользователя по любимым актерам.
- * 
- * Логика:
- * 1. Получаем все просмотренные фильмы пользователя из базы (включая оценки)
- * 2. Для каждого фильма запрашиваем TMDB API для получения актёрского состава
- * 3. Группируем фильмы по актерам и считаем количество просмотренных
- * 4. Для топ-актеров запрашиваем полную фильмографию из TMDB
- * 5. Вычисляем процент заполнения фильмографии
- * 6. Сортируем по: watched_movies → progress_percent → average_rating
- */
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -110,11 +97,10 @@ export async function GET(request: Request) {
     }
 
     const userId = session.user.id;
-
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get('userId') || userId;
 
-    // Получаем все фильмы пользователя со статусом "Просмотрено" (включая оценки)
+    // Получаем все фильмы пользователя со статусом "Просмотрено"
     const watchedMoviesData = await prisma.watchList.findMany({
       where: {
         userId: targetUserId,
@@ -139,8 +125,8 @@ export async function GET(request: Request) {
       ratings: number[];
     }>();
 
-    // Параллельная загрузка данных об актерах (с ограничением concurrency)
-    const BATCH_SIZE = 5;
+    // Оптимизированная параллельная загрузка данных об актерах
+    const BATCH_SIZE = 10;
     for (let i = 0; i < watchedMoviesData.length; i += BATCH_SIZE) {
       const batch = watchedMoviesData.slice(i, i + BATCH_SIZE);
       
@@ -164,7 +150,6 @@ export async function GET(request: Request) {
             }
             
             actorMap.get(actor.id)!.watchedIds.add(credits.id);
-            // Сохраняем оценку если она есть
             if (rating !== null && rating !== undefined) {
               actorMap.get(actor.id)!.ratings.push(rating);
             }
@@ -172,38 +157,33 @@ export async function GET(request: Request) {
         }
       }
 
-      // Небольшая пауза между батчами для избежания rate limiting
+      // Уменьшенная пауза между батчами
       if (i + BATCH_SIZE < watchedMoviesData.length) {
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 20));
       }
     }
 
-    // Берем топ-50 актеров для запроса их фильмографии
+    // Берем топ-50 актеров
     const topActors = Array.from(actorMap.entries())
       .sort((a, b) => b[1].watchedIds.size - a[1].watchedIds.size)
       .slice(0, 50);
 
-    // Запрашиваем полную фильмографию для каждого топ-актера
-    const achievements: ActorProgress[] = [];
-    
-    for (const [actorId, actorData] of topActors) {
+    // Параллельная загрузка фильмографии для всех топ-актеров
+    const achievementsPromises = topActors.map(async ([actorId, actorData]) => {
       const credits = await fetchPersonCredits(actorId);
       
-      // Считаем общее количество фильмов в фильмографии (только фильмы, где actor в cast)
       const totalMovies = credits?.cast?.length || 0;
       const watchedMovies = actorData.watchedIds.size;
       
-      // Вычисляем процент прогресса
       const progressPercent = totalMovies > 0 
         ? Math.round((watchedMovies / totalMovies) * 100)
         : 0;
 
-      // Вычисляем среднюю оценку
       const averageRating = actorData.ratings.length > 0
         ? Number((actorData.ratings.reduce((a, b) => a + b, 0) / actorData.ratings.length).toFixed(1))
         : null;
 
-      achievements.push({
+      return {
         id: actorId,
         name: actorData.name,
         profile_path: actorData.profile_path,
@@ -211,19 +191,15 @@ export async function GET(request: Request) {
         total_movies: totalMovies,
         progress_percent: progressPercent,
         average_rating: averageRating,
-      });
+      };
+    });
 
-      // Пауза между запросами для избежания rate limiting
-      await new Promise(resolve => setTimeout(resolve, 15));
-    }
+    // Ждем завершения всех запросов параллельно
+    const achievements = await Promise.all(achievementsPromises);
 
-    // Сортируем по:
-    // 1. Средняя оценка (убывание), null в конец
-    // 2. Процент заполнения (убывание)
-    // 3. Алфавит (возрастание)
+    // Сортировка результатов
     const result = achievements
       .sort((a, b) => {
-        // Первичная сортировка по средней оценке (null в конце)
         if (a.average_rating !== null && b.average_rating !== null) {
           if (b.average_rating !== a.average_rating) {
             return b.average_rating - a.average_rating;
@@ -234,12 +210,10 @@ export async function GET(request: Request) {
           return -1;
         }
         
-        // Вторичная сортировка по проценту заполнения
         if (b.progress_percent !== a.progress_percent) {
           return b.progress_percent - a.progress_percent;
         }
         
-        // Третичная сортировка по алфавиту
         return a.name.localeCompare(b.name, 'ru');
       })
       .slice(0, 50);

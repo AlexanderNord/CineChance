@@ -154,7 +154,6 @@ export default function CollectionClient({ collectionId }: { collectionId: strin
                   fill
                   className="object-cover rounded-lg shadow-lg"
                   sizes="(max-width: 640px) 128px, (max-width: 768px) 176px, 176px"
-                  quality={85}
                 />
               </div>
             )}

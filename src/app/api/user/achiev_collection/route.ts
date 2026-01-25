@@ -37,7 +37,7 @@ async function fetchMovieWithCollection(tmdbId: number): Promise<TMDBMovieDetail
 
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
-      next: { revalidate: 86400 }, // Кэшируем на 24 часа
+      next: { revalidate: 86400, tags: ['movie-details'] },
     });
 
     if (!response.ok) {
@@ -46,7 +46,6 @@ async function fetchMovieWithCollection(tmdbId: number): Promise<TMDBMovieDetail
 
     return await response.json();
   } catch (error) {
-    console.error(`Error fetching movie ${tmdbId}:`, error);
     return null;
   }
 }
@@ -60,7 +59,7 @@ async function fetchCollectionMovies(collectionId: number): Promise<number[]> {
 
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
-      next: { revalidate: 86400 },
+      next: { revalidate: 86400, tags: ['collection-details'] },
     });
 
     if (!response.ok) {
@@ -70,24 +69,12 @@ async function fetchCollectionMovies(collectionId: number): Promise<number[]> {
     const data = await response.json();
     return (data.parts || []).map((movie: { id: number }) => movie.id);
   } catch (error) {
-    console.error(`Error fetching collection ${collectionId}:`, error);
     return [];
   }
 }
 
-/**
- * API-эндпоинт для получения достижений пользователя по коллекциям.
- * 
- * Логика:
- * 1. Получаем все просмотренные фильмы пользователя из базы
- * 2. Для каждого фильма запрашиваем TMDB API для получения информации о коллекции
- * 3. Группируем фильмы по коллекциям и считаем прогресс
- * 
- * Возвращает массив объектов с прогрессом по каждой коллекции.
- */
 export async function GET(request: Request) {
   try {
-    // Проверка аутентификации
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -98,12 +85,10 @@ export async function GET(request: Request) {
     }
 
     const userId = session.user.id;
-
-    // Получаем userId из параметров запроса
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get('userId') || userId;
 
-    // Получаем все фильмы пользователя со статусом "Просмотрено" и их оценки
+    // Получаем все фильмы пользователя со статусом "Просмотрено"
     const watchedMovies = await prisma.watchList.findMany({
       where: {
         userId: targetUserId,
@@ -128,22 +113,22 @@ export async function GET(request: Request) {
       ratings: number[];
     }>();
 
-    // Параллельная загрузка данных о коллекциях (с ограничением concurrency)
-    const BATCH_SIZE = 5;
+    // Оптимизированная параллельная загрузка данных о коллекциях
+    const BATCH_SIZE = 10;
     for (let i = 0; i < watchedMovies.length; i += BATCH_SIZE) {
       const batch = watchedMovies.slice(i, i + BATCH_SIZE);
       
       const results = await Promise.all(
         batch.map(async (movie) => {
-          // Только фильмы могут быть в коллекциях
           if (movie.mediaType !== 'movie') return null;
-          
           const details = await fetchMovieWithCollection(movie.tmdbId);
-          return details;
+          return { details, rating: movie.userRating };
         })
       );
 
-      for (const details of results) {
+      for (const result of results) {
+        if (!result) continue;
+        const { details, rating } = result;
         if (details?.belongs_to_collection) {
           const collection = details.belongs_to_collection;
           
@@ -158,37 +143,30 @@ export async function GET(request: Request) {
           
           collectionMap.get(collection.id)!.watchedIds.add(details.id);
           
-          // Добавляем рейтинг если он есть
-          const movieData = watchedMovies.find(m => m.tmdbId === details.id);
-          if (movieData?.userRating) {
-            collectionMap.get(collection.id)!.ratings.push(movieData.userRating);
+          if (rating !== null && rating !== undefined) {
+            collectionMap.get(collection.id)!.ratings.push(rating);
           }
         }
       }
 
-      // Небольшая пауза между батчами для избежания rate limiting
+      // Уменьшенная пауза между батчами
       if (i + BATCH_SIZE < watchedMovies.length) {
-        await new Promise(resolve => setTimeout(resolve, 25));
+        await new Promise(resolve => setTimeout(resolve, 15));
       }
     }
 
-    // Для каждой коллекции получаем общее количество фильмов и считаем прогресс
-    const achievements: CollectionProgress[] = [];
+    // Параллельная загрузка данных о коллекциях
     const collectionEntries = Array.from(collectionMap.entries());
-
-    for (const [collectionId, collectionData] of collectionEntries) {
+    const achievementsPromises = collectionEntries.map(async ([collectionId, collectionData]) => {
       const collectionMovies = await fetchCollectionMovies(collectionId);
       const totalMovies = collectionMovies.length;
-      
-      // Считаем, сколько из просмотренных фильмов пользователя есть в этой коллекции
       const watchedInCollection = collectionData.watchedIds.size;
 
-      // Вычисляем средний рейтинг коллекции
       const averageRating = collectionData.ratings.length > 0
         ? parseFloat((collectionData.ratings.reduce((sum, r) => sum + r, 0) / collectionData.ratings.length).toFixed(1))
         : null;
 
-      achievements.push({
+      return {
         id: collectionId,
         name: collectionData.name,
         poster_path: collectionData.poster_path,
@@ -199,31 +177,28 @@ export async function GET(request: Request) {
           ? Math.round((watchedInCollection / totalMovies) * 100)
           : 0,
         average_rating: averageRating,
-      });
+      };
+    });
 
-      // Пауза между запросами для избежания rate limiting
-      await new Promise(resolve => setTimeout(resolve, 15));
-    }
+    // Ждем завершения всех запросов параллельно
+    const achievements = await Promise.all(achievementsPromises);
 
-    // Сортируем по рейтингу, затем по прогрессу, затем по алфавиту
+    // Сортировка результатов
     achievements.sort((a, b) => {
-      // Сначала по рейтингу (desc), null в конце
       if (a.average_rating !== null && b.average_rating !== null) {
         if (b.average_rating !== a.average_rating) {
           return b.average_rating - a.average_rating;
         }
       } else if (a.average_rating === null && b.average_rating !== null) {
-        return 1; // a с null рейтингом в конец
+        return 1;
       } else if (a.average_rating !== null && b.average_rating === null) {
-        return -1; // b с null рейтингом в конец
+        return -1;
       }
       
-      // Если рейтинги равны или оба null, сортируем по прогрессу (desc)
       if (b.progress_percent !== a.progress_percent) {
         return b.progress_percent - a.progress_percent;
       }
       
-      // Если и прогресс одинаковый, сортируем по алфавиту (asc)
       return a.name.localeCompare(b.name, 'ru');
     });
 

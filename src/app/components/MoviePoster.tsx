@@ -105,7 +105,6 @@ const MoviePoster = memo(({
         placeholder="blur"
         blurDataURL={STATIC_BLUR_PLACEHOLDER}
         onError={handlePosterError}
-        quality={85}
       />
     </div>
   );

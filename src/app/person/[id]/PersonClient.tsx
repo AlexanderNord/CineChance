@@ -255,7 +255,6 @@ export default function PersonClient({ personId }: PersonClientProps) {
                   fill
                   className="object-cover rounded-lg shadow-lg"
                   sizes="(max-width: 640px) 128px, (max-width: 768px) 160px, 160px"
-                  quality={85}
                 />
               </div>
             )}

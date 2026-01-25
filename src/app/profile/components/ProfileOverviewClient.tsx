@@ -606,7 +606,6 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                               fill
                               className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
                               sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, 144px"
-                              quality={85}
                               style={{ 
                                 filter: `grayscale(${grayscaleValue}%) saturate(${saturateValue}%)`
                               }}
@@ -731,7 +730,6 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                               fill
                               className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
                               sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, 144px"
-                              quality={85}
                               style={{ 
                                 filter: `grayscale(${grayscaleValue}%) saturate(${saturateValue}%)`
                               }}

@@ -164,7 +164,6 @@ export default function CollectionsClient({ userId }: CollectionsClientProps) {
                           fill
                           className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
                           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                          quality={85}
                           style={{ 
                             filter: `grayscale(${grayscaleValue}%) saturate(${saturateValue}%)`
                           }}
