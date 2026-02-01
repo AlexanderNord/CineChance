@@ -117,21 +117,6 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
     additionalFilters?: AdditionalFilters;
   } | null>(null);
 
-  // Дебаунсим fetchRecommendation для предотвращения race conditions
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  const debouncedFetchRecommendation = useCallback((...args: Parameters<typeof fetchRecommendation>) => {
-    // Отменяем предыдущий таймаут
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    // Устанавливаем новый таймаут
-    timeoutRef.current = setTimeout(() => {
-      fetchRecommendation(...args);
-    }, 300);
-  }, [fetchRecommendation]);
-
   // Загружаем настройки пользователя при монтировании
   useEffect(() => {
     const fetchUserSettings = async () => {
@@ -356,6 +341,21 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       setViewState('error');
     }
   }, []);
+
+  // Дебаунсим fetchRecommendation для предотвращения race conditions
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const debouncedFetchRecommendation = useCallback((...args: Parameters<typeof fetchRecommendation>) => {
+    // Отменяем предыдущий таймаут
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Устанавливаем новый таймаут
+    timeoutRef.current = setTimeout(() => {
+      fetchRecommendation(...args);
+    }, 300);
+  }, [fetchRecommendation]);
 
   // Сброс логов рекомендаций
   const handleResetLogs = async () => {
