@@ -74,8 +74,8 @@ export async function GET(req: Request) {
        imageUrl.includes('.png') ? 'image/png' :
        imageUrl.includes('.webp') ? 'image/webp' : 'image/jpeg');
 
-    // Сохраняем в кэш на 1 час
-    await redis.setex(cacheKey, 3600, {
+    // Сохраняем в кэш на 24 часа
+    await redis.setex(cacheKey, 86400, {
       data: base64Data,
       contentType: contentType
     });
@@ -124,8 +124,8 @@ export async function GET(req: Request) {
           const fallbackBase64 = Buffer.from(fallbackBuffer).toString('base64');
           const fallbackContentType = fallbackResponse.headers.get('content-type') || 'image/jpeg';
           
-          // Кэшируем fallback
-          await redis.setex(fallbackCacheKey, 3600, {
+          // Кэшируем fallback на 24 часа
+          await redis.setex(fallbackCacheKey, 86400, {
             data: fallbackBase64,
             contentType: fallbackContentType
           });

@@ -20,7 +20,7 @@ export default function ImageWithFallback({
   fallbackSrc = '/placeholder-poster.svg',
   alt,
   fill = true,
-  sizes,
+  sizes = "(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw",
   priority = false,
   className = '',
   blurDataURL,
@@ -53,6 +53,7 @@ export default function ImageWithFallback({
         blurDataURL={blurDataURL}
         onError={handleError}
         onLoad={handleLoadingComplete}
+        quality={75}
       />
       {isLoading && !error && blurDataURL && (
         <div className="absolute inset-0 bg-gray-800 animate-pulse" />
