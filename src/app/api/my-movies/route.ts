@@ -68,6 +68,13 @@ export async function GET(request: NextRequest) {
     const statusNameParam = searchParams.get('statusName');
     const includeHidden = searchParams.get('includeHidden') === 'true';
 
+    // Отладочная информация
+    console.log('=== API MY-MOVIES DEBUG ===');
+    console.log('User ID:', userId);
+    console.log('Status name param:', statusNameParam);
+    console.log('Include hidden:', includeHidden);
+    console.log('Page:', page);
+
     // Parse filters
     const typesParam = searchParams.get('types');
     const yearFrom = searchParams.get('yearFrom');
@@ -83,10 +90,14 @@ export async function GET(request: NextRequest) {
     if (statusNameParam) {
       const statusNames = statusNameParam.split(',');
       const statusIds = statusNames.map(name => getStatusIdByName(name)).filter(id => id !== null) as number[];
+      console.log('Status names:', statusNames);
+      console.log('Status IDs:', statusIds);
       if (statusIds.length > 0) {
         whereClause.statusId = { in: statusIds };
       }
     }
+
+    console.log('Final where clause:', whereClause);
 
     if (includeHidden) {
       // For hidden tab, we use blacklist
@@ -199,6 +210,7 @@ export async function GET(request: NextRequest) {
     // For regular tabs (watched, wantToWatch, dropped)
     // First count total
     const totalCount = await prisma.watchList.count({ where: whereClause });
+    console.log('Total count for where clause:', totalCount);
 
     // Get paginated records from database
     const skip = (page - 1) * limit;
@@ -321,21 +333,6 @@ export async function GET(request: NextRequest) {
     });
 
     // Sort movies
-    const sortedMovies = sortMovies(movies, sortBy, sortOrder);
-
-    const hasMore = skip + ITEMS_PER_PAGE < totalCount;
-    const resultMovies = sortedMovies.slice(0, limit);
-
-    return NextResponse.json({
-      movies: resultMovies,
-      hasMore,
-      totalCount,
-    });
-  } catch (error) {
-    console.error('Error fetching my movies:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
 
 function sortMovies(
   movies: any[],
@@ -371,3 +368,26 @@ function sortMovies(
     return sortOrder === 'desc' ? comparison : -comparison;
   });
 }
+
+// ... (rest of the code remains the same)
+
+const sortedMovies = sortMovies(movies, sortBy, sortOrder);
+
+const hasMore = skip + ITEMS_PER_PAGE < totalCount;
+const resultMovies = sortedMovies.slice(0, limit);
+
+return NextResponse.json({
+  movies: resultMovies,
+  hasMore,
+  totalCount,
+  debug: {
+    userId,
+    statusNameParam,
+    statusIds: statusNameParam ? statusNameParam.split(',').map(name => getStatusIdByName(name)).filter(id => id !== null) : null,
+    whereClause,
+    totalCount,
+    timestamp: new Date().toISOString(),
+  }
+});
+
+// ... (rest of the code remains the same)

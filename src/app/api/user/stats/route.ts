@@ -6,6 +6,33 @@ import { prisma } from '@/lib/prisma';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
 import { rateLimit } from '@/middleware/rateLimit';
 
+// Вспомогательная функция для получения деталей с TMDB
+async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) return null;
+  const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU`;
+  try {
+    const res = await fetch(url, { next: { revalidate: 86400 } }); // 24 часа
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (error) {
+    return null;
+  }
+}
+
+// Helper function to check if movie is anime
+function isAnime(movie: any): boolean {
+  const hasAnimeGenre = movie.genre_ids?.includes(16) ?? false;
+  return hasAnimeGenre && movie.original_language === 'ja';
+}
+
+// Helper function to check if movie is cartoon (animation but not anime)
+function isCartoon(movie: any): boolean {
+  const hasAnimationGenre = movie.genre_ids?.includes(16) ?? false;
+  const isNotJapanese = movie.original_language !== 'ja';
+  return hasAnimationGenre && isNotJapanese;
+}
+
 export async function GET(req: Request) {
   const { success } = await rateLimit(req, '/api/user');
   if (!success) {
@@ -20,7 +47,7 @@ export async function GET(req: Request) {
 
     const userId = session.user.id;
 
-    // Получаем общее количество по статусам
+    // Получаем общую статистику
     const [watchedCount, wantToWatchCount, droppedCount, hiddenCount] = await Promise.all([
       // Просмотрено + Пересмотрено
       prisma.watchList.count({
@@ -41,27 +68,56 @@ export async function GET(req: Request) {
       prisma.blacklist.count({ where: { userId } }),
     ]);
 
+    // Отладочная информация
+    console.log('=== СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ ===');
+    console.log('User ID:', userId);
+    console.log('Watched count:', watchedCount);
+    console.log('Want to watch count:', wantToWatchCount);
+    console.log('Dropped count:', droppedCount);
+    console.log('Hidden count:', hiddenCount);
+    console.log('DROPPED status ID:', MOVIE_STATUS_IDS.DROPPED);
+
     // Получаем соотношение по типам контента (только для просмотренных)
-    const watchedByType = await prisma.watchList.groupBy({
-      by: ['mediaType'],
+    // Сначала получаем все просмотренные записи
+    const watchedRecords = await prisma.watchList.findMany({
       where: {
         userId,
         statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
       },
-      _count: { mediaType: true },
+      select: {
+        tmdbId: true,
+        mediaType: true,
+      },
     });
 
     const typeCounts = {
       movie: 0,
       tv: 0,
+      cartoon: 0,
       anime: 0,
     };
 
-    watchedByType.forEach((item) => {
-      if (item.mediaType in typeCounts) {
-        typeCounts[item.mediaType as keyof typeof typeCounts] = item._count.mediaType;
+    // Для каждой записи получаем данные TMDB и определяем тип контента
+    for (const record of watchedRecords) {
+      const tmdbData = await fetchMediaDetails(record.tmdbId, record.mediaType as 'movie' | 'tv');
+      
+      if (tmdbData) {
+        if (isAnime(tmdbData)) {
+          typeCounts.anime++;
+        } else if (isCartoon(tmdbData)) {
+          typeCounts.cartoon++;
+        } else if (record.mediaType === 'movie') {
+          typeCounts.movie++;
+        } else if (record.mediaType === 'tv') {
+          typeCounts.tv++;
+        }
+      } else {
+        // Если не удалось получить данные TMDB, используем базовый mediaType
+        if (record.mediaType in typeCounts) {
+          typeCounts[record.mediaType as keyof typeof typeCounts]++;
+        }
       }
-    });
+    }
 
     // Средняя оценка пользователя
     const avgRatingResult = await prisma.watchList.aggregate({
@@ -80,16 +136,40 @@ export async function GET(req: Request) {
     // Общее количество оценённых фильмов
     const ratedCount = avgRatingResult._count.userRating || 0;
 
+    // Общая сумма для расчета процентов (все статусы кроме скрытых)
+    const totalForPercentage = watchedCount + wantToWatchCount + droppedCount;
+
+    // Добавляем debug информацию в ответ
+    const debugInfo = {
+      userId,
+      statusIds: {
+        DROPPED: MOVIE_STATUS_IDS.DROPPED,
+        WANT_TO_WATCH: MOVIE_STATUS_IDS.WANT_TO_WATCH,
+        WATCHED: MOVIE_STATUS_IDS.WATCHED,
+        REWATCHED: MOVIE_STATUS_IDS.REWATCHED,
+      },
+      rawCounts: {
+        watchedCount,
+        wantToWatchCount,
+        droppedCount,
+        hiddenCount,
+        totalForPercentage,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
     return NextResponse.json({
       total: {
         watched: watchedCount,
         wantToWatch: wantToWatchCount,
         dropped: droppedCount,
         hidden: hiddenCount,
+        totalForPercentage,
       },
       typeBreakdown: typeCounts,
       averageRating,
       ratedCount,
+      debug: debugInfo, // Добавляем debug информацию
     });
   } catch (error) {
     console.error('Error fetching user stats:', error);

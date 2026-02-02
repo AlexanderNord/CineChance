@@ -88,16 +88,27 @@ export async function fetchMoviesByStatus(
   const skip = (page - 1) * limit;
   const take = limit + 1; // Запрашиваем на 1 больше для проверки hasMore
 
+  // Отладочная информация
+  console.log('=== FETCH MOVIES BY STATUS ===');
+  console.log('User ID:', userId);
+  console.log('Status name:', statusName);
+  console.log('Include hidden:', includeHidden);
+  console.log('Page:', page);
+
   // Оптимизация: сначала считаем общее количество, затем загружаем только нужную страницу
   const whereClause: any = { userId };
   if (statusName) {
     if (Array.isArray(statusName)) {
       const statusIds = statusName.map(name => getStatusIdByName(name)).filter(id => id !== null) as number[];
+      console.log('Status names (array):', statusName);
+      console.log('Status IDs:', statusIds);
       if (statusIds.length > 0) {
         whereClause.statusId = { in: statusIds };
       }
     } else {
       const statusId = getStatusIdByName(statusName);
+      console.log('Status name (single):', statusName);
+      console.log('Status ID:', statusId);
       if (statusId) {
         whereClause.statusId = statusId;
       }
@@ -107,6 +118,10 @@ export async function fetchMoviesByStatus(
   // 1. Сначала считаем общее количество (быстрый запрос)
   const totalCount = await prisma.watchList.count({ where: whereClause });
   const hasMore = skip + ITEMS_PER_PAGE < totalCount;
+
+  console.log('Where clause:', whereClause);
+  console.log('Total count:', totalCount);
+  console.log('Has more:', hasMore);
 
   // 2. Загружаем ТОЛЬКО нужную страницу из БД
   const watchListRecords = await prisma.watchList.findMany({
@@ -278,6 +293,10 @@ function sortMoviesOnServer(
 
 // Функция для получения общего количества фильмов по статусам
 export async function getMoviesCounts(userId: string) {
+  console.log('=== GET MOVIES COUNTS DEBUG ===');
+  console.log('User ID:', userId);
+  console.log('DROPPED status ID:', MOVIE_STATUS_IDS.DROPPED);
+  
   // Считаем и "Просмотрено" и "Пересмотрено" в одну категорию
   const [watched, wantToWatch, dropped, hidden] = await Promise.all([
     prisma.watchList.count({ 
@@ -290,6 +309,8 @@ export async function getMoviesCounts(userId: string) {
     prisma.watchList.count({ where: { userId, statusId: MOVIE_STATUS_IDS.DROPPED } }),
     prisma.blacklist.count({ where: { userId } }),
   ]);
+
+  console.log('Counts result:', { watched, wantToWatch, dropped, hidden });
 
   return { watched, wantToWatch, dropped, hidden };
 }

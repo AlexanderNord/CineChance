@@ -335,7 +335,10 @@ export async function GET(req: Request) {
     });
 
     // Если у нас много фильмов, берем случайную выборку для ускорения
-    const SAMPLE_SIZE = Math.min(100, Math.max(50, preFilteredItems.length / 5)); // 50-100 фильмов
+    // Адаптивная выборка: для малого количества берем все элементы
+    const SAMPLE_SIZE = preFilteredItems.length <= 10 
+      ? preFilteredItems.length  // Если мало фильмов, берем все
+      : Math.min(100, Math.max(50, preFilteredItems.length / 5)); // 50-100 фильмов для больших библиотек
     let sampledItems = preFilteredItems;
     
     if (preFilteredItems.length > SAMPLE_SIZE) {
@@ -352,6 +355,18 @@ export async function GET(req: Request) {
       sendProgress('sampling_complete', 20, { 
         totalItems: preFilteredItems.length, 
         sampledItems: sampledItems.length 
+      });
+    } else {
+      // Для малого количества логируем что берем все элементы
+      logger.info('Using all items for small library', {
+        totalItems: preFilteredItems.length,
+        isSmallLibrary: preFilteredItems.length <= 10
+      });
+      
+      sendProgress('sampling_complete', 20, { 
+        totalItems: preFilteredItems.length, 
+        sampledItems: preFilteredItems.length,
+        isSmallLibrary: true
       });
     }
 
@@ -637,13 +652,52 @@ export async function GET(req: Request) {
       afterAdditionalFilters
     });
 
-    // Если все кандидаты отфильтрованы, возвращаем сообщение
+    // Если все кандидаты отфильтрованы, возвращаем расширенную информацию
     if (candidates.length === 0) {
       sendProgress('no_candidates', 100, { message: 'No candidates found' });
+      
+      // Анализируем почему не осталось кандидатов и даем предложения
+      const suggestions = {
+        expandTypes: types.length > 0 && types.length < 3,
+        includeOtherLists: lists.length > 0 && lists.length < 3,
+        lowerRating: minRating && minRating > 6,
+        addMoreMovies: initialCount <= 5
+      };
+      
+      // Формируем детальное сообщение
+      let detailedMessage = 'Нет доступных рекомендаций по выбранным фильтрам.';
+      const suggestionParts: string[] = [];
+      
+      if (suggestions.addMoreMovies) {
+        suggestionParts.push(`Добавьте больше фильмов в списки (у вас всего ${initialCount})`);
+      }
+      if (suggestions.expandTypes) {
+        suggestionParts.push('Попробуйте включить другие типы контента');
+      }
+      if (suggestions.includeOtherLists) {
+        suggestionParts.push('Включите просмотренные или брошенные фильмы');
+      }
+      if (suggestions.lowerRating) {
+        suggestionParts.push('Попробуйте понизить минимальный рейтинг');
+      }
+      
+      if (suggestionParts.length > 0) {
+        detailedMessage += ' ' + suggestionParts.join('. ');
+      } else {
+        detailedMessage += ' Попробуйте изменить настройки фильтров.';
+      }
+      
       return NextResponse.json({
         success: false,
-        message: 'Нет доступных рекомендаций по выбранным фильтрам. Попробуйте изменить настройки.',
+        message: detailedMessage,
         movie: null,
+        suggestions,
+        stats: {
+          totalItems: initialCount,
+          afterTypeFilter,
+          afterAdditionalFilters: 0,
+          isSmallLibrary: initialCount <= 10
+        }
       });
     }
 
@@ -843,6 +897,17 @@ export async function GET(req: Request) {
       userRating: watchListData?.userRating || null,
       watchCount: watchListData?.watchCount || 0,
       message: 'Рекомендация получена',
+      // Добавляем статистику для клиента
+      stats: {
+        totalItems: initialCount,
+        availableCandidates: candidates.length,
+        isSmallLibrary: initialCount <= 10,
+        suggestions: {
+          addMoreMovies: initialCount <= 5,
+          expandTypes: types.length > 0 && types.length < 3,
+          includeOtherLists: lists.length > 0 && lists.length < 3
+        }
+      },
       // Debug информация для разработки (только для администратора)
       ...(isAdmin && {
         debug: {

@@ -46,6 +46,23 @@ interface RecommendationResponse {
   userRating: number | null;
   watchCount: number;
   message?: string;
+  stats?: {
+    totalItems: number;
+    availableCandidates: number;
+    isSmallLibrary: boolean;
+    suggestions: {
+      addMoreMovies: boolean;
+      expandTypes: boolean;
+      includeOtherLists: boolean;
+      lowerRating?: boolean;
+    };
+  };
+  suggestions?: {
+    expandTypes: boolean;
+    includeOtherLists: boolean;
+    lowerRating: boolean;
+    addMoreMovies: boolean;
+  };
   debug?: {
     tmdbCalls: number;
     dbRecords: number;
@@ -75,7 +92,7 @@ interface AdditionalFilters {
   selectedTags: string[];
 }
 
-type ViewState = 'filters' | 'loading' | 'result' | 'error';
+type ViewState = 'filters' | 'loading' | 'result' | 'error' | 'suggestions';
 
 // Типы для отслеживания
 interface FilterChange {
@@ -100,6 +117,16 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   const [watchCount, setWatchCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noAvailable, setNoAvailable] = useState(false);
+  const [stats, setStats] = useState<{
+    totalItems: number;
+    availableCandidates: number;
+    isSmallLibrary: boolean;
+    suggestions: {
+      addMoreMovies: boolean;
+      expandTypes: boolean;
+      includeOtherLists: boolean;
+    };
+  } | null>(null);
   const [progress, setProgress] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -366,6 +393,11 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
           debug: data.debug
         });
         
+        // Сохраняем статистику
+        if (data.stats) {
+          setStats(data.stats);
+        }
+        
         // Останавливаем анимацию прогресса
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
@@ -403,10 +435,17 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
           clearInterval(progressIntervalRef.current);
         }
         
+        // Сохраняем статистику из ответа об ошибке
+        if (data.stats) {
+          setStats(data.stats);
+        }
+        
         if (data.message?.includes('Выбранные списки пусты') ||
             data.message?.includes('Все доступные рекомендации')) {
           setNoAvailable(true);
         }
+        
+        setErrorMessage(data.message || 'Ошибка при получении рекомендации');
         setProgress(100);
         setViewState('error');
       }
@@ -729,18 +768,123 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                     </div>
                   )}
 
+                  {/* Состояние: Предложения */}
+                  {viewState === 'suggestions' && stats && (
+                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-md mx-auto">
+                      <div className="text-5xl mb-3">💡</div>
+                      <h2 className="text-lg font-bold text-white mb-2">
+                        {stats.isSmallLibrary && stats.totalItems <= 3 
+                          ? 'У вас мало фильмов в списке!'
+                          : 'Хотите больше разнообразия?'
+                        }
+                      </h2>
+                      <p className="text-gray-500 text-sm mb-6">
+                        {stats.isSmallLibrary && stats.totalItems <= 3
+                          ? `Добавьте больше фильмов для разнообразия рекомендаций`
+                          : `Попробуйте наши предложения для улучшения рекомендаций`
+                        }
+                      </p>
+                      
+                      {/* Панель предложений */}
+                      <div className="bg-gray-800 rounded-lg p-4 mb-6 w-full">
+                        <h3 className="text-sm font-semibold text-gray-300 mb-3">Что можно улучшить:</h3>
+                        <div className="space-y-2">
+                          {stats.suggestions.addMoreMovies && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-yellow-400">🎬</span>
+                              <span className="text-gray-300">Добавьте больше фильмов в списки</span>
+                            </div>
+                          )}
+                          {stats.suggestions.expandTypes && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-blue-400">📺</span>
+                              <span className="text-gray-300">Включите другие типы контента</span>
+                            </div>
+                          )}
+                          {stats.suggestions.includeOtherLists && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-green-400">📋</span>
+                              <span className="text-gray-300">Попробуйте просмотренные фильмы</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Кнопки действий */}
+                      <div className="flex gap-3 flex-wrap justify-center">
+                        <button
+                          onClick={handleBackToFilters}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium"
+                        >
+                          Изменить фильтры
+                        </button>
+                        {stats.suggestions.addMoreMovies && (
+                          <button
+                            onClick={() => router.push('/my-movies')}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors text-sm font-medium"
+                          >
+                            Добавить фильмы
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Состояние: Ошибка */}
                   {viewState === 'error' && (
-                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-md mx-auto">
                       <div className="text-5xl mb-3">😕</div>
                       <h2 className="text-lg font-bold text-white mb-2">
                         {errorMessage}
                       </h2>
-                      <p className="text-gray-500 text-sm mb-4 max-w-xs">
+                      <p className="text-gray-500 text-sm mb-6 max-w-xs">
                         {noAvailable
                           ? 'Все фильмы из вашего списка были показаны за последнюю неделю'
-                          : 'Попробуйте изменить фильтры'}
+                          : 'Попробуйте изменить фильтры или добавить больше фильмов'
+                        }
                       </p>
+                      
+
+                      {/* Быстрые действия на основе статистики */}
+                      {stats && (
+                        <div className="bg-gray-800 rounded-lg p-4 mb-6 w-full">
+                          <h3 className="text-sm font-semibold text-gray-300 mb-3">Быстрые действия:</h3>
+                          <div className="flex gap-2 flex-wrap justify-center">
+                            {stats.suggestions.expandTypes && (
+                              <button
+                                onClick={() => {
+                                  // Расширить типы контента
+                                  const allTypes: ContentType[] = ['movie', 'tv', 'anime'];
+                                  fetchRecommendation(allTypes, ['want', 'watched'], undefined, tracking);
+                                }}
+                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors text-xs"
+                              >
+                                Все типы
+                              </button>
+                            )}
+                            {stats.suggestions.includeOtherLists && (
+                              <button
+                                onClick={() => {
+                                  // Включить все списки
+                                  const allLists: ListType[] = ['want', 'watched', 'dropped'];
+                                  fetchRecommendation(['movie', 'tv', 'anime'], allLists, undefined, tracking);
+                                }}
+                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-500 transition-colors text-xs"
+                              >
+                                Все списки
+                              </button>
+                            )}
+                            {stats.suggestions.addMoreMovies && (
+                              <button
+                                onClick={() => router.push('/my-movies')}
+                                className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-500 transition-colors text-xs"
+                              >
+                                Добавить фильмы
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {noAvailable ? (
                         <div className="flex gap-2 flex-wrap justify-center">
@@ -759,25 +903,29 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                                 Очистка...
                               </>
                             ) : (
-                              'Сбросить историю'
+                              'Сбросить рекомендации'
                             )}
-                          </button>
-                          <button
-                            onClick={handleBackToFilters}
-                            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg font-medium hover:bg-blue-500 transition cursor-pointer"
-                          >
-                            Изменить фильтры
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={handleBackToFilters}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg font-medium hover:bg-blue-500 transition cursor-pointer"
-                        >
-                          Изменить фильтры
-                        </button>
+                        <div className="flex gap-2 flex-wrap justify-center">
+                          <button
+                            onClick={handleBackToFilters}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium"
+                          >
+                            Изменить фильтры
+                          </button>
+                          {stats?.suggestions.addMoreMovies && (
+                            <button
+                              onClick={() => router.push('/my-movies')}
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors text-sm font-medium"
+                            >
+                              Добавить фильмы
+                            </button>
+                          )}
+                        </div>
                       )}
-
+                      
                       {/* Сообщение о результате сброса */}
                       {resetMessage && (
                         <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 text-sm max-w-xs ${

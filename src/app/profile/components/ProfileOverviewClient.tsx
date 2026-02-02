@@ -9,7 +9,7 @@ import { ru } from 'date-fns/locale';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 const TermsOfServiceModal = dynamic(() => import('@/app/components/TermsOfServiceModal'), { ssr: false });
-import { FileText, Settings, Users, ArrowRight, Clock, Star, TrendingUp, Monitor, Tv, Film, CheckIcon, PlusIcon, XIcon, BanIcon } from 'lucide-react';
+import { FileText, Settings, Users, ArrowRight, Clock, Star, TrendingUp, Monitor, Tv, Film, CheckIcon, PlusIcon, XIcon, BanIcon, Smile } from 'lucide-react';
 import NicknameEditor from './NicknameEditor';
 import Loader from '@/app/components/Loader';
 import '@/app/profile/components/AchievementCards.css';
@@ -20,10 +20,12 @@ interface UserStats {
     wantToWatch: number;
     dropped: number;
     hidden: number;
+    totalForPercentage: number;
   };
   typeBreakdown: {
     movie: number;
     tv: number;
+    cartoon: number;
     anime: number;
   };
   averageRating: number | null;
@@ -221,10 +223,12 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
               wantToWatch: data.total?.wantToWatch || 0,
               dropped: data.total?.dropped || 0,
               hidden: data.total?.hidden || 0,
+              totalForPercentage: data.total?.totalForPercentage || 0,
             },
             typeBreakdown: {
               movie: data.typeBreakdown?.movie || 0,
               tv: data.typeBreakdown?.tv || 0,
+              cartoon: data.typeBreakdown?.cartoon || 0,
               anime: data.typeBreakdown?.anime || 0,
             },
             averageRating: data.averageRating || null,
@@ -466,8 +470,8 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                         <div 
                           className="h-full bg-green-500 rounded-full transition-all duration-500"
                           style={{ 
-                            width: `${stats.total.watched > 0 
-                              ? (stats.typeBreakdown.movie / stats.total.watched) * 100 
+                            width: `${stats.total.totalForPercentage > 0 
+                              ? (stats.typeBreakdown.movie / stats.total.totalForPercentage) * 100 
                               : 0}%` 
                           }}
                         />
@@ -486,8 +490,28 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                         <div 
                           className="h-full bg-blue-500 rounded-full transition-all duration-500"
                           style={{ 
-                            width: `${stats.total.watched > 0 
-                              ? (stats.typeBreakdown.tv / stats.total.watched) * 100 
+                            width: `${stats.total.totalForPercentage > 0 
+                              ? (stats.typeBreakdown.tv / stats.total.totalForPercentage) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Мультфильмы */}
+                  <div className="flex items-center gap-3">
+                    <Smile className="w-5 h-5 text-orange-400 flex-shrink-0" />
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-gray-300 text-sm">Мультфильмы</span>
+                        <span className="text-white font-medium">{stats.typeBreakdown.cartoon}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                          style={{ 
+                            width: `${stats.total.totalForPercentage > 0 
+                              ? (stats.typeBreakdown.cartoon / stats.total.totalForPercentage) * 100 
                               : 0}%` 
                           }}
                         />
@@ -506,8 +530,8 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                         <div 
                           className="h-full bg-purple-500 rounded-full transition-all duration-500"
                           style={{ 
-                            width: `${stats.total.watched > 0 
-                              ? (stats.typeBreakdown.anime / stats.total.watched) * 100 
+                            width: `${stats.total.totalForPercentage > 0 
+                              ? (stats.typeBreakdown.anime / stats.total.totalForPercentage) * 100 
                               : 0}%` 
                           }}
                         />
@@ -600,17 +624,20 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                       {/* Постер */}
                       <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 border border-gray-700 group-hover:border-purple-500/50 transition-all relative">
                         {collection.poster_path ? (
-                          <div className="w-full h-full relative">
-                            <ImageWithProxy
-                              src={`https://image.tmdb.org/t/p/w300${collection.poster_path}`}
-                              alt={collection.name}
-                              fill
-                              className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
-                              sizes="120px"
+                          <div className="relative w-full h-full">
+                            <div
                               style={{ 
                                 filter: `grayscale(${grayscaleValue}%) saturate(${saturateValue}%)`
                               }}
-                            />
+                            >
+                              <ImageWithProxy
+                                src={`https://image.tmdb.org/t/p/w300${collection.poster_path}`}
+                                alt={collection.name}
+                                fill
+                                className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
+                                sizes="120px"
+                              />
+                            </div>
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-600">
@@ -725,16 +752,19 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                       <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 border border-gray-700 group-hover:border-amber-500/50 transition-all relative">
                         {actor.profile_path ? (
                           <div className="w-full h-full relative">
-                            <ImageWithProxy
-                              src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
-                              alt={actor.name}
-                              fill
-                              className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
-                              sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, 144px"
+                            <div
                               style={{ 
                                 filter: `grayscale(${grayscaleValue}%) saturate(${saturateValue}%)`
                               }}
-                            />
+                            >
+                              <ImageWithProxy
+                                src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                                alt={actor.name}
+                                fill
+                                className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
+                                sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, 144px"
+                              />
+                            </div>
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-600">
