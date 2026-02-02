@@ -248,6 +248,19 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const { types, lists, minRating, yearFrom, yearTo, genres, tags } = parseFilterParams(url);
     
+    // Логируем входящие фильтры для отладки
+    logger.info('Recommendation request filters', {
+      userId,
+      types,
+      lists,
+      minRating,
+      yearFrom,
+      yearTo,
+      genres,
+      tags,
+      url: req.url
+    });
+    
     // Проверяем права администратора для debug информации
     const isAdmin = userId === ADMIN_USER_ID && process.env.NODE_ENV === 'development';
 
@@ -269,6 +282,12 @@ export async function GET(req: Request) {
 
     // 3. Формируем условия для статусов используя ID вместо имен
     const statusIds = getRecommendationStatusIds(lists);
+    
+    logger.info('Status IDs for filtering', {
+      lists,
+      statusIds,
+      statusIdsEmpty: statusIds.length === 0
+    });
 
     if (statusIds.length === 0) {
       return NextResponse.json({
@@ -478,6 +497,11 @@ export async function GET(req: Request) {
       const isMovie = item.mediaType === 'movie';
       const isTv = item.mediaType === 'tv';
 
+      // Если типы не указаны, включаем все
+      if (types.length === 0) {
+        return true;
+      }
+
       // Логика фильтрации:
       // - Если выбрано аниме, включаем все аниме (и movie, и tv)
       // - Если выбрано movie, включаем не-аниме фильмы
@@ -499,6 +523,13 @@ export async function GET(req: Request) {
     });
 
     const afterTypeFilter = filteredItems.length;
+    
+    logger.info('Type filtering results', {
+      itemsBefore: sampledItems.length,
+      itemsAfter: afterTypeFilter,
+      typesFilter: types,
+      filteredOut: sampledItems.length - afterTypeFilter
+    });
 
     // 6. Получаем историю показов за последние N дней (cooldown)
     const cooldownDate = new Date();

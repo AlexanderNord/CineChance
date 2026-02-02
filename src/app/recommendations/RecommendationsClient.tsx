@@ -313,6 +313,15 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       params.set('types', types.join(','));
       params.set('lists', lists.join(','));
       params.set('userId', userId); // Добавляем userId для проверки прав
+      
+      // Логируем отправляемые параметры для отладки
+      logger.info('Sending recommendation request', {
+        types,
+        lists,
+        additionalFilters,
+        userId,
+        paramsString: params.toString()
+      });
 
       // Добавляем дополнительные фильтры
       if (additionalFilters) {
@@ -349,6 +358,14 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       });
 
       if (data.success && data.movie) {
+        // Логируем успешный ответ для отладки
+        logger.info('Recommendation response received', {
+          movieId: data.movie.id,
+          movieTitle: data.movie.title || data.movie.name,
+          movieType: data.movie.media_type,
+          debug: data.debug
+        });
+        
         // Останавливаем анимацию прогресса
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
@@ -511,7 +528,20 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
 
           await recordAction('skipped');
           fetchStartTime.current = 0;
-          await fetchRecommendation(['movie', 'tv', 'anime'], ['want', 'watched'], undefined, tracking);
+          
+          // Используем сохраненные фильтры для повторной рекомендации
+          if (currentFilters) {
+            const { types, lists, additionalFilters } = currentFilters;
+            await fetchRecommendation(
+              types.length > 0 ? types : ['movie', 'tv', 'anime'],
+              lists.length > 0 ? lists : ['want', 'watched'],
+              additionalFilters,
+              tracking
+            );
+          } else {
+            // Если фильтры не сохранены, используем значения по умолчанию
+            await fetchRecommendation(['movie', 'tv', 'anime'], ['want', 'watched'], undefined, tracking);
+          }
           setActionLoading(false);
         };
 
