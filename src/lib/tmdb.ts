@@ -1,5 +1,6 @@
 // src/lib/tmdb.ts
 import { logger } from '@/lib/logger';
+import { fetchTrendingMoviesMock, fetchPopularMoviesMock, searchMediaMock } from './tmdb-mock';
 
 export interface Media {
   id: number;
@@ -22,12 +23,30 @@ export interface Media {
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = 'https://api.themoviedb.org/3';
 
+// Проверяем, есть ли проблемы с сетью (прокси и т.д.) - только в development
+const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
+const HAS_NETWORK_ISSUES = IS_DEVELOPMENT && !!(
+  process.env.HTTPS_PROXY || process.env.HTTP_PROXY || 
+  process.env.https_proxy || process.env.http_proxy ||
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
+);
+
 // Убедитесь, что ключ загружен (для отладки)
 if (!TMDB_API_KEY) {
   logger.warn('TMDB_API_KEY не найден! Проверьте .env.local', { context: 'TMDB' });
 }
 
+// Если есть проблемы с сетью в development, используем mock данные
+if (HAS_NETWORK_ISSUES) {
+  logger.info('Обнаружены проблемы с сетью в development, используем mock данные для TMDB', { context: 'TMDB' });
+}
+
 export const fetchTrendingMovies = async (timeWindow: 'day' | 'week' = 'week'): Promise<Media[]> => {
+  // Если есть проблемы с сетью, сразу возвращаем mock данные
+  if (HAS_NETWORK_ISSUES) {
+    return await fetchTrendingMoviesMock(timeWindow);
+  }
+
   try {
     // Формируем URL с API ключом как параметр запроса
     const url = new URL(`${BASE_URL}/trending/movie/${timeWindow}`);
@@ -68,12 +87,18 @@ export const fetchTrendingMovies = async (timeWindow: 'day' | 'week' = 'week'): 
     
     return movies;
   } catch (error) {
-    logger.error('Сетевая ошибка при запросе к TMDB (trending)', { error, context: 'TMDB' });
-    return [];
+    logger.error('Сетевая ошибка при запросе к TMDB (trending), используем mock данные', { error, context: 'TMDB' });
+    // Возвращаем mock данные при ошибке сети
+    return await fetchTrendingMoviesMock(timeWindow);
   }
 };
 
 export const fetchPopularMovies = async (page: number = 1): Promise<Media[]> => {
+  // Если есть проблемы с сетью, сразу возвращаем mock данные
+  if (HAS_NETWORK_ISSUES) {
+    return await fetchPopularMoviesMock(page);
+  }
+
   try {
     const url = new URL(`${BASE_URL}/movie/popular`);
     url.searchParams.append('api_key', TMDB_API_KEY || '');
@@ -109,13 +134,18 @@ export const fetchPopularMovies = async (page: number = 1): Promise<Media[]> => 
     
     return movies;
   } catch (error) {
-    logger.error('Ошибка при запросе популярных фильмов', { error, context: 'TMDB' });
-    return [];
+    logger.error('Ошибка при запросе популярных фильмов, используем mock данные', { error, context: 'TMDB' });
+    return await fetchPopularMoviesMock(page);
   }
 };
 
 export const searchMedia = async (query: string, page: number = 1): Promise<Media[]> => {
   if (!query.trim()) return [];
+
+  // Если есть проблемы с сетью, сразу возвращаем mock данные
+  if (HAS_NETWORK_ISSUES) {
+    return await searchMediaMock(query, page);
+  }
 
   try {
     const url = new URL(`${BASE_URL}/search/multi`);
@@ -160,8 +190,8 @@ export const searchMedia = async (query: string, page: number = 1): Promise<Medi
 
     return media.slice(0, 100); // Ограничиваем 100 результатами
   } catch (error) {
-    logger.error('Ошибка при поиске медиа', { error, context: 'TMDB' });
-    return [];
+    logger.error('Ошибка при поиске медиа, используем mock данные', { error, context: 'TMDB' });
+    return await searchMediaMock(query, page);
   }
 };
 

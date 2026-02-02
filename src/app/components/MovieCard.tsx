@@ -7,7 +7,7 @@ import { Media } from '@/lib/tmdb';
 import RatingModal from './RatingModal';
 import RatingInfoModal from './RatingInfoModal';
 import { calculateCineChanceScore } from '@/lib/calculateCineChanceScore';
-import MoviePoster from './MoviePoster';
+import MoviePosterProxy from './MoviePosterProxy';
 import StatusOverlay from './StatusOverlay';
 import { logger } from '@/lib/logger';
 import { useBlacklist } from './BlacklistContext';
@@ -569,7 +569,7 @@ export default function MovieCard({
             
             {getStatusIcon()}
 
-            <MoviePoster
+            <MoviePosterProxy
               key={movie.id}
               movie={movie}
               priority={priority}

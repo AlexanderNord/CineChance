@@ -8,6 +8,8 @@ import FilterForm from './FilterForm';
 import SessionTracker from './SessionTracker';
 import FilterStateManager from './FilterStateManager';
 import { useSessionTracking } from './useSessionTracking';
+import { useDebounce } from './useDebounce';
+import { validateFilters, areFiltersValid, getFirstValidationError } from './filterValidation';
 import { logger } from '@/lib/logger';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { ContentType, ListType } from '@/lib/recommendation-types';
@@ -61,6 +63,7 @@ interface AdditionalFilters {
   yearFrom: string;
   yearTo: string;
   selectedGenres: number[];
+  selectedTags: string[];
 }
 
 type ViewState = 'filters' | 'loading' | 'result' | 'error';
@@ -93,6 +96,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [filterErrors, setFilterErrors] = useState<string[]>([]);
   const [userMinRating, setUserMinRating] = useState<number>(6.0); // Настройка minRating пользователя
   const [userListPreferences, setUserListPreferences] = useState<{
     includeWant: boolean;
@@ -207,6 +211,17 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
     additionalFilters?: AdditionalFilters,
     tracking?: ReturnType<typeof useSessionTracking>
   ) => {
+    // Валидация фильтров
+    const validationErrors = validateFilters(types, lists, additionalFilters);
+    if (validationErrors.length > 0) {
+      setFilterErrors(validationErrors.map(error => error.message));
+      logger.warn('Filter validation failed', { errors: validationErrors, types, lists, additionalFilters });
+      return;
+    }
+
+    // Очищаем ошибки валидации
+    setFilterErrors([]);
+
     const isFirstCall = !fetchStartTime.current;
     if (isFirstCall) {
       fetchStartTime.current = Date.now();
@@ -216,8 +231,9 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       }
     }
 
-    // Обновляем текущие фильтры
-    setCurrentFilters({ types, lists, additionalFilters });
+    // Используем переданные фильтры вместо currentFilters
+    const currentFilterState = { types, lists, additionalFilters };
+    setCurrentFilters(currentFilterState);
 
     setViewState('loading');
     setErrorMessage(null);
@@ -250,6 +266,9 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
         if (additionalFilters.selectedGenres.length > 0) {
           params.set('genres', additionalFilters.selectedGenres.join(','));
         }
+        if (additionalFilters.selectedTags.length > 0) {
+          params.set('tags', additionalFilters.selectedTags.join(','));
+        }
       }
 
       const res = await fetch(`/api/recommendations/random?${params.toString()}`);
@@ -277,6 +296,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
           tracking.trackEvent('page_view', {
             page: 'recommendation_result',
             fetchDuration,
+            filters: currentFilterState,
           });
         }
 
@@ -315,12 +335,27 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
         setViewState('error');
       }
     } catch (err) {
-      logger.error('Failed to fetch recommendation', { error: err });
+      logger.error('Failed to fetch recommendation', { error: err, filters: currentFilterState });
       setErrorMessage('Ошибка при загрузке рекомендации');
       setProgress(100);
       setViewState('error');
     }
   }, []);
+
+  // Дебаунсим fetchRecommendation для предотвращения race conditions
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const debouncedFetchRecommendation = useCallback((...args: Parameters<typeof fetchRecommendation>) => {
+    // Отменяем предыдущий таймаут
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Устанавливаем новый таймаут
+    timeoutRef.current = setTimeout(() => {
+      fetchRecommendation(...args);
+    }, 300);
+  }, [fetchRecommendation]);
 
   // Сброс логов рекомендаций
   const handleResetLogs = async () => {
@@ -464,7 +499,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
               tracking.trackFilterChange(parameterName, previousValue, newValue);
             }}
           >
-            {({ filters, updateFilter, resetFilters }) => (
+            {({ filters, updateFilter, updateAdditionalFilter, resetFilters }) => (
               <div className="min-h-screen bg-gray-950">
                 <div className="container mx-auto px-3 sm:px-4 py-4">
                   {/* Заголовок */}
@@ -485,7 +520,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                       ) : (
                         <FilterForm
                           onSubmit={(types, lists, additionalFilters) =>
-                            fetchRecommendation(types as ContentType[], lists as ListType[], additionalFilters, tracking)
+                            debouncedFetchRecommendation(types as ContentType[], lists as ListType[], additionalFilters, tracking)
                           }
                           isLoading={false}
                           initialMinRating={userMinRating}
@@ -493,10 +528,19 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                           initialLists={filters.lists}
                           availableGenres={availableGenres}
                           userTags={userTags}
+                          updateAdditionalFilter={updateAdditionalFilter}
                           onTypeChange={(types) => updateFilter('types', types)}
                           onListChange={(lists) => updateFilter('lists', lists)}
                           onAdditionalFilterChange={(additionalFilters) => {
-                            updateFilter('additionalFilters', additionalFilters);
+                            // Обновляем все поля additionalFilters
+                            if (filters.additionalFilters && additionalFilters) {
+                              Object.keys(additionalFilters).forEach(key => {
+                                const filterKey = key as keyof typeof additionalFilters;
+                                if (additionalFilters[filterKey] !== filters.additionalFilters[filterKey]) {
+                                  updateAdditionalFilter(filterKey, additionalFilters[filterKey]);
+                                }
+                              });
+                            }
                           }}
                         />
                       )}

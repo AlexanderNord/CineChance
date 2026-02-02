@@ -10,12 +10,12 @@ import { isUnder18 } from '@/lib/age-utils';
 import { Media } from '@/lib/tmdb';
 import { revalidate, tags } from '@/lib/cache';
 
-// Маппинг статусов
-const STATUS_FROM_DB: Record<string, 'want' | 'watched' | 'dropped' | 'rewatched' | null> = {
-  'Хочу посмотреть': 'want',
-  'Просмотрено': 'watched',
-  'Брошено': 'dropped',
-  'Пересмотрено': 'rewatched',
+// Маппинг статусов из ID в названия
+const STATUS_FROM_ID: Record<number, 'want' | 'watched' | 'dropped' | 'rewatched' | null> = {
+  1: 'want',      // Хочу посмотреть
+  2: 'watched',   // Просмотрено
+  3: 'dropped',   // Брошено
+  4: 'rewatched', // Пересмотрено
 };
 
 // Интерфейс для данных MovieCard
@@ -38,7 +38,7 @@ export default async function HorizontalMovieGridServer() {
   
   let blacklistedIds = new Set<number>();
   let shouldFilterAdult = false;
-  let watchlistMap: Map<string, { status: string | null; userRating: number | null }> = new Map();
+  let watchlistMap: Map<string, { status: number | null; userRating: number | null }> = new Map();
 
   // Загружаем данные пользователя на сервере для фильтрации
   if (userId) {
@@ -61,6 +61,9 @@ export default async function HorizontalMovieGridServer() {
       }
     } catch (error) {
       console.error("Failed to fetch user data", error);
+      // В случае ошибки продолжаем с безопасными значениями по умолчанию
+      blacklistedIds = new Set();
+      shouldFilterAdult = false;
     }
   }
 
@@ -69,17 +72,24 @@ export default async function HorizontalMovieGridServer() {
     try {
       const watchlist = await prisma.watchList.findMany({
         where: { userId },
-        include: { status: true }
+        select: {
+          mediaType: true,
+          tmdbId: true,
+          statusId: true,
+          userRating: true,
+        }
       });
       
       watchlist.forEach((item) => {
         watchlistMap.set(`${item.mediaType}_${item.tmdbId}`, { 
-          status: item.status?.name || null, 
+          status: item.statusId, 
           userRating: item.userRating 
         });
       });
     } catch (error) {
       console.error("Failed to fetch watchlist", error);
+      // В случае ошибки продолжаем работу с пустым watchlist
+      watchlistMap.clear();
     }
   }
 
@@ -122,6 +132,8 @@ export default async function HorizontalMovieGridServer() {
       });
     } catch (error) {
       console.error("Failed to fetch CineChance ratings", error);
+      // В случае ошибки продолжаем без рейтингов
+      cineChanceRatings.clear();
     }
   }
 
@@ -134,7 +146,9 @@ export default async function HorizontalMovieGridServer() {
     return {
       movie,
       isBlacklisted: blacklistedIds.has(movie.id),
-      status: watchlistData ? (STATUS_FROM_DB[watchlistData.status || ''] || null) : null,
+      status: watchlistData?.status !== null && watchlistData?.status !== undefined 
+        ? (STATUS_FROM_ID[watchlistData.status] || null) 
+        : null,
       userRating: watchlistData?.userRating || null,
       averageRating: cineChanceData?.averageRating || null,
       ratingCount: cineChanceData?.count || 0,
