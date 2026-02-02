@@ -1,12 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { fetchMediaDetails } from '@/lib/tmdb';
-import { shouldFilterAdult } from '@/lib/age-utils';
+import { getCachedMediaDetails, setCachedMediaDetails } from '@/lib/tmdbCache';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
 import { calculateCineChanceScore } from '@/lib/calculateCineChanceScore';
+import { shouldFilterAdult } from '@/lib/ageFilter';
+import { getRecommendationStatusIds, getStatusNameById } from '@/lib/movieStatusConstants';
 import {
   FiltersSnapshot,
   CandidatePoolMetrics,
@@ -21,6 +23,13 @@ import {
 const RECOMMENDATION_COOLDOWN_DAYS = 7;
 const MIN_RATING_THRESHOLD = 6.5;
 
+// Функция для отправки прогресса (если доступно)
+function sendProgress(stage: string, progress: number, details?: any) {
+  // В будущем здесь будет интеграция с SSE
+  // Пока просто логируем для отладки
+  logger.info('Progress update', { stage, progress, details });
+}
+
 // Типы фильтров
 interface FilterParams {
   types: ContentType[];
@@ -30,6 +39,14 @@ interface FilterParams {
   yearTo?: string;
   genres?: number[];
   tags?: string[];
+}
+
+interface AdditionalFilters {
+  minRating: number;
+  yearFrom: string;
+  yearTo: string;
+  selectedGenres: number[];
+  selectedTags: string[];
 }
 
 /**
@@ -211,6 +228,9 @@ function createFiltersSnapshot(
  * Пример: /api/recommendations/random?types=movie,anime&lists=want,watched,dropped&genres=28,12&tags=action,comedy
  */
 export async function GET(req: Request) {
+  const startTime = Date.now();
+  const ADMIN_USER_ID = 'cmkbc7sn2000104k3xd3zyf2a';
+  
   // Apply rate limiting
   const { success } = await rateLimit(req, '/api/recommendations');
   if (!success) {
@@ -227,6 +247,9 @@ export async function GET(req: Request) {
     const userId = session.user.id as string;
     const url = new URL(req.url);
     const { types, lists, minRating, yearFrom, yearTo, genres, tags } = parseFilterParams(url);
+    
+    // Проверяем права администратора для debug информации
+    const isAdmin = userId === ADMIN_USER_ID && process.env.NODE_ENV === 'development';
 
     // 1. Получаем настройки пользователя
     const settings = await prisma.recommendationSettings.findUnique({
@@ -244,20 +267,10 @@ export async function GET(req: Request) {
     // Проверяем, нужно ли фильтровать взрослый контент
     const filterAdult = shouldFilterAdult((user as any)?.birthDate ?? null, true);
 
-    // 3. Формируем условия для статусов
-    const statusConditions: string[] = [];
-    if (lists.includes('want')) {
-      statusConditions.push('Хочу посмотреть');
-    }
-    if (lists.includes('watched')) {
-      statusConditions.push('Просмотрено');
-      statusConditions.push('Пересмотрено');
-    }
-    if (lists.includes('dropped')) {
-      statusConditions.push('Брошено');
-    }
+    // 3. Формируем условия для статусов используя ID вместо имен
+    const statusIds = getRecommendationStatusIds(lists);
 
-    if (statusConditions.length === 0) {
+    if (statusIds.length === 0) {
       return NextResponse.json({
         success: false,
         message: 'Выберите хотя бы один список',
@@ -269,9 +282,7 @@ export async function GET(req: Request) {
     const watchListItems = await prisma.watchList.findMany({
       where: {
         userId,
-        status: {
-          name: { in: statusConditions },
-        },
+        statusId: { in: statusIds },
       },
       select: {
         id: true,
@@ -281,11 +292,7 @@ export async function GET(req: Request) {
         voteAverage: true,
         addedAt: true,
         userRating: true,
-        status: {
-          select: {
-            name: true,
-          },
-        },
+        statusId: true,
       },
     });
 
@@ -299,42 +306,128 @@ export async function GET(req: Request) {
       });
     }
 
-    // 4. Получаем актуальные данные из TMDB для фильтрации по типам
-    // Сначала собираем tmdbId всех фильмов из списков
-    const tmdbIds = watchListItems.map(item => item.tmdbId);
+    // 4. ОПТИМИЗАЦИЯ: Умная выборка перед TMDB запросами
+    sendProgress('sampling', 10, { totalItems: watchListItems.length });
+    
+    // Сначала применяем базовые фильтры, которые не требуют TMDB данных
+    let preFilteredItems = watchListItems.filter(item => {
+      // Базовая фильтрация по статусам (уже применена в запросе)
+      return true; // Пока все элементы проходят базовую фильтрацию
+    });
 
-    // Загружаем детали для определения типа контента (аниме/не аниме)
-    const tmdbDetailsPromises = watchListItems.map(async (item) => {
-      try {
-        const details = await fetchMediaDetails(item.tmdbId, item.mediaType as 'movie' | 'tv');
+    // Если у нас много фильмов, берем случайную выборку для ускорения
+    const SAMPLE_SIZE = Math.min(100, Math.max(50, preFilteredItems.length / 5)); // 50-100 фильмов
+    let sampledItems = preFilteredItems;
+    
+    if (preFilteredItems.length > SAMPLE_SIZE) {
+      // Перемешиваем массив и берем первые SAMPLE_SIZE элементов
+      const shuffled = [...preFilteredItems].sort(() => Math.random() - 0.5);
+      sampledItems = shuffled.slice(0, SAMPLE_SIZE);
+      
+      logger.info('Sampling strategy applied', {
+        totalItems: preFilteredItems.length,
+        sampledItems: sampledItems.length,
+        sampleRatio: (sampledItems.length / preFilteredItems.length * 100).toFixed(1) + '%'
+      });
+      
+      sendProgress('sampling_complete', 20, { 
+        totalItems: preFilteredItems.length, 
+        sampledItems: sampledItems.length 
+      });
+    }
+
+    // 5. Получаем актуальные данные из TMDB только для выборки
+    // Используем батчинг с retry логикой для предотвращения rate limiting
+    const BATCH_SIZE = 3; // Уменьшаем размер батча для большей стабильности
+    const BATCH_DELAY = 100; // Уменьшаем задержку между батчами
+    const MAX_RETRIES = 2; // Количество повторных попыток
+    
+    sendProgress('tmdb_start', 30, { 
+      itemsToProcess: sampledItems.length, 
+      batchSize: BATCH_SIZE 
+    });
+    
+    const tmdbDetailsPromises = [];
+    let processedBatches = 0;
+    
+    for (let i = 0; i < sampledItems.length; i += BATCH_SIZE) {
+      const batch = sampledItems.slice(i, i + BATCH_SIZE);
+      
+      const batchPromises = batch.map(async (item) => {
+        let lastError: Error | null = null;
         
-        // Фильтруем взрослый контент
-        if (filterAdult && details?.adult) {
-          return {
-            tmdbId: item.tmdbId,
-            mediaType: item.mediaType,
-            isAnime: false,
-            originalLanguage: null,
-            genreIds: [] as number[],
-            release_date: null,
-            first_air_date: null,
-            adult: true,
-            vote_count: 0,
-          };
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            // Добавляем экспоненциальную задержку для retry
+            if (attempt > 0) {
+              const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Max 5 секунд
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            
+            // Сначала проверяем кэш
+            let details = getCachedMediaDetails(item.tmdbId, item.mediaType);
+            
+            if (!details) {
+              // Если в кэше нет, запрашиваем из TMDB
+              details = await fetchMediaDetails(item.tmdbId, item.mediaType as 'movie' | 'tv');
+              // Сохраняем в кэш
+              if (details) {
+                setCachedMediaDetails(item.tmdbId, item.mediaType, details);
+              }
+            }
+            
+            // Фильтруем взрослый контент
+            if (filterAdult && details?.adult) {
+              return {
+                tmdbId: item.tmdbId,
+                mediaType: item.mediaType,
+                isAnime: false,
+                originalLanguage: null,
+                genreIds: [] as number[],
+                release_date: null,
+                first_air_date: null,
+                adult: true,
+                vote_count: 0,
+              };
+            }
+            
+            return {
+              tmdbId: item.tmdbId,
+              mediaType: item.mediaType,
+              isAnime: details ? isAnime(details) : false,
+              originalLanguage: details?.original_language,
+              genreIds: details?.genres?.map((g: any) => g.id) || [],
+              release_date: details?.release_date || null,
+              first_air_date: details?.first_air_date || null,
+              adult: details?.adult || false,
+              vote_count: details?.vote_count || 0,
+            };
+          } catch (error) {
+            lastError = error instanceof Error ? error : new Error('Unknown error');
+            
+            // Если это 429 ошибка, ждем дольше перед следующей попыткой
+            if (error && typeof error === 'object' && 'status' in error && error.status === 429) {
+              logger.warn('TMDB rate limit hit, retrying...', { 
+                tmdbId: item.tmdbId, 
+                attempt: attempt + 1,
+                maxRetries: MAX_RETRIES + 1
+              });
+              continue;
+            }
+            
+            // Для других ошибок не retry, кроме последней попытки
+            if (attempt < MAX_RETRIES) {
+              continue;
+            }
+          }
         }
         
-        return {
-          tmdbId: item.tmdbId,
-          mediaType: item.mediaType,
-          isAnime: details ? isAnime(details) : false,
-          originalLanguage: details?.original_language,
-          genreIds: details?.genres?.map((g: any) => g.id) || [],
-          release_date: details?.release_date || null,
-          first_air_date: details?.first_air_date || null,
-          adult: details?.adult || false,
-          vote_count: details?.vote_count || 0,
-        };
-      } catch {
+        // Если все попытки неудачны, возвращаем значения по умолчанию
+        logger.warn('Failed to fetch TMDB details after all retries', { 
+          tmdbId: item.tmdbId, 
+          mediaType: item.mediaType, 
+          error: lastError?.message || 'Unknown error' 
+        });
         return {
           tmdbId: item.tmdbId,
           mediaType: item.mediaType,
@@ -346,16 +439,35 @@ export async function GET(req: Request) {
           adult: false,
           vote_count: 0,
         };
+      });
+      
+      tmdbDetailsPromises.push(...batchPromises);
+      processedBatches++;
+      
+      // Отправляем прогресс после каждого батча
+      const batchProgress = 30 + (processedBatches / Math.ceil(sampledItems.length / BATCH_SIZE)) * 40;
+      sendProgress('tmdb_batch', Math.round(batchProgress), {
+        processedBatches,
+        totalBatches: Math.ceil(sampledItems.length / BATCH_SIZE),
+        currentBatchSize: batch.length
+      });
+      
+      // Добавляем задержку между батчами для предотвращения rate limiting
+      if (i + BATCH_SIZE < sampledItems.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
       }
-    });
+    }
 
     const tmdbDetails = await Promise.all(tmdbDetailsPromises);
+    sendProgress('tmdb_complete', 70, { totalDetails: tmdbDetails.length });
 
     // Создаём Map для быстрого доступа к деталям
     const detailsMap = new Map(tmdbDetails.map(d => [d.tmdbId, d]));
 
-    // 5. Фильтруем по типам контента
-    let filteredItems = watchListItems.filter(item => {
+    // 6. Фильтруем по типам контента
+    sendProgress('filtering_start', 75, { itemsToFilter: sampledItems.length });
+    
+    let filteredItems = sampledItems.filter(item => {
       const details = detailsMap.get(item.tmdbId);
       if (!details) return false;
 
@@ -488,9 +600,15 @@ export async function GET(req: Request) {
     }
 
     const afterAdditionalFilters = candidates.length;
+    sendProgress('filtering_complete', 85, { 
+      finalCandidates: candidates.length,
+      afterTypeFilter,
+      afterAdditionalFilters
+    });
 
     // Если все кандидаты отфильтрованы, возвращаем сообщение
     if (candidates.length === 0) {
+      sendProgress('no_candidates', 100, { message: 'No candidates found' });
       return NextResponse.json({
         success: false,
         message: 'Нет доступных рекомендаций по выбранным фильтрам. Попробуйте изменить настройки.',
@@ -499,8 +617,15 @@ export async function GET(req: Request) {
     }
 
     // 7. Случайный выбор
+    sendProgress('selecting', 90, { candidatesCount: candidates.length });
+    
     let randomIndex = Math.floor(Math.random() * candidates.length);
     let selected = candidates[randomIndex];
+    
+    sendProgress('selected', 95, { 
+      selectedTmdbId: selected.tmdbId,
+      selectedTitle: selected.title 
+    });
 
     // 7.1. Получаем полные данные о выбранном фильме из watchlist (включая рейтинг пользователя)
     let watchListData = await prisma.watchList.findFirst({
@@ -587,7 +712,8 @@ export async function GET(req: Request) {
       'Пересмотрено': 'rewatched',
       'Брошено': 'dropped',
     };
-    const userStatus = userStatusMap[selected.status.name] || null;
+    const statusName = getStatusNameById(selected.statusId);
+    const userStatus = statusName ? userStatusMap[statusName] || null : null;
 
     // 9. Формируем контекстные данные для записи
     const filtersSnapshot = createFiltersSnapshot(types, lists, minRating, yearFrom, yearTo, genres, tags);
@@ -671,6 +797,11 @@ export async function GET(req: Request) {
       original_language: tmdbData?.original_language,
     };
 
+    sendProgress('complete', 100, { 
+      movieTitle: movie.title || movie.name,
+      totalDuration: Date.now() - startTime
+    });
+
     return NextResponse.json({
       success: true,
       movie,
@@ -681,6 +812,27 @@ export async function GET(req: Request) {
       userRating: watchListData?.userRating || null,
       watchCount: watchListData?.watchCount || 0,
       message: 'Рекомендация получена',
+      // Debug информация для разработки (только для администратора)
+      ...(isAdmin && {
+        debug: {
+          tmdbCalls: sampledItems.length, // Теперь отражает реальное количество запросов
+          dbRecords: initialCount,
+          cached: false, // TODO: Добавить реальную проверку кэша
+          fetchDuration: Date.now() - startTime,
+          filters: { types, lists, minRating, yearFrom, yearTo, genres, tags: tags || [] },
+          // Добавляем детальную статистику
+          sampling: {
+            totalItems: initialCount,
+            sampledItems: sampledItems.length,
+            sampleRatio: initialCount > 0 ? (sampledItems.length / initialCount * 100).toFixed(1) + '%' : '0%'
+          },
+          performance: {
+            batchSize: BATCH_SIZE,
+            batchDelay: BATCH_DELAY,
+            totalBatches: Math.ceil(sampledItems.length / BATCH_SIZE)
+          }
+        }
+      })
     });
   } catch (error) {
     logger.error('Recommendations API error', { 

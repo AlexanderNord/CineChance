@@ -46,6 +46,13 @@ interface RecommendationResponse {
   userRating: number | null;
   watchCount: number;
   message?: string;
+  debug?: {
+    tmdbCalls: number;
+    dbRecords: number;
+    cached: boolean;
+    fetchDuration: number;
+    filters: any;
+  };
 }
 
 interface ActionResponse {
@@ -57,6 +64,8 @@ interface ActionResponse {
 interface RecommendationsClientProps {
   userId: string;
 }
+
+const ADMIN_USER_ID = 'cmkbc7sn2000104k3xd3zyf2a';
 
 interface AdditionalFilters {
   minRating: number;
@@ -97,6 +106,26 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   const [isResetting, setIsResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [filterErrors, setFilterErrors] = useState<string[]>([]);
+  const [debugMode, setDebugMode] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<{
+    apiStatus: string;
+    dbQuery: string;
+    cache: string;
+    fetchDuration: number;
+    tmdbCalls: number;
+    dbRecords: number;
+  }>({
+    apiStatus: 'Idle',
+    dbQuery: 'None',
+    cache: 'Empty',
+    fetchDuration: 0,
+    tmdbCalls: 0,
+    dbRecords: 0
+  });
+  
+  // Refs для управления интервалами и таймаутами
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchStartTime = useRef<number>(0);
   const [userMinRating, setUserMinRating] = useState<number>(6.0); // Настройка minRating пользователя
   const [userListPreferences, setUserListPreferences] = useState<{
     includeWant: boolean;
@@ -110,7 +139,6 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
   const [availableGenres, setAvailableGenres] = useState<{ id: number; name: string }[]>([]);
   const [userTags, setUserTags] = useState<Array<{ id: string; name: string; count: number }>>([]);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true); // Флаг загрузки настроек
-  const fetchStartTime = useRef<number>(0);
   const [currentFilters, setCurrentFilters] = useState<{
     types: ContentType[];
     lists: ListType[];
@@ -246,11 +274,45 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
     setUserRating(null);
     setWatchCount(0);
 
+    // Запускаем анимацию прогресса сразу после начала загрузки
+    const progressAnimation = () => {
+      let currentProgress = 0;
+      
+      // Очищаем предыдущий интервал если есть
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      
+      progressIntervalRef.current = setInterval(() => {
+        // Медленный прогресс до 70% во время загрузки
+        if (currentProgress < 70) {
+          currentProgress += Math.random() * 3 + 1; // 1-4% каждые 200мс
+          setProgress(Math.min(currentProgress, 70));
+        } else {
+          // Замедляемся при подходе к 70%
+          currentProgress += Math.random() * 0.5 + 0.2;
+          setProgress(Math.min(currentProgress, 75));
+        }
+      }, 200);
+    };
+    progressAnimation();
+
+    // Обновляем debug информацию
+    setDebugInfo({
+      apiStatus: 'Fetching...',
+      dbQuery: 'Preparing...',
+      cache: 'Checking...',
+      fetchDuration: 0,
+      tmdbCalls: 0,
+      dbRecords: 0
+    });
+
     try {
       // Формируем URL с параметрами фильтров
       const params = new URLSearchParams();
       params.set('types', types.join(','));
       params.set('lists', lists.join(','));
+      params.set('userId', userId); // Добавляем userId для проверки прав
 
       // Добавляем дополнительные фильтры
       if (additionalFilters) {
@@ -276,7 +338,22 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
       const fetchEndTime = Date.now();
       const fetchDuration = fetchEndTime - fetchStartTime.current;
 
+      // Обновляем debug информацию после ответа
+      setDebugInfo({
+        apiStatus: res.ok ? 'Success' : `Error (${res.status})`,
+        dbQuery: data.success ? 'Optimized' : 'Failed',
+        cache: data.debug?.cached ? 'Hit' : 'Miss',
+        fetchDuration,
+        tmdbCalls: data.debug?.tmdbCalls || 0,
+        dbRecords: data.debug?.dbRecords || 0
+      });
+
       if (data.success && data.movie) {
+        // Останавливаем анимацию прогресса
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
+        
         setMovie(data.movie);
         setLogId(data.logId);
         setUserStatus(data.userStatus);
@@ -300,34 +377,16 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
           });
         }
 
-        // Анимация progress bar
-        if (fetchDuration < 3000) {
-          const remainingTime = 3000 - fetchDuration;
-          const steps = 20;
-          const stepTime = remainingTime / steps;
-          let currentProgress = 0;
-
-          const progressInterval = setInterval(() => {
-            currentProgress += (100 - currentProgress) / (steps - Math.floor(currentProgress / (100 / steps)));
-            if (currentProgress >= 95) {
-              clearInterval(progressInterval);
-              setProgress(100);
-              setViewState('result');
-            } else {
-              setProgress(Math.min(currentProgress, 95));
-            }
-          }, stepTime);
-        } else {
-          setProgress(100);
-          setTimeout(() => setViewState('result'), 200);
-        }
+        // Завершаем прогресс бар
+        setProgress(100);
+        setTimeout(() => setViewState('result'), 300); // Небольшая задержка для визуала
       } else {
-        setErrorMessage(data.message || 'Не удалось получить рекомендацию');
-        if (data.message?.includes('Нет доступных рекомендаций') ||
-            data.message?.includes('пуст') ||
-            data.message?.includes('были показаны за последнюю неделю') ||
-            data.message?.includes('показаны за последнюю неделю') ||
-            data.message?.includes('Все фильмы из вашего списка') ||
+        // Останавливаем анимацию прогресса
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
+        
+        if (data.message?.includes('Выбранные списки пусты') ||
             data.message?.includes('Все доступные рекомендации')) {
           setNoAvailable(true);
         }
@@ -335,6 +394,11 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
         setViewState('error');
       }
     } catch (err) {
+      // Останавливаем анимацию прогресса
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      
       logger.error('Failed to fetch recommendation', { error: err, filters: currentFilterState });
       setErrorMessage('Ошибка при загрузке рекомендации');
       setProgress(100);
@@ -536,7 +600,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                             if (filters.additionalFilters && additionalFilters) {
                               Object.keys(additionalFilters).forEach(key => {
                                 const filterKey = key as keyof typeof additionalFilters;
-                                if (additionalFilters[filterKey] !== filters.additionalFilters[filterKey]) {
+                                if (additionalFilters[filterKey] !== filters.additionalFilters?.[filterKey]) {
                                   updateAdditionalFilter(filterKey, additionalFilters[filterKey]);
                                 }
                               });
@@ -560,7 +624,57 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                         </div>
                         <p className="text-gray-400 text-xs text-center">{Math.round(progress)}%</p>
                       </div>
-                      <p className="text-gray-500 text-sm mt-4">Идёт подбор...</p>
+                      
+                      {/* Информативные сообщения */}
+                      <div className="text-center mt-4">
+                        <p className="text-gray-500 text-sm mb-2">
+                          {progress < 30 ? '🍿 Готовим попкорн...' :
+                           progress < 60 ? '🎬 Заряжаем киноленту...' :
+                           progress < 85 ? '🎭 Ищем идеальный фильм...' :
+                           '🌟 Почти готово...'}
+                        </p>
+                        <p className="text-gray-600 text-xs">
+                          {progress < 30 ? 'Выбираем лучшие сорта кукурузы' :
+                           progress < 60 ? 'Настраиваем проектор и звук' :
+                           progress < 85 ? 'Сверяемся с вашими предпочтениями' :
+                           'Подаем горячий попкорн'}
+                        </p>
+                      </div>
+                      
+                      {/* Техническое окно для отладки */}
+                      {process.env.NODE_ENV === 'development' && userId === ADMIN_USER_ID && (
+                        <div className="mt-6 p-3 bg-gray-900 border border-gray-700 rounded-lg text-xs">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-gray-400 font-mono">🔧 DEBUG MODE</span>
+                            <button
+                              onClick={() => setDebugMode(!debugMode)}
+                              className="text-gray-500 hover:text-gray-300"
+                            >
+                              {debugMode ? 'Скрыть' : 'Показать'}
+                            </button>
+                          </div>
+                          
+                          {debugMode && (
+                            <div className="space-y-1 text-gray-500 font-mono">
+                              <div>Progress: {Math.round(progress)}%</div>
+                              <div>API Status: <span className={debugInfo.apiStatus.includes('Success') ? 'text-green-400' : debugInfo.apiStatus.includes('Error') ? 'text-red-400' : 'text-yellow-400'}>{debugInfo.apiStatus}</span></div>
+                              <div>DB Query: <span className={debugInfo.dbQuery === 'Optimized' ? 'text-blue-400' : 'text-red-400'}>{debugInfo.dbQuery}</span></div>
+                              <div>Cache: <span className={debugInfo.cache === 'Hit' ? 'text-green-400' : 'text-yellow-400'}>{debugInfo.cache}</span></div>
+                              <div>Duration: <span className="text-cyan-400">{debugInfo.fetchDuration}ms</span></div>
+                              <div>TMDB Calls: <span className="text-purple-400">{debugInfo.tmdbCalls}</span></div>
+                              <div>DB Records: <span className="text-orange-400">{debugInfo.dbRecords}</span></div>
+                              
+                              {/* Дополнительная debug информация будет доступна после завершения запроса */}
+                              <div className="mt-2 pt-2 border-t border-gray-700">
+                                <div className="text-gray-600">Note:</div>
+                                <div className="text-xs text-gray-400">
+                                  Detailed performance metrics will be available after request completion.
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 

@@ -2,6 +2,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { MOVIE_STATUS_IDS, getStatusIdByName, getStatusNameById } from '@/lib/movieStatusConstants';
 import { calculateCineChanceScore } from '@/lib/calculateCineChanceScore';
 
 // Вспомогательная функция для получения деталей с TMDB
@@ -91,9 +92,15 @@ export async function fetchMoviesByStatus(
   const whereClause: any = { userId };
   if (statusName) {
     if (Array.isArray(statusName)) {
-      whereClause.status = { name: { in: statusName } };
+      const statusIds = statusName.map(name => getStatusIdByName(name)).filter(id => id !== null) as number[];
+      if (statusIds.length > 0) {
+        whereClause.statusId = { in: statusIds };
+      }
     } else {
-      whereClause.status = { name: statusName };
+      const statusId = getStatusIdByName(statusName);
+      if (statusId) {
+        whereClause.statusId = statusId;
+      }
     }
   }
 
@@ -112,7 +119,7 @@ export async function fetchMoviesByStatus(
       voteAverage: true,
       userRating: true,
       addedAt: true,
-      status: { select: { name: true } },
+      statusId: true,
       tags: { select: { id: true, name: true } },
     },
     orderBy: { addedAt: 'desc' },
@@ -139,11 +146,12 @@ export async function fetchMoviesByStatus(
         cineChanceVotes,
       });
 
+      const statusName = getStatusNameById(record.statusId);
       return {
         id: record.tmdbId,
         media_type: record.mediaType as 'movie' | 'tv',
-        title: record.title,
-        name: record.title,
+        title: tmdbData?.title || tmdbData?.name || record.title,
+        name: tmdbData?.title || tmdbData?.name || record.title,
         poster_path: tmdbData?.poster_path || null,
         vote_average: tmdbData?.vote_average || 0,
         vote_count: tmdbData?.vote_count || 0,
@@ -152,7 +160,7 @@ export async function fetchMoviesByStatus(
         overview: tmdbData?.overview || '',
         genre_ids: tmdbData?.genres?.map((g: any) => g.id) || [],
         original_language: tmdbData?.original_language || '',
-        statusName: record.status.name,
+        statusName: statusName || 'Unknown',
         combinedRating,
         averageRating: cineChanceRating,
         ratingCount: cineChanceVotes,
@@ -275,13 +283,11 @@ export async function getMoviesCounts(userId: string) {
     prisma.watchList.count({ 
       where: { 
         userId, 
-        status: { 
-          name: { in: ['Просмотрено', 'Пересмотрено'] } 
-        } 
+        statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] } 
       } 
     }),
-    prisma.watchList.count({ where: { userId, status: { name: 'Хочу посмотреть' } } }),
-    prisma.watchList.count({ where: { userId, status: { name: 'Брошено' } } }),
+    prisma.watchList.count({ where: { userId, statusId: MOVIE_STATUS_IDS.WANT_TO_WATCH } }),
+    prisma.watchList.count({ where: { userId, statusId: MOVIE_STATUS_IDS.DROPPED } }),
     prisma.blacklist.count({ where: { userId } }),
   ]);
 

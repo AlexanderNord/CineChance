@@ -31,6 +31,7 @@ export interface FiltersSnapshot {
     yearFrom?: string;
     yearTo?: string;
     selectedGenres?: number[];
+    selectedTags?: string[];
   };
   [key: string]: unknown;
 }
