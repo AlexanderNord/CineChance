@@ -6,15 +6,15 @@
 export const MOVIE_STATUS_IDS = {
   WANT_TO_WATCH: 1,      // Хочу посмотреть
   WATCHED: 2,           // Просмотрено  
-  REWATCHED: 3,         // Пересмотрено
-  DROPPED: 4,           // Брошено
+  DROPPED: 3,           // Брошено
+  REWATCHED: 4,         // Пересмотрено
 } as const;
 
 export const MOVIE_STATUS_NAMES = {
   [MOVIE_STATUS_IDS.WANT_TO_WATCH]: 'Хочу посмотреть',
   [MOVIE_STATUS_IDS.WATCHED]: 'Просмотрено',
-  [MOVIE_STATUS_IDS.REWATCHED]: 'Пересмотрено',
   [MOVIE_STATUS_IDS.DROPPED]: 'Брошено',
+  [MOVIE_STATUS_IDS.REWATCHED]: 'Пересмотрено',
 } as const;
 
 /**
