@@ -536,7 +536,7 @@ export default function RecommendationsClient({ userId }: RecommendationsClientP
                             if (filters.additionalFilters && additionalFilters) {
                               Object.keys(additionalFilters).forEach(key => {
                                 const filterKey = key as keyof typeof additionalFilters;
-                                if (additionalFilters[filterKey] !== filters.additionalFilters[filterKey]) {
+                                if (additionalFilters[filterKey] !== filters.additionalFilters?.[filterKey]) {
                                   updateAdditionalFilter(filterKey, additionalFilters[filterKey]);
                                 }
                               });
