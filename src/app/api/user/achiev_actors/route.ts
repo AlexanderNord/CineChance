@@ -226,15 +226,12 @@ export async function GET(request: Request) {
       }
     }
 
-    // Берем всех актеров для сортировки, но ограничиваем пагинацией
+    // Берем всех актеров для сортировки
     const allActors = Array.from(actorMap.entries())
       .sort((a, b) => b[1].watchedIds.size - a[1].watchedIds.size);
     
-    // Применяем пагинацию
-    const paginatedActors = allActors.slice(offset, offset + limit);
-    
-    // Подготавливаем базовые данные без фильмографии
-    const baseActorsData = paginatedActors.map(([actorId, actorData]) => ({
+    // Подготавливаем базовые данные без фильмографии для всех актеров
+    const baseActorsData = allActors.map(([actorId, actorData]) => ({
       id: actorId,
       name: actorData.name,
       profile_path: actorData.profile_path,
@@ -246,9 +243,12 @@ export async function GET(request: Request) {
         : null,
     }));
 
-    // Если нужна полная фильмография - загружаем ее
+    // Применяем пагинацию к подготовленным данным
+    const paginatedActors = baseActorsData.slice(offset, offset + limit);
+
+    // Если нужна полная фильмография - загружаем ее для пагинированных актеров
     if (loadFullData) {
-      const achievementsPromises = baseActorsData.map(async (actor) => {
+      const achievementsPromises = paginatedActors.map(async (actor) => {
         const credits = await fetchPersonCredits(actor.id);
         
         const totalMovies = credits?.cast?.length || 0;
@@ -265,32 +265,31 @@ export async function GET(request: Request) {
         };
       });
 
-      const achievements = await Promise.all(achievementsPromises);
-
-      // Сортировка результатов
-      const result = achievements
-        .sort((a, b) => {
-          if (a.average_rating !== null && b.average_rating !== null) {
-            if (b.average_rating !== a.average_rating) {
-              return b.average_rating - a.average_rating;
-            }
-          } else if (a.average_rating === null && b.average_rating !== null) {
-            return 1;
-          } else if (a.average_rating !== null && b.average_rating === null) {
-            return -1;
+      const result = await Promise.all(achievementsPromises);
+      
+      // Сортируем результат по тому же принципу
+      result.sort((a, b) => {
+        if (a.average_rating !== null && b.average_rating !== null) {
+          if (b.average_rating !== a.average_rating) {
+            return b.average_rating - a.average_rating;
           }
-          
-          if (b.progress_percent !== a.progress_percent) {
-            return b.progress_percent - a.progress_percent;
-          }
-          
-          return a.name.localeCompare(b.name, 'ru');
-        });
+        } else if (a.average_rating === null && b.average_rating !== null) {
+          return 1;
+        } else if (a.average_rating !== null && b.average_rating === null) {
+          return -1;
+        }
+        
+        if (b.progress_percent !== a.progress_percent) {
+          return b.progress_percent - a.progress_percent;
+        }
+        
+        return a.name.localeCompare(b.name, 'ru');
+      });
 
       return NextResponse.json({
         actors: result,
-        hasMore: offset + limit < allActors.length,
-        total: allActors.length,
+        hasMore: offset + limit < baseActorsData.length,
+        total: baseActorsData.length,
       });
     }
 
@@ -316,8 +315,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       actors: sortedBaseActors,
-      hasMore: offset + limit < allActors.length,
-      total: allActors.length,
+      hasMore: offset + limit < sortedBaseActors.length,
+      total: sortedBaseActors.length,
     });
 
   } catch (error) {

@@ -88,6 +88,10 @@ export async function GET(request: Request) {
     const userId = session.user.id;
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get('userId') || userId;
+    
+    // Параметры пагинации
+    const limit = Math.min(parseInt(searchParams.get('limit') || '24'), 50); // Максимум 50
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0'), 0);
 
     // Получаем все фильмы пользователя со статусом "Просмотрено"
     const watchedMovies = await prisma.watchList.findMany({
@@ -203,7 +207,14 @@ export async function GET(request: Request) {
       return a.name.localeCompare(b.name, 'ru');
     });
 
-    return NextResponse.json(achievements);
+    // Применяем пагинацию
+    const paginatedAchievements = achievements.slice(offset, offset + limit);
+
+    return NextResponse.json({
+      collections: paginatedAchievements,
+      hasMore: offset + limit < achievements.length,
+      total: achievements.length,
+    });
 
   } catch (error) {
     console.error('Ошибка при получении достижений:', error);

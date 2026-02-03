@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { Users } from 'lucide-react';
 import ImageWithProxy from '@/app/components/ImageWithProxy';
 import Loader from '@/app/components/Loader';
+import { useActors } from '@/hooks/useActors';
 import '@/app/profile/components/AchievementCards.css';
 
 interface ActorAchievement {
@@ -50,111 +51,35 @@ function PageSkeleton() {
 }
 
 export default function ActorsClient({ userId }: ActorsClientProps) {
-  const [allActors, setAllActors] = useState<ActorAchievement[]>([]);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_ITEMS);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingFullData, setLoadingFullData] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const isFetchingRef = useRef(false);
 
-  // Функция загрузки актеров с пагинацией
-  const fetchActors = async (offsetValue = 0, append = false) => {
-    try {
-      const params = new URLSearchParams({
-        limit: '24',
-        offset: offsetValue.toString(),
-        fullData: 'false', // Сначала загружаем базовые данные с фото
-      });
-      
-      const res = await fetch(`/api/user/achiev_actors?${params}`);
-      if (!res.ok) throw new Error('Failed to fetch actors');
-      const data = await res.json();
-      
-      if (data.actors && Array.isArray(data.actors)) {
-        setAllActors(prev => append ? [...prev, ...data.actors] : data.actors);
-        setHasMore(data.hasMore || false);
-        setTotal(data.total || 0);
-        setOffset(offsetValue + (append ? data.actors.length : 0));
-      }
-    } catch (err) {
-      console.error('Failed to fetch actors:', err);
-      setError('Не удалось загрузить актеров');
+  // Use our optimized hook for infinite query
+  const actorsQuery = useActors(userId);
+
+  // Loading states
+  const isLoading = actorsQuery.isLoading;
+  const isFetchingNextPage = actorsQuery.isFetchingNextPage;
+  const hasNextPage = actorsQuery.hasNextPage ?? false;
+  const actors = actorsQuery.actors;
+  const totalCount = actorsQuery.totalCount;
+
+  // Fetch next page handler with safeguards
+  const handleFetchNextPage = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage && !isFetchingRef.current) {
+      isFetchingRef.current = true;
+      actorsQuery.fetchNextPage();
     }
-  };
-
-  // Функция дозагрузки полной фильмографии для видимых актеров
-  const loadFullDataForVisibleActors = async () => {
-    const visibleActors = allActors.slice(0, visibleCount);
-    const actorsNeedingFullData = visibleActors.filter(actor => actor.total_movies === 0);
-    
-    if (actorsNeedingFullData.length === 0) return;
-    
-    setLoadingFullData(true);
-    
-    try {
-      const params = new URLSearchParams({
-        limit: actorsNeedingFullData.length.toString(),
-        offset: '0',
-        fullData: 'true',
-      });
-      
-      const res = await fetch(`/api/user/achiev_actors?${params}`);
-      if (!res.ok) throw new Error('Failed to fetch full data');
-      const data = await res.json();
-      
-      if (data.actors && Array.isArray(data.actors)) {
-        // Обновляем данные для актеров без перерисовки карточек
-        setAllActors(prev => prev.map(actor => {
-          const fullDataActor = data.actors.find((full: any) => full.id === actor.id);
-          return fullDataActor || actor;
-        }));
-      }
-    } catch (err) {
-      console.error('Failed to load full data:', err);
-    } finally {
-      setLoadingFullData(false);
-    }
-  };
-
-  // Первоначальная загрузка
-  useEffect(() => {
-    setLoading(true);
-    fetchActors().finally(() => setLoading(false));
-  }, [userId]);
-
-  // Загрузка полной фильмографии для видимых актеров (с задержкой чтобы не блокировать)
-  useEffect(() => {
-    if (allActors.length > 0 && !loading) {
-      const timer = setTimeout(() => {
-        loadFullDataForVisibleActors();
-      }, 100); // Небольшая задержка для плавности
-      return () => clearTimeout(timer);
-    }
-  }, [visibleCount, allActors.length, loading]);
-
-  // Scroll to top button + Infinite scroll
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 300);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [hasNextPage, isFetchingNextPage, actorsQuery]);
 
   // Infinite scroll observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         const sentinel = entries[0];
-        if (sentinel.isIntersecting && hasMore && !loadingMore && !isFetchingRef.current) {
+        if (sentinel.isIntersecting && hasNextPage && !isFetchingNextPage && !isFetchingRef.current) {
           isFetchingRef.current = true;
-          loadMore();
+          actorsQuery.fetchNextPage();
         }
       },
       {
@@ -173,11 +98,11 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
         observer.unobserve(currentSentinel);
       }
     };
-  }, [hasMore, loadingMore]);
+  }, [hasNextPage, isFetchingNextPage, actorsQuery]);
 
-  // Reset fetching ref when load completes
+  // Reset fetching ref when fetch completes
   useEffect(() => {
-    if (!loadingMore) {
+    if (!isFetchingNextPage) {
       isFetchingRef.current = false;
     }
   }, [loadingMore]);

@@ -38,13 +38,24 @@ const fetchCollections = async (
 ): Promise<CollectionsResults> => {
   const params = buildFetchParams(offset);
   const queryString = new URLSearchParams(params).toString();
-  const response = await fetch(`/api/user/achiev_collections?${queryString}`);
+  const response = await fetch(`/api/user/achiev_collection?${queryString}`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch collections');
   }
 
-  return response.json();
+  const result = await response.json();
+  
+  // API может возвращать массив или объект
+  if (Array.isArray(result)) {
+    return {
+      collections: result,
+      hasMore: false,
+      total: result.length,
+    };
+  }
+  
+  return result;
 };
 
 export const useCollections = (userId: string) => {
@@ -54,10 +65,8 @@ export const useCollections = (userId: string) => {
     queryKey: ['collections', userId] as const,
     queryFn: ({ pageParam = 0 }) => fetchCollections(pageParam),
     getNextPageParam: (lastPage, allPages) => {
-      const currentOffset = allPages.reduce((acc, page) => acc + page.collections.length, 0);
-      if (lastPage.collections.length === 0) return undefined;
       if (!lastPage.hasMore) return undefined;
-      return currentOffset;
+      return allPages.reduce((acc, page) => acc + page.collections.length, 0);
     },
     initialPageParam: 0,
     staleTime: 30 * 1000, // 30 seconds

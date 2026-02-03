@@ -46,7 +46,18 @@ const fetchActors = async (
     throw new Error('Failed to fetch actors');
   }
 
-  return response.json();
+  const result = await response.json();
+  
+  // API может возвращать массив или объект
+  if (Array.isArray(result)) {
+    return {
+      actors: result,
+      hasMore: false,
+      total: result.length,
+    };
+  }
+  
+  return result;
 };
 
 export const useActors = (userId: string) => {
@@ -54,12 +65,10 @@ export const useActors = (userId: string) => {
 
   const query = useInfiniteQuery({
     queryKey: ['actors', userId] as const,
-    queryFn: ({ pageParam = 0 }) => fetchActors(pageParam, true), // Всегда загружаем полные данные
+    queryFn: ({ pageParam = 0 }) => fetchActors(pageParam, false), // Загружаем базовые данные для пагинации
     getNextPageParam: (lastPage, allPages) => {
-      const currentOffset = allPages.reduce((acc, page) => acc + page.actors.length, 0);
-      if (lastPage.actors.length === 0) return undefined;
       if (!lastPage.hasMore) return undefined;
-      return currentOffset;
+      return allPages.reduce((acc, page) => acc + page.actors.length, 0);
     },
     initialPageParam: 0,
     staleTime: 30 * 1000, // 30 seconds
