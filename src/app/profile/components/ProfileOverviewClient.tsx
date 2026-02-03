@@ -272,10 +272,11 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
   useEffect(() => {
     const fetchActors = async () => {
       try {
-        const res = await fetch('/api/user/achiev_actors');
+        const res = await fetch('/api/user/achiev_actors?limit=5&fullData=true');
         if (res.ok) {
           const data = await res.json();
-          setActors(Array.isArray(data) ? data.slice(0, 5) : []);
+          // Обрабатываем новый формат ответа
+          setActors(data.actors ? data.actors.slice(0, 5) : []);
         }
       } catch (error) {
         console.error('Failed to fetch actors:', error);
