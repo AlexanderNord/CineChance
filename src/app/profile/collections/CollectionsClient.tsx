@@ -230,29 +230,29 @@ export default function CollectionsClient({ userId }: CollectionsClientProps) {
         {collections.map((collection, index) => {
           const progress = collection.progress_percent || 0;
           
-          // Улучшенная нелинейная формула для лучшего контраста между прогрессами
+          // Исправленная формула контраста с правильной насыщенностью
           let grayscale, saturate;
           
           if (progress <= 25) {
             // Очень низкий прогресс - почти полностью бесцветные
-            grayscale = 100 - (progress * 0.8); // 100% -> 80%
-            saturate = 0.05 + (progress * 0.02); // 0.05 -> 0.55
+            grayscale = 100 - (progress * 0.4); // 100% -> 90%
+            saturate = 0.1 + (progress * 0.02); // 0.1 -> 0.6
           } else if (progress <= 50) {
             // Низкий прогресс - заметная бесцветность
-            grayscale = 80 - ((progress - 25) * 1.2); // 80% -> 50%
-            saturate = 0.55 + ((progress - 25) * 0.02); // 0.55 -> 1.05
+            grayscale = 90 - ((progress - 25) * 1.6); // 90% -> 50%
+            saturate = 0.6 + ((progress - 25) * 0.016); // 0.6 -> 1.0
           } else if (progress <= 75) {
             // Средний прогресс - умеренная бесцветность (самая заметная разница)
-            grayscale = 50 - ((progress - 50) * 1.6); // 50% -> 10%
-            saturate = 1.05 + ((progress - 50) * 0.06); // 1.05 -> 2.55
+            grayscale = 50 - ((progress - 50) * 1.2); // 50% -> 20%
+            saturate = 1.0; // Нормальная насыщенность
           } else if (progress <= 90) {
             // Высокий прогресс - легкая бесцветность
-            grayscale = 10 - ((progress - 75) * 0.4); // 10% -> 0%
-            saturate = 2.55 + ((progress - 75) * 0.03); // 2.55 -> 3.0
+            grayscale = 20 - ((progress - 75) * 0.8); // 20% -> 0%
+            saturate = 1.0; // Нормальная насыщенность
           } else {
             // Почти завершено - минимальная бесцветность
-            grayscale = 0;
-            saturate = 3.0 + ((progress - 90) * 0.02); // 3.0 -> 3.2
+            grayscale = Math.max(0, 10 - ((progress - 90) * 1)); // 10% -> 0%
+            saturate = 1.0; // Нормальная насыщенность
           }
           
           // Ограничиваем значения
