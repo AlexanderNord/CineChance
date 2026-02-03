@@ -7,7 +7,7 @@ export const MOVIE_STATUS_IDS = {
   WANT_TO_WATCH: 1,      // Хочу посмотреть
   WATCHED: 2,           // Просмотрено  
   DROPPED: 3,           // Брошено
-  REWATCHED: 4,         // Пересмотрено
+  REWATCHED: 7,         // Пересмотрено
 } as const;
 
 export const MOVIE_STATUS_NAMES = {

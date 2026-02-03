@@ -9,7 +9,7 @@ import { ru } from 'date-fns/locale';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 const TermsOfServiceModal = dynamic(() => import('@/app/components/TermsOfServiceModal'), { ssr: false });
-import { FileText, Settings, Users, ArrowRight, Clock, Star, TrendingUp, Monitor, Tv, Film, CheckIcon, PlusIcon, XIcon, BanIcon, Smile } from 'lucide-react';
+import { FileText, Settings, Users, ArrowRight, Clock, Star, TrendingUp, Monitor, Tv, Film, CheckIcon, PlusIcon, XIcon, BanIcon, Smile, Clock as ClockIcon, EyeOff as EyeOffIcon, PieChart as PieChartIcon, Star as StarIcon } from 'lucide-react';
 import NicknameEditor from './NicknameEditor';
 import Loader from '@/app/components/Loader';
 import '@/app/profile/components/AchievementCards.css';
@@ -56,9 +56,12 @@ interface ActorAchievement {
   name: string;
   profile_path: string | null;
   watched_movies: number;
+  rewatched_movies: number;
+  dropped_movies: number;
   total_movies: number;
   progress_percent: number;
   average_rating: number | null;
+  actor_score: number;
 }
 
 interface ProfileOverviewClientProps {
@@ -146,20 +149,26 @@ function AverageRatingSkeleton() {
   );
 }
 
-// Skeleton для горизонтального списка карточек (коллекции/актеры)
-function HorizontalListSkeleton() {
+// Skeleton для горизонтального списка карточек (коллекции/актеры) с индикатором загрузки
+function HorizontalListSkeleton({ title }: { title: string }) {
   return (
-    <div className="space-y-4 animate-pulse">
-      <div className="flex items-center gap-2">
-        <div className="w-5 h-5 bg-gray-700 rounded"></div>
-        <div className="h-5 w-32 bg-gray-700 rounded"></div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-gray-700 rounded animate-pulse"></div>
+          <div className="h-5 w-32 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+        <div className="flex items-center gap-2 text-gray-500 text-sm">
+          <div className="w-4 h-4 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin"></div>
+          <span className="text-xs">Загрузка...</span>
+        </div>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="flex-shrink-0 w-28 sm:w-36">
-            <div className="aspect-[2/3] bg-gray-800 rounded-lg"></div>
-            <div className="mt-2 h-4 w-20 bg-gray-800 rounded"></div>
-            <div className="mt-1 h-3 w-16 bg-gray-900 rounded"></div>
+            <div className="aspect-[2/3] bg-gray-800 rounded-lg animate-pulse"></div>
+            <div className="mt-2 h-4 w-20 bg-gray-800 rounded animate-pulse"></div>
+            <div className="mt-1 h-3 w-16 bg-gray-900 rounded animate-pulse"></div>
           </div>
         ))}
       </div>
@@ -176,6 +185,9 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
   // Отдельные состояния загрузки для каждого блока
   const [userDataLoading, setUserDataLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [basicStatsLoading, setBasicStatsLoading] = useState(true);
+  const [typeBreakdownLoading, setTypeBreakdownLoading] = useState(true);
+  const [averageRatingLoading, setAverageRatingLoading] = useState(true);
   const [collections, setCollections] = useState<CollectionAchievement[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [actors, setActors] = useState<ActorAchievement[]>([]);
@@ -210,13 +222,22 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
     return () => clearTimeout(timer);
   }, [userId]);
 
-  // Загружаем статистику (быстрый запрос)
+  // Последовательная загрузка данных для лучшего UX
   useEffect(() => {
-    const fetchStats = async () => {
+    const loadDataSequentially = async () => {
       try {
-        const res = await fetch('/api/user/stats');
-        if (res.ok) {
-          const data = await res.json();
+        // Этап 1: Быстро загружаем статистику с последовательным отображением
+        setStatsLoading(true);
+        setBasicStatsLoading(true);
+        setTypeBreakdownLoading(true);
+        setAverageRatingLoading(true);
+        
+        const statsRes = await fetch('/api/user/stats');
+        
+        if (statsRes.ok) {
+          const data = await statsRes.json();
+          
+          // Сначала отображаем базовую статистику
           setStats({
             total: {
               watched: data.total?.watched || 0,
@@ -226,67 +247,82 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
               totalForPercentage: data.total?.totalForPercentage || 0,
             },
             typeBreakdown: {
+              movie: 0,
+              tv: 0,
+              cartoon: 0,
+              anime: 0,
+            },
+            averageRating: null,
+            ratedCount: 0,
+          });
+          setBasicStatsLoading(false);
+          
+          // Небольшая задержка для визуального эффекта
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Затем отображаем breakdown по типам
+          setStats(prev => prev ? ({
+            ...prev,
+            typeBreakdown: {
               movie: data.typeBreakdown?.movie || 0,
               tv: data.typeBreakdown?.tv || 0,
               cartoon: data.typeBreakdown?.cartoon || 0,
               anime: data.typeBreakdown?.anime || 0,
             },
+          }) : null);
+          setTypeBreakdownLoading(false);
+          
+          // Еще одна небольшая задержка
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // В конце отображаем среднюю оценку
+          setStats(prev => prev ? ({
+            ...prev,
             averageRating: data.averageRating || null,
             ratedCount: data.ratedCount || 0,
-          });
+          }) : null);
+          setAverageRatingLoading(false);
+        } else {
+          // Если запрос не удался, все равно завершаем загрузку
+          setBasicStatsLoading(false);
+          setTypeBreakdownLoading(false);
+          setAverageRatingLoading(false);
         }
-      } catch (error) {
-        console.error('Failed to fetch stats:', error);
-      } finally {
         setStatsLoading(false);
-      }
-    };
-    
-    // Небольшая задержка для избежания rate limiting
-    const timer = setTimeout(fetchStats, 100);
-    return () => clearTimeout(timer);
-  }, []);
 
-  // Загружаем коллекции (медленный запрос - делаем в фоне)
-  useEffect(() => {
-    const fetchCollections = async () => {
-      try {
-        const res = await fetch('/api/user/achiev_collection');
-        if (res.ok) {
-          const data = await res.json();
-          setCollections(Array.isArray(data) ? data.slice(0, 5) : []);
+        // Этап 2: Загружаем коллекции (параллельно с актерами)
+        setCollectionsLoading(true);
+        const collectionsRes = await fetch('/api/user/achiev_collection?limit=50&singleLoad=true');
+        
+        if (collectionsRes.ok) {
+          const data = await collectionsRes.json();
+          setCollections(data.collections ? data.collections.slice(0, 5) : []);
         }
-      } catch (error) {
-        console.error('Failed to fetch collections:', error);
-      } finally {
         setCollectionsLoading(false);
-      }
-    };
-    
-    // Небольшая задержка чтобы не блокировать основную загрузку
-    const timer = setTimeout(fetchCollections, 100);
-    return () => clearTimeout(timer);
-  }, []);
 
-  // Загружаем актеров (медленный запрос - делаем в фоне)
-  useEffect(() => {
-    const fetchActors = async () => {
-      try {
-        const res = await fetch('/api/user/achiev_actors');
-        if (res.ok) {
-          const data = await res.json();
-          setActors(Array.isArray(data) ? data.slice(0, 5) : []);
+        // Этап 3: Загружаем актеров
+        setActorsLoading(true);
+        const actorsRes = await fetch('/api/user/achiev_actors?limit=50&singleLoad=true');
+        
+        if (actorsRes.ok) {
+          const data = await actorsRes.json();
+          setActors(data.actors ? data.actors.slice(0, 5) : []);
         }
+        setActorsLoading(false);
+
       } catch (error) {
-        console.error('Failed to fetch actors:', error);
-      } finally {
+        console.error('Failed to load profile data:', error);
+        // В случае ошибки все равно завершаем загрузку
+        setStatsLoading(false);
+        setBasicStatsLoading(false);
+        setTypeBreakdownLoading(false);
+        setAverageRatingLoading(false);
+        setCollectionsLoading(false);
         setActorsLoading(false);
       }
     };
-    
-    // Небольшая задержка чтобы не блокировать основную загрузку
-    const timer = setTimeout(fetchActors, 200);
-    return () => clearTimeout(timer);
+
+    loadDataSequentially();
   }, []);
 
   // Определяем мобильное устройство
@@ -366,14 +402,14 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
 
         {/* Основные метрики - сетка 2x2 на мобильных, 4 колонки на десктопе */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          {statsLoading ? (
+          {basicStatsLoading ? (
             <>
               <StatsCardSkeleton />
               <StatsCardSkeleton />
               <StatsCardSkeleton />
               <StatsCardSkeleton />
             </>
-          ) : stats ? (
+          ) : stats?.total ? (
             <>
               {/* Всего просмотрено */}
               <Link
@@ -398,7 +434,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
               >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-7 h-7 bg-blue-400/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <PlusIcon className="w-4 h-4 text-blue-400" />
+                    <ClockIcon className="w-4 h-4 text-blue-400" />
                   </div>
                   <p className="text-gray-400 text-xs md:text-sm">Отложено</p>
                 </div>
@@ -407,7 +443,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 </p>
               </Link>
 
-              {/* Всего брошено */}
+              {/* Брошено */}
               <Link
                 href="/my-movies?tab=dropped"
                 className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-red-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
@@ -423,161 +459,157 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 </p>
               </Link>
 
-              {/* Всего заблокировано */}
-              <Link
-                href="/my-movies?tab=hidden"
-                className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-gray-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
-              >
+              {/* Скрыто */}
+              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-7 h-7 bg-gray-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <BanIcon className="w-4 h-4 text-gray-400" />
+                  <div className="w-7 h-7 bg-gray-400/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <EyeOffIcon className="w-4 h-4 text-gray-400" />
                   </div>
-                  <p className="text-gray-400 text-xs md:text-sm">Заблокировано</p>
+                  <p className="text-gray-400 text-xs md:text-sm">Скрыто</p>
                 </div>
                 <p className="text-2xl md:text-3xl font-bold text-white pl-10">
                   {stats.total.hidden}
                 </p>
-              </Link>
+              </div>
             </>
           ) : null}
         </div>
 
         {/* Вторая строка: Типы контента и Средняя оценка */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-          {statsLoading ? (
-            <>
-              <TypeBreakdownSkeleton />
-              <AverageRatingSkeleton />
-            </>
-          ) : stats ? (
-            <>
-              {/* Соотношение типов контента */}
-              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
-                <div className="flex items-center gap-2 mb-4">
-                  <Monitor className="w-4 h-4 text-purple-400" />
-                  <p className="text-gray-400 text-xs md:text-sm">Типы контента</p>
+          {/* Типы контента */}
+          {typeBreakdownLoading ? (
+            <TypeBreakdownSkeleton />
+          ) : stats?.typeBreakdown ? (
+            <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+              <div className="flex items-center gap-2 mb-4">
+                <PieChartIcon className="w-4 h-4 text-purple-400" />
+                <h3 className="text-sm font-medium text-white">Типы контента</h3>
+              </div>
+              <div className="space-y-3">
+                {/* Фильмы */}
+                <div className="flex items-center gap-3">
+                  <Monitor className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Фильмы</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.movie}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.movie / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  {/* Фильмы */}
-                  <div className="flex items-center gap-3">
-                    <Film className="w-5 h-5 text-green-400 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Фильмы</span>
-                        <span className="text-white font-medium">{stats.typeBreakdown.movie}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-green-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.movie / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                {/* Сериалы */}
+                <div className="flex items-center gap-3">
+                  <Tv className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Сериалы</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.tv}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.tv / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
                     </div>
                   </div>
-                  {/* Сериалы */}
-                  <div className="flex items-center gap-3">
-                    <Tv className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Сериалы</span>
-                        <span className="text-white font-medium">{stats.typeBreakdown.tv}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.tv / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                </div>
+                {/* Мультфильмы */}
+                <div className="flex items-center gap-3">
+                  <Smile className="w-5 h-5 text-orange-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Мультфильмы</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.cartoon}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.cartoon / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
                     </div>
                   </div>
-                  {/* Мультфильмы */}
-                  <div className="flex items-center gap-3">
-                    <Smile className="w-5 h-5 text-orange-400 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Мультфильмы</span>
-                        <span className="text-white font-medium">{stats.typeBreakdown.cartoon}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.cartoon / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                </div>
+                {/* Аниме */}
+                <div className="flex items-center gap-3">
+                  <span className="w-5 h-5 text-purple-400 text-sm font-bold">あ</span>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Аниме</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.anime}</span>
                     </div>
-                  </div>
-                  {/* Аниме */}
-                  <div className="flex items-center gap-3">
-                    <span className="w-5 h-5 text-purple-400 text-sm font-bold">あ</span>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Аниме</span>
-                        <span className="text-white font-medium">{stats.typeBreakdown.anime}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-purple-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.anime / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.anime / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
+          ) : null}
 
-              {/* Средняя оценка */}
-              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
-                <div className="flex items-center gap-2 mb-4">
-                  <Star className="w-4 h-4 text-yellow-400" />
-                  <p className="text-gray-400 text-xs md:text-sm">Средняя оценка</p>
-                </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-4xl md:text-5xl font-bold text-white">
-                    {stats.averageRating?.toFixed(1) || '-'}
-                  </span>
-                  <div className="flex-1 pb-1">
-                    <div className="flex gap-0.5 mb-1">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
-                        <Star 
-                          key={star}
-                          className={`w-4 h-4 ${
-                            (stats.averageRating || 0) >= star 
-                              ? 'text-yellow-400 fill-yellow-400' 
-                              : 'text-gray-600'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-gray-500 text-xs">
-                      {stats.ratedCount} оценённых
-                    </p>
+          {/* Средняя оценка */}
+          {averageRatingLoading ? (
+            <AverageRatingSkeleton />
+          ) : stats?.averageRating !== null ? (
+            <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+              <div className="flex items-center gap-2 mb-4">
+                <StarIcon className="w-4 h-4 text-yellow-400" />
+                <h3 className="text-sm font-medium text-white">Средняя оценка</h3>
+              </div>
+              <div className="flex items-end gap-3">
+                <span className="text-4xl md:text-5xl font-bold text-white">
+                  {stats?.averageRating?.toFixed(1) || '-'}
+                </span>
+                <div className="flex-1 pb-1">
+                  <div className="flex gap-0.5 mb-1">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                      <Star 
+                        key={star}
+                        className={`w-4 h-4 ${
+                          (stats?.averageRating || 0) >= star 
+                            ? 'text-yellow-400 fill-yellow-400' 
+                            : 'text-gray-600'
+                        }`}
+                      />
+                    ))}
                   </div>
+                  <p className="text-gray-500 text-xs">
+                    {stats?.ratedCount || 0} оценённых
+                  </p>
                 </div>
               </div>
-            </>
+            </div>
           ) : null}
         </div>
       </div>
 
       {/* Кинофраншизы */}
       {collectionsLoading ? (
-        <HorizontalListSkeleton />
+        <HorizontalListSkeleton title="Кинофраншизы" />
       ) : collections.length > 0 ? (
         <div className="space-y-4">
           {/* Заголовок секции */}
@@ -610,9 +642,35 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 return a.name.localeCompare(b.name, 'ru');
               })
               .map((collection) => {
-                // Рассчитываем grayscale и saturate на основе прогресса
-                const grayscaleValue = 100 - collection.progress_percent;
-                const saturateValue = collection.progress_percent;
+                // Исправленная формула контраста с правильной насыщенностью
+                const progress = collection.progress_percent || 0;
+                let grayscale, saturate;
+                
+                if (progress <= 25) {
+                  // Очень низкий прогресс - почти полностью бесцветные
+                  grayscale = 100 - (progress * 0.4); // 100% -> 90%
+                  saturate = 0.1 + (progress * 0.02); // 0.1 -> 0.6
+                } else if (progress <= 50) {
+                  // Низкий прогресс - заметная бесцветность
+                  grayscale = 90 - ((progress - 25) * 1.6); // 90% -> 50%
+                  saturate = 0.6 + ((progress - 25) * 0.016); // 0.6 -> 1.0
+                } else if (progress <= 75) {
+                  // Средний прогресс - умеренная бесцветность (самая заметная разница)
+                  grayscale = 50 - ((progress - 50) * 1.2); // 50% -> 20%
+                  saturate = 1.0; // Нормальная насыщенность
+                } else if (progress <= 90) {
+                  // Высокий прогресс - легкая бесцветность
+                  grayscale = 20 - ((progress - 75) * 0.8); // 20% -> 0%
+                  saturate = 1.0; // Нормальная насыщенность
+                } else {
+                  // Почти завершено - минимальная бесцветность
+                  grayscale = Math.max(0, 10 - ((progress - 90) * 1)); // 10% -> 0%
+                  saturate = 1.0; // Нормальная насыщенность
+                }
+                
+                // Ограничиваем значения
+                grayscale = Math.max(0, Math.min(100, grayscale));
+                saturate = Math.max(0.1, Math.min(1.0, saturate));
                 
                 return (
                   <Link
@@ -625,19 +683,16 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                       <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 border border-gray-700 group-hover:border-purple-500/50 transition-all relative">
                         {collection.poster_path ? (
                           <div className="relative w-full h-full">
-                            <div
+                            <ImageWithProxy
+                              src={`https://image.tmdb.org/t/p/w300${collection.poster_path}`}
+                              alt={collection.name}
+                              fill
+                              className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
+                              sizes="120px"
                               style={{ 
-                                filter: `grayscale(${grayscaleValue}%) saturate(${saturateValue}%)`
+                                filter: `grayscale(${grayscale}%) saturate(${saturate})`
                               }}
-                            >
-                              <ImageWithProxy
-                                src={`https://image.tmdb.org/t/p/w300${collection.poster_path}`}
-                                alt={collection.name}
-                                fill
-                                className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
-                                sizes="120px"
-                              />
-                            </div>
+                            />
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-600">
@@ -702,7 +757,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
 
       {/* Любимые актеры */}
       {actorsLoading ? (
-        <HorizontalListSkeleton />
+        <HorizontalListSkeleton title="Любимые актеры" />
       ) : actors.length > 0 ? (
         <div className="space-y-4">
           {/* Заголовок секции */}
@@ -735,11 +790,35 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                 return a.name.localeCompare(b.name, 'ru');
               })
               .map((actor) => {
-                // Используем progress_percent из API
-                const progressPercent = actor.progress_percent || 0;
-                // Рассчитываем grayscale и saturate на основе прогресса
-                const grayscaleValue = 100 - progressPercent;
-                const saturateValue = progressPercent;
+                // Исправленная формула контраста с правильной насыщенностью
+                const progress = actor.progress_percent || 0;
+                let grayscale, saturate;
+                
+                if (progress <= 25) {
+                  // Очень низкий прогресс - почти полностью бесцветные
+                  grayscale = 100 - (progress * 0.4); // 100% -> 90%
+                  saturate = 0.1 + (progress * 0.02); // 0.1 -> 0.6
+                } else if (progress <= 50) {
+                  // Низкий прогресс - заметная бесцветность
+                  grayscale = 90 - ((progress - 25) * 1.6); // 90% -> 50%
+                  saturate = 0.6 + ((progress - 25) * 0.016); // 0.6 -> 1.0
+                } else if (progress <= 75) {
+                  // Средний прогресс - умеренная бесцветность (самая заметная разница)
+                  grayscale = 50 - ((progress - 50) * 1.2); // 50% -> 20%
+                  saturate = 1.0; // Нормальная насыщенность
+                } else if (progress <= 90) {
+                  // Высокий прогресс - легкая бесцветность
+                  grayscale = 20 - ((progress - 75) * 0.8); // 20% -> 0%
+                  saturate = 1.0; // Нормальная насыщенность
+                } else {
+                  // Почти завершено - минимальная бесцветность
+                  grayscale = Math.max(0, 10 - ((progress - 90) * 1)); // 10% -> 0%
+                  saturate = 1.0; // Нормальная насыщенность
+                }
+                
+                // Ограничиваем значения
+                grayscale = Math.max(0, Math.min(100, grayscale));
+                saturate = Math.max(0.1, Math.min(1.0, saturate));
                 
                 return (
                   <Link
@@ -752,19 +831,16 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                       <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 border border-gray-700 group-hover:border-amber-500/50 transition-all relative">
                         {actor.profile_path ? (
                           <div className="w-full h-full relative">
-                            <div
+                            <ImageWithProxy
+                              src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                              alt={actor.name}
+                              fill
+                              className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
+                              sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, 144px"
                               style={{ 
-                                filter: `grayscale(${grayscaleValue}%) saturate(${saturateValue}%)`
+                                filter: `grayscale(${grayscale}%) saturate(${saturate})`
                               }}
-                            >
-                              <ImageWithProxy
-                                src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
-                                alt={actor.name}
-                                fill
-                                className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
-                                sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, 144px"
-                              />
-                            </div>
+                            />
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-600">
@@ -776,7 +852,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-800">
                           <div 
                             className="h-full bg-amber-500"
-                            style={{ width: `${progressPercent}%` }}
+                            style={{ width: `${progress}%` }}
                           />
                         </div>
                         
