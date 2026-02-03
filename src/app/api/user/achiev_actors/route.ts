@@ -7,6 +7,34 @@ import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = 'https://api.themoviedb.org/3';
 
+// Вспомогательная функция для получения деталей с TMDB
+async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) return null;
+  const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU`;
+  try {
+    const res = await fetch(url, { next: { revalidate: 86400 } }); // 24 часа
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (error) {
+    return null;
+  }
+}
+
+// Helper function to check if movie is anime
+function isAnime(movie: any): boolean {
+  const hasAnimeGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+  const isJapanese = movie.original_language === 'ja';
+  return hasAnimeGenre && isJapanese;
+}
+
+// Helper function to check if movie is cartoon (animation but not anime)
+function isCartoon(movie: any): boolean {
+  const hasAnimationGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+  const isNotJapanese = movie.original_language !== 'ja';
+  return hasAnimationGenre && isNotJapanese;
+}
+
 interface TMDBMovieCredits {
   id: number;
   cast: Array<{
@@ -42,16 +70,16 @@ interface ActorProgress {
   average_rating: number | null;
 }
 
-// Получение актёрского состава фильма
-async function fetchMovieCredits(tmdbId: number): Promise<TMDBMovieCredits | null> {
+// Получение актёрского состава фильма или сериала
+async function fetchMovieCredits(tmdbId: number, mediaType: 'movie' | 'tv'): Promise<TMDBMovieCredits | null> {
   try {
-    const url = new URL(`${BASE_URL}/movie/${tmdbId}/credits`);
+    const url = new URL(`${BASE_URL}/${mediaType}/${tmdbId}/credits`);
     url.searchParams.append('api_key', TMDB_API_KEY || '');
     url.searchParams.append('language', 'ru-RU');
 
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
-      next: { revalidate: 86400, tags: ['movie-credits'] },
+      next: { revalidate: 86400, tags: [`${mediaType}-credits`] },
     });
 
     if (!response.ok) {
@@ -101,15 +129,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get('userId') || userId;
 
-    // Получаем все фильмы пользователя со статусом "Просмотрено"
+    // Получаем все фильмы и сериалы пользователя со статусом "Просмотрено"
     const watchedMoviesData = await prisma.watchList.findMany({
       where: {
         userId: targetUserId,
         statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
-        mediaType: 'movie',
+        mediaType: { in: ['movie', 'tv'] }, // Включаем и фильмы, и сериалы
       },
       select: {
         tmdbId: true,
+        mediaType: true,
         userRating: true,
       },
     });
@@ -133,14 +162,25 @@ export async function GET(request: Request) {
       
       const results = await Promise.all(
         batch.map(async (movie) => {
-          const credits = await fetchMovieCredits(movie.tmdbId);
+          // Получаем детали для фильтрации мультфильмов и аниме
+          const mediaDetails = await fetchMediaDetails(movie.tmdbId, movie.mediaType as 'movie' | 'tv');
+          
+          // Пропускаем мультфильмы и аниме
+          if (mediaDetails && (isAnime(mediaDetails) || isCartoon(mediaDetails))) {
+            return { credits: null, rating: movie.userRating };
+          }
+          
+          const credits = await fetchMovieCredits(movie.tmdbId, movie.mediaType as 'movie' | 'tv');
           return { credits, rating: movie.userRating };
         })
       );
 
       for (const { credits, rating } of results) {
         if (credits?.cast) {
-          for (const actor of credits.cast) {
+          // Берем только топ-5 актеров из фильма/сериала
+          const topActors = credits.cast.slice(0, 5);
+          
+          for (const actor of topActors) {
             if (!actorMap.has(actor.id)) {
               actorMap.set(actor.id, {
                 name: actor.name,
