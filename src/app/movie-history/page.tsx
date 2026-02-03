@@ -81,25 +81,6 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
     );
   }
 
-  // Получаем историю изменений статусов из логов системы
-  // Используем audit trail или создаем историю из доступных данных
-  const statusHistory = await prisma.$queryRaw`
-    WITH status_changes AS (
-      SELECT 
-        ws.id,
-        ws."statusId",
-        ws."addedAt",
-        ms.name as statusName,
-        ROW_NUMBER() OVER (ORDER BY ws."addedAt" DESC) as rn
-      FROM "WatchList" ws
-      JOIN "MovieStatus" ms ON ws."statusId" = ms.id
-      WHERE ws."userId" = ${session.user.id}
-        AND ws."tmdbId" = ${tmdbIdNum}
-        AND ws."mediaType" = ${mediaType}
-    )
-    SELECT * FROM status_changes ORDER BY "addedAt" DESC
-  `;
-
   // Получаем логи пересмотров
   const rewatchLogs = await prisma.rewatchLog.findMany({
     where: {
@@ -125,13 +106,11 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
   });
 
   // Обогащаем историю оценок датами просмотра из WatchList
+  // Используем watchedDate из WatchList для всех записей, так как это дата из датапикера
   const enrichedRatingHistory = ratingHistory.map(entry => ({
     ...entry,
-    // Для первоначальной оценки используем watchedDate из WatchList
-    // Для изменений оценок используем createdAt (когда изменили)
-    displayDate: entry.actionType === 'initial' 
-      ? (watchList.watchedDate || entry.createdAt)
-      : entry.createdAt
+    // Всегда используем watchedDate из WatchList - это дата из датапикера
+    displayDate: watchList.watchedDate || entry.createdAt
   }));
 
   // Форматируем дату
@@ -155,84 +134,40 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
         </Link>
 
         <div className="bg-[#0f1520] rounded-xl p-6 border border-blue-500/20 mb-6">
-          <h1 className="text-xl font-bold">{watchList.title}</h1>
-          <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
-            <span>Статус: {watchList.status?.name}</span>
-            <span>•</span>
-            <span>Просмотров: {watchList.watchCount}</span>
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <span className="font-bold text-white">
+              Текущий статус: 
+              <span className={
+                watchList.status?.name === 'Просмотрено' ? 'text-green-400' :
+                watchList.status?.name === 'Хочу посмотреть' ? 'text-blue-400' :
+                watchList.status?.name === 'Брошено' ? 'text-red-400' :
+                watchList.status?.name === 'Пересмотрено' ? 'text-purple-400' :
+                'text-gray-400'
+              }>
+                {' '}{watchList.status?.name || 'Неизвестный статус'}
+              </span>
+            </span>
+            
+            <span className="text-gray-300">
+              Количество повторных просмотров: <span className="font-bold text-purple-400">{watchList.watchCount}</span>
+            </span>
+            
             {watchList.weightedRating && (
-              <>
-                <span>•</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-green-400">Текущая: {watchList.weightedRating.toFixed(1)}</span>
-                  {watchList.userRating && watchList.weightedRating !== watchList.userRating && (
-                    <span className={`flex items-center gap-1 text-xs ${
-                      watchList.weightedRating > watchList.userRating ? 'text-green-400' : 
-                      watchList.weightedRating < watchList.userRating ? 'text-red-400' : 'text-gray-400'
-                    }`}>
-                      {watchList.weightedRating > watchList.userRating && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                          <polyline points="17 6 23 6 23 12"></polyline>
-                        </svg>
-                      )}
-                      {watchList.weightedRating < watchList.userRating && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-                          <polyline points="17 18 23 18 23 12"></polyline>
-                        </svg>
-                      )}
-                      {watchList.weightedRating === watchList.userRating && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                      )}
-                      {(watchList.weightedRating - watchList.userRating).toFixed(1)}
-                    </span>
-                  )}
-                </div>
-              </>
-            )}
-            {watchList.userRating && (
-              <>
-                <span>•</span>
-                <span className="text-purple-400">Последняя: {watchList.userRating}</span>
-              </>
+              <span className="text-gray-300">
+                Взвешенная оценка: <span className="font-bold text-green-400">{watchList.weightedRating.toFixed(1)}</span>
+              </span>
             )}
           </div>
         </div>
 
-        {/* История изменений статусов */}
-        <div className="bg-[#0f1520] rounded-xl p-6 border border-blue-500/20 mb-6">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
-              <path d="M2 17L12 22L22 17"></path>
-              <path d="M2 12L12 17L22 12"></path>
-            </svg>
-            История изменений статусов
-          </h2>
-
-          {statusHistory.length === 0 ? (
-            <p className="text-gray-500 text-sm">Фильм не добавлен в списки</p>
-          ) : (
-            <div className="space-y-3">
-              {statusHistory.map((entry: any, index: number) => (
-                <div key={entry.id} className="flex items-center gap-3 text-sm">
-                  <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-gray-300">
-                      Статус: {entry.statusName || 'Неизвестный статус'}
-                    </span>
-                    <span className="text-gray-500 ml-2">{formatDate(entry.addedAt)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* История изменений статусов - ВРЕМЕННО УБРАНО */}
+        {/* 
+        Примечание: Текущая структура БД (WatchList) хранит только текущий статус фильма,
+        не ведет историю изменений статусов. Для отображения полной истории статусов
+        потребуется модификация схемы БД с добавлением таблицы StatusHistory.
+        
+        Текущий SQL запрос возвращает только одну запись (текущий статус).
+        */}
 
         {/* Логи пересмотров */}
         <div className="bg-[#0f1520] rounded-xl p-6 border border-blue-500/20 mb-6">
@@ -258,9 +193,6 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
                   <div className="flex-1">
                     <span className="text-gray-300">Пересмотр #{rewatchLogs.length - index}</span>
                     <span className="text-gray-500 ml-2">{formatDate(log.watchedAt)}</span>
-                    {log.previousWatchCount !== undefined && (
-                      <span className="text-gray-400 ml-2">(было {log.previousWatchCount} просмотров)</span>
-                    )}
                   </div>
                 </div>
               ))}
