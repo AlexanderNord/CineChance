@@ -161,8 +161,37 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
             return a.name.localeCompare(b.name, 'ru');
           })
           .map((actor, index) => {
-            // Более гибкая формула для цветности с нелинейной прогрессией
+            // Более гибкая формула цветности с нелинейной прогрессией
             const progress = actor.progress_percent || 0;
+            
+            // Нелинейная формула для лучшего UX распределения
+            // 0-10%: почти черно-белые (90-100% grayscale)
+            // 10-30%: начинают появляться цвета (70-90% grayscale) 
+            // 30-60%: заметная цветность (30-70% grayscale)
+            // 60-90%: почти цветные (10-30% grayscale)
+            // 90-100%: полностью цветные (0-10% grayscale)
+            let grayscale, saturate;
+            
+            if (progress <= 10) {
+              grayscale = 100 - (progress * 0.5); // 100% -> 95%
+              saturate = 0.1 + (progress * 0.01); // 0.1 -> 0.2
+            } else if (progress <= 30) {
+              grayscale = 95 - ((progress - 10) * 1.25); // 95% -> 70%
+              saturate = 0.2 + ((progress - 10) * 0.015); // 0.2 -> 0.5
+            } else if (progress <= 60) {
+              grayscale = 70 - ((progress - 30) * 1.33); // 70% -> 30%
+              saturate = 0.5 + ((progress - 30) * 0.02); // 0.5 -> 1.1
+            } else if (progress <= 90) {
+              grayscale = 30 - ((progress - 60) * 0.67); // 30% -> 10%
+              saturate = 1.1 + ((progress - 60) * 0.03); // 1.1 -> 2.0
+            } else {
+              grayscale = 10 - ((progress - 90) * 1); // 10% -> 0%
+              saturate = 2.0 + ((progress - 90) * 0.02); // 2.0 -> 2.4
+            }
+            
+            // Ограничиваем значения
+            grayscale = Math.max(0, Math.min(100, grayscale));
+            saturate = Math.max(0.1, Math.min(2.5, saturate));
             
             return (
               <Link
@@ -179,7 +208,10 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
                           alt={actor.name}
                           fill
                           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
-                          className="object-cover"
+                          className="object-cover transition-all duration-300 group-hover:grayscale-0 group-hover:saturate-100 achievement-poster"
+                          style={{ 
+                            filter: `grayscale(${grayscale}%) saturate(${saturate})`
+                          }}
                           priority={index < 12}
                           quality={80}
                         />
