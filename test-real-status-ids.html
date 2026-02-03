@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка реальных ID статусов</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white p-4">
+    <div class="max-w-6xl mx-auto space-y-4">
+        <h1 class="text-2xl font-bold">🔍 Реальные ID статусов в базе данных</h1>
+        
+        <div id="loading" class="text-gray-400">Загрузка данных...</div>
+        
+        <div id="results" class="space-y-4 hidden">
+            <!-- Реальные статусы из базы -->
+            <div class="bg-gray-900 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-3 text-blue-400">📋 Реальные статусы в базе</h2>
+                <div id="realStatuses" class="space-y-2"></div>
+            </div>
+            
+            <!-- Счетчики по каждому статусу -->
+            <div class="bg-gray-900 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-3 text-green-400">🔢 Счетчики по статусам</h2>
+                <div id="counts" class="space-y-2"></div>
+            </div>
+            
+            <!-- Сравнение с константами -->
+            <div class="bg-gray-900 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-3 text-yellow-400">⚖️ Сравнение с константами</h2>
+                <div id="comparison" class="space-y-2"></div>
+            </div>
+            
+            <!-- Образцы записей -->
+            <div class="bg-gray-900 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-3 text-purple-400">📝 Образцы записей</h2>
+                <div id="sampleRecords" class="space-y-3"></div>
+            </div>
+            
+            <!-- Итоговая статистика -->
+            <div class="bg-gray-900 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-3 text-red-400">📊 Итоговая статистика</h2>
+                <div id="summary" class="space-y-2"></div>
+            </div>
+        </div>
+        
+        <div class="flex gap-4">
+            <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">
+                🔄 Обновить
+            </button>
+            <button onclick="window.open('/test-logs-browser.html', '_blank')" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded">
+                📋 Логи статистики
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let realData = null;
+
+        // Текущие константы (должны совпадать с movieStatusConstants.ts)
+        const CURRENT_CONSTANTS = {
+            WANT_TO_WATCH: 1,
+            WATCHED: 2,
+            DROPPED: 3,
+            REWATCHED: 7
+        };
+
+        async function fetchRealStatuses() {
+            try {
+                document.getElementById('loading').classList.remove('hidden');
+                document.getElementById('results').classList.add('hidden');
+                
+                const response = await fetch('/api/debug/real-status-ids');
+                realData = await response.json();
+                
+                console.log('Реальные статусы:', realData);
+                
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('results').classList.remove('hidden');
+                
+                displayRealStatuses();
+                displayCounts();
+                displayComparison();
+                displaySampleRecords();
+                displaySummary();
+                
+            } catch (error) {
+                console.error('Ошибка:', error);
+                document.getElementById('loading').innerHTML = `<div class="text-red-400">Ошибка: ${error.message}</div>`;
+            }
+        }
+        
+        function displayRealStatuses() {
+            const realStatuses = document.getElementById('realStatuses');
+            const statuses = realData.realStatuses;
+            
+            realStatuses.innerHTML = statuses.map(status => `
+                <div class="flex justify-between items-center p-2 bg-gray-800 rounded">
+                    <span class="font-semibold">${status.name}</span>
+                    <span class="text-blue-400">ID: ${status.id}</span>
+                </div>
+            `).join('');
+        }
+        
+        function displayCounts() {
+            const counts = document.getElementById('counts');
+            const statusCounts = realData.counts;
+            
+            counts.innerHTML = statusCounts.map(item => `
+                <div class="flex justify-between items-center p-2 bg-gray-800 rounded">
+                    <span>${item.name} (ID: ${item.id})</span>
+                    <span class="text-green-400 font-bold">${item.count} записей</span>
+                </div>
+            `).join('');
+        }
+        
+        function displayComparison() {
+            const comparison = document.getElementById('comparison');
+            const statuses = realData.realStatuses;
+            
+            let html = '<div class="space-y-2">';
+            
+            // Проверяем соответствие констант
+            const statusMap = {
+                'Хочу посмотреть': 'WANT_TO_WATCH',
+                'Просмотрено': 'WATCHED',
+                'Брошено': 'DROPPED',
+                'Пересмотрено': 'REWATCHED'
+            };
+            
+            statuses.forEach(status => {
+                const constantName = statusMap[status.name];
+                const constantId = CURRENT_CONSTANTS[constantName];
+                const isMatch = constantId === status.id;
+                
+                html += `
+                    <div class="flex justify-between items-center p-2 bg-gray-800 rounded">
+                        <span>${status.name}</span>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs">База ID: ${status.id}</span>
+                            <span class="text-xs">Константа: ${constantId}</span>
+                            <span class="${isMatch ? 'text-green-400' : 'text-red-400'}">${isMatch ? '✅' : '❌'}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            comparison.innerHTML = html;
+        }
+        
+        function displaySampleRecords() {
+            const sampleRecords = document.getElementById('sampleRecords');
+            const records = realData.sampleRecords;
+            
+            let html = '';
+            records.forEach(statusGroup => {
+                html += `
+                    <div class="mb-3">
+                        <h3 class="font-semibold text-sm mb-2">${statusGroup.statusName} (ID: ${statusGroup.statusId}) - ${statusGroup.records.length} записей:</h3>
+                        <div class="space-y-1">
+                            ${statusGroup.records.map(record => `
+                                <div class="text-xs p-2 bg-gray-800 rounded">
+                                    <div class="font-semibold">${record.title || 'Без названия'}</div>
+                                    <div class="text-gray-400">
+                                        ID: ${record.tmdbId} | Тип: ${record.mediaType} | Добавлено: ${new Date(record.addedAt).toLocaleString()}
+                                    </div>
+                                </div>
+                            `).join('')}
+                            ${statusGroup.records.length === 0 ? '<div class="text-xs text-gray-500">Нет записей</div>' : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            sampleRecords.innerHTML = html;
+        }
+        
+        function displaySummary() {
+            const summary = document.getElementById('summary');
+            const counts = realData.counts;
+            
+            // Считаем итоговые значения
+            const watchedCount = counts.find(c => c.name === 'Просмотрено')?.count || 0;
+            const rewatchedCount = counts.find(c => c.name === 'Пересмотрено')?.count || 0;
+            const wantToWatchCount = counts.find(c => c.name === 'Хочу посмотреть')?.count || 0;
+            const droppedCount = counts.find(c => c.name === 'Брошено')?.count || 0;
+            const hiddenCount = realData.blacklistCount;
+            
+            const totalWatched = watchedCount + rewatchedCount;
+            const totalActive = totalWatched + wantToWatchCount + droppedCount;
+            
+            summary.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div class="text-center p-3 bg-gray-800 rounded">
+                        <div class="text-2xl font-bold text-green-400">${totalWatched}</div>
+                        <div class="text-sm text-gray-400">Просмотрено всего</div>
+                        <div class="text-xs text-gray-500">(${watchedCount} + ${rewatchedCount})</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-800 rounded">
+                        <div class="text-2xl font-bold text-blue-400">${wantToWatchCount}</div>
+                        <div class="text-sm text-gray-400">Отложено</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-800 rounded">
+                        <div class="text-2xl font-bold text-red-400">${droppedCount}</div>
+                        <div class="text-sm text-gray-400">Брошено</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-800 rounded">
+                        <div class="text-2xl font-bold text-gray-400">${hiddenCount}</div>
+                        <div class="text-sm text-gray-400">Скрыто</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-800 rounded">
+                        <div class="text-2xl font-bold text-purple-400">${totalActive}</div>
+                        <div class="text-sm text-gray-400">Активных всего</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Запускаем загрузку
+        fetchRealStatuses();
+    </script>
+</body>
+</html>
