@@ -482,26 +482,90 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
             <TypeBreakdownSkeleton />
           ) : stats?.typeBreakdown ? (
             <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-4">
                 <PieChartIcon className="w-4 h-4 text-purple-400" />
                 <h3 className="text-sm font-medium text-white">Типы контента</h3>
               </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-xs">🎬 Фильмы</span>
-                  <span className="text-white text-xs font-medium">{stats.typeBreakdown.movie}</span>
+              <div className="space-y-3">
+                {/* Фильмы */}
+                <div className="flex items-center gap-3">
+                  <Monitor className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Фильмы</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.movie}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.movie / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-xs">📺 Сериалы</span>
-                  <span className="text-white text-xs font-medium">{stats.typeBreakdown.tv}</span>
+                {/* Сериалы */}
+                <div className="flex items-center gap-3">
+                  <Tv className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Сериалы</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.tv}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.tv / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-xs">🎨 Мультфильмы</span>
-                  <span className="text-white text-xs font-medium">{stats.typeBreakdown.cartoon}</span>
+                {/* Мультфильмы */}
+                <div className="flex items-center gap-3">
+                  <Smile className="w-5 h-5 text-orange-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Мультфильмы</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.cartoon}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.cartoon / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-xs">🌸 Аниме</span>
-                  <span className="text-white text-xs font-medium">{stats.typeBreakdown.anime}</span>
+                {/* Аниме */}
+                <div className="flex items-center gap-3">
+                  <span className="w-5 h-5 text-purple-400 text-sm font-bold">あ</span>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Аниме</span>
+                      <span className="text-white font-medium">{stats.typeBreakdown.anime}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.anime / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -512,19 +576,32 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
             <AverageRatingSkeleton />
           ) : stats?.averageRating !== null ? (
             <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-4">
                 <StarIcon className="w-4 h-4 text-yellow-400" />
                 <h3 className="text-sm font-medium text-white">Средняя оценка</h3>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl md:text-3xl font-bold text-white">
-                  {stats?.averageRating?.toFixed(1) || '—'}
+              <div className="flex items-end gap-3">
+                <span className="text-4xl md:text-5xl font-bold text-white">
+                  {stats?.averageRating?.toFixed(1) || '-'}
                 </span>
-                <span className="text-gray-400 text-xs">/ 10</span>
+                <div className="flex-1 pb-1">
+                  <div className="flex gap-0.5 mb-1">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                      <Star 
+                        key={star}
+                        className={`w-4 h-4 ${
+                          (stats?.averageRating || 0) >= star 
+                            ? 'text-yellow-400 fill-yellow-400' 
+                            : 'text-gray-600'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-gray-500 text-xs">
+                    {stats?.ratedCount || 0} оценённых
+                  </p>
+                </div>
               </div>
-              <p className="text-gray-400 text-xs mt-1">
-                Оценено фильмов: {stats?.ratedCount || 0}
-              </p>
             </div>
           ) : null}
         </div>
