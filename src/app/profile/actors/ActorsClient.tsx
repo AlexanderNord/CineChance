@@ -23,7 +23,8 @@ interface ActorsClientProps {
   userId: string;
 }
 
-const TOP_ACTORS_COUNT = 50;
+const TOP_ACTORS_COUNT = 50; // Оптимальное количество для балансировки производительности и сортировки
+const DISPLAY_COUNT = 50; // Показываем все 50
 
 // Skeleton для карточки актера
 function ActorCardSkeleton() {
@@ -100,7 +101,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
           clearInterval(progressIntervalRef.current);
         }
 
-        setActors(data.actors || []);
+        setActors(data.actors ? data.actors.slice(0, DISPLAY_COUNT) : []);
         setProgress(100);
         
         // Небольшая задержка для визуала

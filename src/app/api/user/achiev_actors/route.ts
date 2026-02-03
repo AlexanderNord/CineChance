@@ -247,9 +247,9 @@ export async function GET(request: Request) {
     if (singleLoad) {
       console.log(`Starting singleLoad for ${baseActorsData.length} actors with limit ${limit}`);
       
-      // Для корректной сортировки нужно обработать всех актеров, но вернуть только limit
-      // Однако для производительности ограничим обработку разумным числом
-      const maxActorsToProcess = Math.min(baseActorsData.length, 100); // Обрабатываем до 100 актеров для корректной сортировки
+      // Оптимизация: обрабатываем только необходимое количество для баланса производительности
+      // Для профиля (limit=20) и страницы актеров (limit=50) этого достаточно для корректной сортировки
+      const maxActorsToProcess = Math.min(baseActorsData.length, limit);
       const actorsToProcess = baseActorsData.slice(0, maxActorsToProcess);
       
       console.log(`Processing ${actorsToProcess.length} actors for singleLoad (will return top ${limit})`);
