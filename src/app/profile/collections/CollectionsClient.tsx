@@ -227,7 +227,63 @@ export default function CollectionsClient({ userId }: CollectionsClientProps) {
 
       {/* Сетка коллекций */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {collections.map((collection, index) => {
+        {collections
+          .map((collection) => {
+            // Сбалансированная формула рейтинга коллекции - качество решает!
+            const calculateCollectionScore = (collection: any) => {
+              const avgRating = collection.average_rating || 0;
+              const watchedMovies = collection.watched_movies || 0;
+              const progress = collection.progress_percent || 0;
+              
+              // Базовый рейтинг качества (0-10) - главный фактор
+              let qualityScore = avgRating;
+              
+              // Минимальный бонус за объем (только для разрешения ничьих)
+              // 1 фильм = +0.03, 5 фильмов = +0.08, 10 фильмов = +0.1, 20 фильмов = +0.13
+              const volumeBonus = Math.log10(Math.max(1, watchedMovies)) * 0.05;
+              
+              // Маленький бонус за прогресс (легкая мотивация)
+              // 0% = 0, 50% = +0.07, 100% = +0.15
+              const progressBonus = (progress / 100) * 0.15;
+              
+              // Итоговый рейтинг - качество главное!
+              let finalScore = qualityScore + volumeBonus + progressBonus;
+              
+              // Ограничиваем диапазон 0-10
+              return Math.max(0, Math.min(10, finalScore));
+            };
+            
+            return {
+              ...collection,
+              calculated_score: calculateCollectionScore(collection)
+            };
+          })
+          .sort((a, b) => {
+            // Сначала по умному рейтингу (desc) - качество решает!
+            if (b.calculated_score !== a.calculated_score) {
+              return b.calculated_score - a.calculated_score;
+            }
+            
+            // Если умный рейтинг равен, сортируем по средней оценке (desc)
+            if (a.average_rating !== null && b.average_rating !== null) {
+              if (b.average_rating !== a.average_rating) {
+                return b.average_rating - a.average_rating;
+              }
+            } else if (a.average_rating === null && b.average_rating !== null) {
+              return 1;
+            } else if (a.average_rating !== null && b.average_rating === null) {
+              return -1;
+            }
+            
+            // Если и средние оценки равны, сортируем по прогрессу (desc)
+            if (b.progress_percent !== a.progress_percent) {
+              return b.progress_percent - a.progress_percent;
+            }
+            
+            // Если и прогресс одинаковый, сортируем по алфавиту (asc)
+            return a.name.localeCompare(b.name, 'ru');
+          })
+          .map((collection, index) => {
           const progress = collection.progress_percent || 0;
           
           // Исправленная формула контраста с правильной насыщенностью

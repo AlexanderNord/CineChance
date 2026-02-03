@@ -189,8 +189,45 @@ export async function GET(request: Request) {
     // Ждем завершения всех запросов параллельно
     const achievements = await Promise.all(achievementsPromises);
 
-    // Сортировка результатов
-    achievements.sort((a, b) => {
+    // Применяем умную формулу рейтинга коллекции - качество решает!
+    const achievementsWithScore = achievements.map((collection) => {
+      const calculateCollectionScore = (collection: any) => {
+        const avgRating = collection.average_rating || 0;
+        const watchedMovies = collection.watched_movies || 0;
+        const progress = collection.progress_percent || 0;
+        
+        // Базовый рейтинг качества (0-10) - главный фактор
+        let qualityScore = avgRating;
+        
+        // Минимальный бонус за объем (только для разрешения ничьих)
+        // 1 фильм = +0.03, 5 фильмов = +0.08, 10 фильмов = +0.1, 20 фильмов = +0.13
+        const volumeBonus = Math.log10(Math.max(1, watchedMovies)) * 0.05;
+        
+        // Маленький бонус за прогресс (легкая мотивация)
+        // 0% = 0, 50% = +0.07, 100% = +0.15
+        const progressBonus = (progress / 100) * 0.15;
+        
+        // Итоговый рейтинг - качество главное!
+        let finalScore = qualityScore + volumeBonus + progressBonus;
+        
+        // Ограничиваем диапазон 0-10
+        return Math.max(0, Math.min(10, finalScore));
+      };
+      
+      return {
+        ...collection,
+        calculated_score: calculateCollectionScore(collection)
+      };
+    });
+
+    // Сортировка результатов по умному рейтингу
+    achievementsWithScore.sort((a, b) => {
+      // Сначала по умному рейтингу (desc) - качество решает!
+      if (b.calculated_score !== a.calculated_score) {
+        return b.calculated_score - a.calculated_score;
+      }
+      
+      // Если умный рейтинг равен, сортируем по средней оценке (desc)
       if (a.average_rating !== null && b.average_rating !== null) {
         if (b.average_rating !== a.average_rating) {
           return b.average_rating - a.average_rating;
@@ -201,10 +238,12 @@ export async function GET(request: Request) {
         return -1;
       }
       
+      // Если и средние оценки равны, сортируем по прогрессу (desc)
       if (b.progress_percent !== a.progress_percent) {
         return b.progress_percent - a.progress_percent;
       }
       
+      // Если и прогресс одинаковый, сортируем по алфавиту (asc)
       return a.name.localeCompare(b.name, 'ru');
     });
 
@@ -212,23 +251,23 @@ export async function GET(request: Request) {
     if (singleLoad) {
       console.log(`Starting singleLoad for collections, returning top ${limit}`);
       
-      const result = achievements.slice(0, limit);
+      const result = achievementsWithScore.slice(0, limit);
       
       return NextResponse.json({
         collections: result,
-        hasMore: false, // При единовременной загрузке нет пагинации
-        total: achievements.length,
-        singleLoad: true,
+        total: result.length,
+        hasMore: false,
+        singleLoad: true
       });
     }
 
-    // Применяем пагинацию
-    const paginatedAchievements = achievements.slice(offset, offset + limit);
+    // Применяем пагинацию к отсортированным данным
+    const paginatedAchievements = achievementsWithScore.slice(offset, offset + limit);
 
     return NextResponse.json({
       collections: paginatedAchievements,
-      hasMore: offset + limit < achievements.length,
-      total: achievements.length,
+      hasMore: offset + limit < achievementsWithScore.length,
+      total: achievementsWithScore.length,
     });
 
   } catch (error) {

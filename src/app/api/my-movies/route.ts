@@ -213,6 +213,7 @@ export async function GET(request: NextRequest) {
         title: true,
         voteAverage: true,
         userRating: true,
+        weightedRating: true, // Добавляем взвешенную оценку
         addedAt: true,
         statusId: true,
         tags: { select: { id: true, name: true } },
@@ -315,7 +316,7 @@ export async function GET(request: NextRequest) {
         averageRating: cineChanceRating,
         ratingCount: cineChanceVotes,
         addedAt: record.addedAt?.toISOString() || '',
-        userRating: record.userRating,
+        userRating: record.weightedRating ?? record.userRating, // Fallback на взвешенную оценку
         tags: record.tags || [],
       };
     });

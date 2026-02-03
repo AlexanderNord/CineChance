@@ -5,6 +5,7 @@ import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/middleware/rateLimit";
+import { calculateWeightedRating } from "@/lib/calculateWeightedRating";
 
 // Маппинг: Код клиента -> Название в БД
 const STATUS_TO_DB: Record<string, string> = {
@@ -57,6 +58,7 @@ export async function GET(req: Request) {
       select: {
         status: { select: { name: true } },
         userRating: true,
+        weightedRating: true, // Добавляем новое поле
         watchedDate: true,
         watchCount: true,
       },
@@ -69,7 +71,7 @@ export async function GET(req: Request) {
     // Возвращаем статус и данные оценки (если есть)
     return NextResponse.json({ 
       status: clientStatus,
-      userRating: record?.userRating,
+      userRating: record?.weightedRating ?? record?.userRating, // Fallback логика
       watchedDate: record?.watchedDate,
       watchCount: record?.watchCount || 0,
     });
@@ -125,6 +127,27 @@ export async function POST(req: Request) {
       const newRating = userRating ? Number(userRating) : null;
       const isRatingChanged = newRating !== null && previousRating !== newRating;
 
+      // Расчитываем взвешенную оценку
+      let weightedValue = null;
+      if (newRating !== null) {
+        const weightedResult = await calculateWeightedRating(
+          session.user.id,
+          tmdbId,
+          mediaType
+        );
+        weightedValue = weightedResult.weightedRating;
+        
+        // Debug логирование для понимания проблемы
+        console.log('Weighted Rating Debug:', {
+          userId: session.user.id,
+          tmdbId,
+          mediaType,
+          newRating,
+          weightedValue,
+          calculationDetails: weightedResult.calculationDetails
+        });
+      }
+
       // Обновляем только оценку
       await prisma.watchList.update({
         where: {
@@ -136,6 +159,7 @@ export async function POST(req: Request) {
         },
         data: {
           userRating: newRating,
+          weightedRating: weightedValue, // Сохраняем взвешенную оценку
           title,
           voteAverage,
         },
@@ -150,6 +174,8 @@ export async function POST(req: Request) {
             mediaType,
             rating: newRating,
             actionType: 'rating_change',
+            previousRating,
+            ratingChange: newRating - (previousRating || 0),
           },
         });
       }
@@ -179,11 +205,31 @@ export async function POST(req: Request) {
       const newRating = userRating ? Number(userRating) : null;
       const isRatingChanged = existingRecord && newRating !== null && previousRating !== newRating;
 
+      // Расчитываем взвешенную оценку для пересмотра
+      let weightedValue = null;
+      if (newRating !== null) {
+        const weightedResult = await calculateWeightedRating(
+          session.user.id,
+          tmdbId,
+          mediaType
+        );
+        weightedValue = weightedResult.weightedRating;
+        
+        // Debug логирование для понимания проблемы
+        console.log('Weighted Rating Debug (REWATCH):', {
+          userId: session.user.id,
+          tmdbId,
+          mediaType,
+          newRating,
+          weightedValue,
+          calculationDetails: weightedResult.calculationDetails
+        });
+      }
+
       // Получаем ID статуса "Пересмотрено" для создания/обновления записи
       const rewatchedStatus = await prisma.movieStatus.findUnique({
         where: { name: 'Пересмотрено' },
       });
-
       if (!rewatchedStatus) {
         return NextResponse.json({ error: 'Status "Пересмотрено" not found' }, { status: 404 });
       }
@@ -202,6 +248,7 @@ export async function POST(req: Request) {
           title,
           voteAverage,
           userRating: newRating,
+          weightedRating: weightedValue, // Сохраняем взвешенную оценку
           watchedDate: watchedDate ? new Date(watchedDate) : null,
           watchCount: previousWatchCount + 1,
         },
@@ -213,6 +260,7 @@ export async function POST(req: Request) {
           voteAverage,
           statusId: rewatchedStatus.id,
           userRating: newRating,
+          weightedRating: weightedValue, // Сохраняем взвешенную оценку
           watchedDate: watchedDate ? new Date(watchedDate) : null,
           watchCount: 1,
         },
@@ -237,6 +285,8 @@ export async function POST(req: Request) {
             mediaType,
             rating: newRating,
             actionType: 'rewatch',
+            previousRating,
+            ratingChange: newRating - (previousRating || 0),
           },
         });
       }
@@ -281,6 +331,27 @@ export async function POST(req: Request) {
     const newRating = userRating ? Number(userRating) : null;
     const isRatingChanged = existingRecord && newRating !== null && previousRating !== newRating;
 
+    // Расчитываем взвешенную оценку
+    let weightedValue = null;
+    if (newRating !== null) {
+      const weightedResult = await calculateWeightedRating(
+        session.user.id,
+        tmdbId,
+        mediaType
+      );
+      weightedValue = weightedResult.weightedRating;
+      
+      // Debug логирование для понимания проблемы
+      console.log('Weighted Rating Debug (POST):', {
+        userId: session.user.id,
+        tmdbId,
+        mediaType,
+        newRating,
+        weightedValue,
+        calculationDetails: weightedResult.calculationDetails
+      });
+    }
+
     const record = await prisma.watchList.upsert({
       where: {
         userId_tmdbId_mediaType: {
@@ -294,6 +365,7 @@ export async function POST(req: Request) {
         title,
         voteAverage,
         userRating: newRating,
+        weightedRating: weightedValue, // Сохраняем взвешенную оценку
         watchedDate: watchedDate ? new Date(watchedDate) : null,
         watchCount: isRewatch ? previousWatchCount + 1 : previousWatchCount,
       },
@@ -305,6 +377,7 @@ export async function POST(req: Request) {
         voteAverage,
         statusId: statusRecord.id,
         userRating: newRating,
+        weightedRating: weightedValue, // Сохраняем взвешенную оценку
         watchedDate: watchedDate ? new Date(watchedDate) : null,
         watchCount: isRewatch ? 1 : 0,
       },
@@ -333,7 +406,9 @@ export async function POST(req: Request) {
           tmdbId,
           mediaType,
           rating: newRating,
-          actionType: isRewatch ? 'rewatch' : 'rating_change',
+          actionType: existingRecord ? 'rating_change' : 'initial',
+          previousRating,
+          ratingChange: newRating - (previousRating || 0),
         },
       });
     } else if (!existingRecord && newRating !== null) {

@@ -172,6 +172,7 @@ model WatchList {
   title        String    // Название фильма/сериала (дублируем из TMDB для быстрого доступа)
   voteAverage  Float     // Рейтинг на TMDB (например, 8.3)
   userRating   Int?      // Рейтинг пользователя от 1 до 10 (опционально)
+  weightedRating Float?   // Взвешенная оценка с учетом всех пересмотров (опционально)
   statusId     Int       // id статуса фильма из таблицы MovieStatus
   addedAt      DateTime  @default(now()) // дата добавления фильма в таблицу
   watchedDate  DateTime? // дата просмотра фильма
@@ -197,6 +198,7 @@ model WatchList {
   @@index([statusId])
   @@index([addedAt])
   @@index([userRating])
+  @@index([weightedRating])
   @@index([userId, statusId])
   @@index([userId, addedAt])
   @@index([userId, statusId, addedAt])  // Для сортировки по addedAt в рамках userId и statusId

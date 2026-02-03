@@ -84,7 +84,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 20;
+  z-index: 60;
   transition: all 0.2s;
 }
 

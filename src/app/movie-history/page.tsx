@@ -53,6 +53,7 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
       title: true,
       voteAverage: true,
       userRating: true,
+      weightedRating: true,
       statusId: true,
       addedAt: true,
       watchedDate: true,
@@ -92,7 +93,7 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
     },
   });
 
-  // Получаем историю изменений оценок
+  // Получаем историю изменений оценок с датами просмотра
   const ratingHistory = await prisma.ratingHistory.findMany({
     where: {
       userId: session.user.id,
@@ -103,6 +104,50 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
       createdAt: 'desc',
     },
   });
+
+  // Функция расчета взвешенной оценки согласно плану
+  const calculateWeightedRating = (ratingHistory: any[], watchCount: number) => {
+    if (!ratingHistory.length) return null;
+    
+    // Сортируем по дате (старые сначала)
+    const sortedHistory = [...ratingHistory].sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    
+    let weightedSum = 0;
+    let weightSum = 0;
+    let rewatchCounter = 0;
+    
+    sortedHistory.forEach((entry, index) => {
+      let weight = 1.0;
+      
+      if (entry.actionType === 'initial') {
+        weight = 1.0; // Первый просмотр
+      } else if (entry.actionType === 'rating_change') {
+        weight = 0.9; // Изменение оценки
+      } else if (entry.actionType === 'rewatch') {
+        rewatchCounter++;
+        weight = Math.max(0.4, 1.0 - (rewatchCounter * 0.2)); // 0.8, 0.6, 0.4...
+      }
+      
+      weightedSum += entry.rating * weight;
+      weightSum += weight;
+    });
+    
+    return weightSum > 0 ? weightedSum / weightSum : null;
+  };
+
+  // Рассчитываем взвешенную оценку если ее нет
+  const calculatedWeightedRating = watchList.weightedRating || 
+    calculateWeightedRating(ratingHistory, watchList.watchCount);
+
+  // Обогащаем историю оценок датами просмотра из WatchList
+  // Используем watchedDate из WatchList для всех записей, так как это дата из датапикера
+  const enrichedRatingHistory = ratingHistory.map(entry => ({
+    ...entry,
+    // Всегда используем watchedDate из WatchList - это дата из датапикера
+    displayDate: watchList.watchedDate || entry.createdAt
+  }));
 
   // Форматируем дату
   const formatDate = (date: Date | string) => {
@@ -125,19 +170,47 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
         </Link>
 
         <div className="bg-[#0f1520] rounded-xl p-6 border border-blue-500/20 mb-6">
-          <h1 className="text-xl font-bold">{watchList.title}</h1>
-          <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
-            <span>Статус: {watchList.status?.name}</span>
-            <span>•</span>
-            <span>Просмотров: {watchList.watchCount}</span>
-            {watchList.userRating && (
-              <>
-                <span>•</span>
-                <span className="text-purple-400">Ваша оценка: {watchList.userRating}</span>
-              </>
+          <h1 className="text-xl font-bold mb-4 text-white">{watchList.title}</h1>
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <span className="font-bold text-white">
+              Текущий статус: 
+              <span className={
+                watchList.status?.name === 'Просмотрено' ? 'text-green-400' :
+                watchList.status?.name === 'Хочу посмотреть' ? 'text-blue-400' :
+                watchList.status?.name === 'Брошено' ? 'text-red-400' :
+                watchList.status?.name === 'Пересмотрено' ? 'text-purple-400' :
+                'text-gray-400'
+              }>
+                {' '}{watchList.status?.name || 'Неизвестный статус'}
+              </span>
+            </span>
+            
+            <span className="text-gray-300">
+              Количество повторных просмотров: <span className="font-bold text-purple-400">{watchList.watchCount}</span>
+            </span>
+            
+            {calculatedWeightedRating && (
+              <span className="text-gray-300">
+                Взвешенная оценка: <span className="font-bold text-green-400">{calculatedWeightedRating.toFixed(1)}</span>
+              </span>
+            )}
+            
+            {!calculatedWeightedRating && watchList.userRating && (
+              <span className="text-gray-300">
+                Оценка: <span className="font-bold text-yellow-400">{watchList.userRating}</span>
+              </span>
             )}
           </div>
         </div>
+
+        {/* История изменений статусов - ВРЕМЕННО УБРАНО */}
+        {/* 
+        Примечание: Текущая структура БД (WatchList) хранит только текущий статус фильма,
+        не ведет историю изменений статусов. Для отображения полной истории статусов
+        потребуется модификация схемы БД с добавлением таблицы StatusHistory.
+        
+        Текущий SQL запрос возвращает только одну запись (текущий статус).
+        */}
 
         {/* Логи пересмотров */}
         <div className="bg-[#0f1520] rounded-xl p-6 border border-blue-500/20 mb-6">
@@ -177,28 +250,44 @@ export default async function MovieHistoryPage({ searchParams }: PageProps) {
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
             </svg>
             История изменений оценок
+            {watchList.weightedRating && (
+              <span className="text-sm text-green-400 ml-2">
+                (текущая взвешенная: {watchList.weightedRating.toFixed(1)})
+              </span>
+            )}
           </h2>
 
           {ratingHistory.length === 0 ? (
             <p className="text-gray-500 text-sm">Изменений оценок пока нет</p>
           ) : (
             <div className="space-y-3">
-              {ratingHistory.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-3 text-sm">
-                  <div className="w-6 h-6 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-xs font-bold">
-                    {entry.rating}
+              {enrichedRatingHistory.map((entry: any, index: number) => {
+                return (
+                  <div key={entry.id} className="flex items-center gap-3 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-xs font-bold">
+                      {entry.rating}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-300">
+                          Оценка: {entry.rating}
+                        </span>
+                        <span className="text-gray-500 text-xs">
+                          {entry.actionType === 'rewatch' && <span className="text-purple-400 ml-1">(при пересмотре)</span>}
+                          {entry.actionType === 'rating_change' && <span className="text-blue-400 ml-1">(изменение)</span>}
+                          {entry.actionType === 'initial' && <span className="text-green-400 ml-1">(первоначальная)</span>}
+                        </span>
+                      </div>
+                      <div className="text-gray-500 text-xs mt-1">
+                        {formatDate(entry.displayDate)}
+                        {entry.previousRating && (
+                          <span className="ml-2">(было {entry.previousRating})</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <span className="text-gray-300">
-                      Оценка: {entry.rating}
-                      {entry.actionType === 'rewatch' && <span className="text-purple-400 ml-1">(при пересмотре)</span>}
-                      {entry.actionType === 'rating_change' && <span className="text-blue-400 ml-1">(изменение)</span>}
-                      {entry.actionType === 'initial' && <span className="text-green-400 ml-1">(первоначальная)</span>}
-                    </span>
-                    <span className="text-gray-500 ml-2">{formatDate(entry.createdAt)}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
