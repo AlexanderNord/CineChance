@@ -53,6 +53,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_ITEMS);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingFullData, setLoadingFullData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -65,7 +66,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
       const params = new URLSearchParams({
         limit: '24',
         offset: offsetValue.toString(),
-        fullData: 'false', // Сначала загружаем базовые данные
+        fullData: 'false', // Сначала загружаем базовые данные с фото
       });
       
       const res = await fetch(`/api/user/achiev_actors?${params}`);
@@ -91,6 +92,8 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
     
     if (actorsNeedingFullData.length === 0) return;
     
+    setLoadingFullData(true);
+    
     try {
       const params = new URLSearchParams({
         limit: actorsNeedingFullData.length.toString(),
@@ -103,7 +106,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
       const data = await res.json();
       
       if (data.actors && Array.isArray(data.actors)) {
-        // Обновляем данные для актеров
+        // Обновляем данные для актеров без перерисовки карточек
         setAllActors(prev => prev.map(actor => {
           const fullDataActor = data.actors.find((full: any) => full.id === actor.id);
           return fullDataActor || actor;
@@ -111,6 +114,8 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
       }
     } catch (err) {
       console.error('Failed to load full data:', err);
+    } finally {
+      setLoadingFullData(false);
     }
   };
 
@@ -120,10 +125,13 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
     fetchActors().finally(() => setLoading(false));
   }, [userId]);
 
-  // Загрузка полной фильмографии для видимых актеров
+  // Загрузка полной фильмографии для видимых актеров (с задержкой чтобы не блокировать)
   useEffect(() => {
     if (allActors.length > 0 && !loading) {
-      loadFullDataForVisibleActors();
+      const timer = setTimeout(() => {
+        loadFullDataForVisibleActors();
+      }, 100); // Небольшая задержка для плавности
+      return () => clearTimeout(timer);
     }
   }, [visibleCount, allActors.length, loading]);
 
@@ -141,6 +149,13 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
     
     setLoadingMore(true);
     await fetchActors(offset, true);
+    
+    // Дозагружаем полную фильмографию для новых актеров
+    const newActors = allActors.slice(-24);
+    if (newActors.some(actor => actor.total_movies === 0)) {
+      await loadFullDataForVisibleActors();
+    }
+    
     setLoadingMore(false);
   };
 
@@ -237,13 +252,24 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
                   
                   <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-800">
                     <div 
-                      className="h-full bg-amber-500 transition-all"
-                      style={{ width: `${progress}%` }}
+                      className="h-full bg-amber-500 transition-all duration-300"
+                      style={{ 
+                        width: actor.total_movies === 0 ? '0%' : `${progress}%`,
+                        opacity: actor.total_movies === 0 ? 0.3 : 1
+                      }}
                     />
                   </div>
                   
                   <div className="absolute top-2 right-2 bg-amber-600/90 text-white text-xs font-medium px-2 py-1 rounded">
-                    {actor.progress_percent}%
+                    {actor.total_movies === 0 ? (
+                      loadingFullData ? (
+                        <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        '...'
+                      )
+                    ) : (
+                      `${actor.progress_percent}%`
+                    )}
                   </div>
                 </div>
                 
@@ -255,8 +281,14 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
                   <p className="text-gray-500 text-xs">
                     <span className="text-green-400">{actor.watched_movies}</span>
                     {' / '}
-                    <span>{actor.total_movies}</span>
-                    {' фильмов'}
+                    <span className={actor.total_movies === 0 ? 'text-gray-600' : ''}>
+                      {actor.total_movies === 0 ? (
+                        loadingFullData ? '...' : 'фильмов'
+                      ) : (
+                        actor.total_movies
+                      )}
+                    </span>
+                    {actor.total_movies > 0 && ' фильмов'}
                   </p>
                   {actor.average_rating !== null && (
                     <div className="flex items-center bg-gray-800/50 rounded text-sm flex-shrink-0">
