@@ -577,7 +577,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                   <div className="flex-1">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-gray-300 text-sm">Фильмы</span>
-                      <span className="text-white font-medium">{stats.typeBreakdown.movie}</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.movie}</span>
                     </div>
                     <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                       <div 
@@ -597,7 +597,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                   <div className="flex-1">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-gray-300 text-sm">Сериалы</span>
-                      <span className="text-white font-medium">{stats.typeBreakdown.tv}</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.tv}</span>
                     </div>
                     <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                       <div 
@@ -617,7 +617,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                   <div className="flex-1">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-gray-300 text-sm">Мультфильмы</span>
-                      <span className="text-white font-medium">{stats.typeBreakdown.cartoon}</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.cartoon}</span>
                     </div>
                     <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                       <div 
@@ -637,7 +637,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                   <div className="flex-1">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-gray-300 text-sm">Аниме</span>
-                      <span className="text-white font-medium">{stats.typeBreakdown.anime}</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.anime}</span>
                     </div>
                     <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                       <div 
@@ -778,7 +778,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                     <div className="flex-1">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-gray-300 text-sm">{tag.name}</span>
-                        <span className="text-white font-medium">{tag.count}</span>
+                        <span className="text-white text-xs">{tag.count}</span>
                       </div>
                       <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                         <div 
@@ -824,7 +824,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
                     <div className="flex-1">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-gray-300 text-sm">{genre.name}</span>
-                        <span className="text-white font-medium">{genre.count}</span>
+                        <span className="text-white text-xs">{genre.count}</span>
                       </div>
                       <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                         <div 
