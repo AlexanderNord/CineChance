@@ -28,10 +28,18 @@ export async function GET(
       return NextResponse.json({ error: 'TMDB API key not configured' }, { status: 500 });
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const res = await fetch(
       `https://api.themoviedb.org/3/collection/${collectionId}?api_key=${apiKey}&language=ru-RU`,
-      { next: { revalidate: 86400 } }
+      { 
+        next: { revalidate: 86400 },
+        signal: controller.signal
+      }
     );
+
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       return NextResponse.json({ error: 'Failed to fetch from TMDB' }, { status: 500 });

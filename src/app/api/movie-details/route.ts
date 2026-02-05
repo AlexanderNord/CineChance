@@ -26,9 +26,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'TMDB API key not configured' }, { status: 500 });
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const res = await fetch(
-      `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU&append_to_response=credits,keywords`
+      `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU&append_to_response=credits,keywords`,
+      { signal: controller.signal }
     );
+
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       return NextResponse.json({ error: 'Failed to fetch from TMDB' }, { status: 500 });

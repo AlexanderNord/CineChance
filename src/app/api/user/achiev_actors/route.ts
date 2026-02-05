@@ -404,21 +404,39 @@ export async function GET(request: Request) {
           try {
             const credits = await fetchPersonCredits(actor.id);
             
-            // Фильтруем мультфильмы и аниме из фильмографии актера
+            // Фильтруем мультфильмы и аниме из фильмографии актера (с батчингом запросов)
             let filteredCast = credits?.cast || [];
             if (filteredCast.length > 0) {
-              const filteredCastDetails = await Promise.all(
-                filteredCast.map(async (movie) => {
-                  // Определяем тип медиа: если есть release_date - это фильм, иначе сериал
-                  const mediaType = movie.release_date ? 'movie' : 'tv';
-                  const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
-                  return {
-                    movie,
-                    isAnime: mediaDetails ? isAnime(mediaDetails) : false,
-                    isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
-                  };
-                })
-              );
+              // Ограничиваем фильмографию для ускорения обработки
+              const moviesToProcess = filteredCast.slice(0, 100);
+              
+              // Обрабатываем фильмы батчами по 5 штук для контроля нагрузки
+              const FETCH_BATCH_SIZE = 5;
+              const filteredCastDetails = [];
+              
+              for (let j = 0; j < moviesToProcess.length; j += FETCH_BATCH_SIZE) {
+                const movieBatch = moviesToProcess.slice(j, j + FETCH_BATCH_SIZE);
+                
+                const batchResults = await Promise.all(
+                  movieBatch.map(async (movie) => {
+                    // Определяем тип медиа: если есть release_date - это фильм, иначе сериал
+                    const mediaType = movie.release_date ? 'movie' : 'tv';
+                    const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
+                    return {
+                      movie,
+                      isAnime: mediaDetails ? isAnime(mediaDetails) : false,
+                      isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
+                    };
+                  })
+                );
+                
+                filteredCastDetails.push(...batchResults);
+                
+                // Небольшая добавка между батчами для предотвращения rate limiting
+                if (j + FETCH_BATCH_SIZE < moviesToProcess.length) {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
+              }
               
               filteredCast = filteredCastDetails
                 .filter(({ isAnime, isCartoon }) => !isAnime && !isCartoon)
@@ -482,21 +500,39 @@ export async function GET(request: Request) {
     const achievementsPromises = actorsForProcessing.map(async (actor) => {
       const credits = await fetchPersonCredits(actor.id);
       
-      // Фильтруем мультфильмы и аниме из фильмографии актера
+      // Фильтруем мультфильмы и аниме из фильмографии актера (с батчингом запросов)
       let filteredCast = credits?.cast || [];
       if (filteredCast.length > 0) {
-        const filteredCastDetails = await Promise.all(
-          filteredCast.map(async (movie) => {
-            // Определяем тип медиа: если есть release_date - это фильм, иначе сериал
-            const mediaType = movie.release_date ? 'movie' : 'tv';
-            const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
-            return {
-              movie,
-              isAnime: mediaDetails ? isAnime(mediaDetails) : false,
-              isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
-            };
-          })
-        );
+        // Ограничиваем фильмографию для ускорения обработки
+        const moviesToProcess = filteredCast.slice(0, 100);
+        
+        // Обрабатываем фильмы батчами по 5 штук для контроля нагрузки
+        const FETCH_BATCH_SIZE = 5;
+        const filteredCastDetails = [];
+        
+        for (let j = 0; j < moviesToProcess.length; j += FETCH_BATCH_SIZE) {
+          const movieBatch = moviesToProcess.slice(j, j + FETCH_BATCH_SIZE);
+          
+          const batchResults = await Promise.all(
+            movieBatch.map(async (movie) => {
+              // Определяем тип медиа: если есть release_date - это фильм, иначе сериал
+              const mediaType = movie.release_date ? 'movie' : 'tv';
+              const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
+              return {
+                movie,
+                isAnime: mediaDetails ? isAnime(mediaDetails) : false,
+                isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
+              };
+            })
+          );
+          
+          filteredCastDetails.push(...batchResults);
+          
+          // Небольшая добавка между батчами для предотвращения rate limiting
+          if (j + FETCH_BATCH_SIZE < moviesToProcess.length) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
         
         filteredCast = filteredCastDetails
           .filter(({ isAnime, isCartoon }) => !isAnime && !isCartoon)

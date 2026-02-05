@@ -394,7 +394,11 @@ export async function GET(request: Request) {
           else if (sortBy === 'date') sortParam = `primary_release_date.${sortOrder}`;
           discoverUrl.searchParams.set('sort_by', sortParam);
 
-          const res = await fetch(discoverUrl.toString());
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          
+          const res = await fetch(discoverUrl.toString(), { signal: controller.signal });
+          clearTimeout(timeoutId);
           if (!res.ok) {
             throw new Error(`TMDB discover API error: ${res.status} ${res.statusText}`);
           }
@@ -474,7 +478,11 @@ export async function GET(request: Request) {
           else if (sortBy === 'date') sortParam = `first_air_date.${sortOrder}`;
           discoverUrl.searchParams.set('sort_by', sortParam);
 
-          const res = await fetch(discoverUrl.toString());
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          
+          const res = await fetch(discoverUrl.toString(), { signal: controller.signal });
+          clearTimeout(timeoutId);
           if (!res.ok) {
             throw new Error(`TMDB TV discover API error: ${res.status} ${res.statusText}`);
           }

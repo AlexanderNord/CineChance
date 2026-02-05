@@ -211,7 +211,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           }
         }
       } catch (error) {
-        console.error('Failed to fetch user data:', error);
+        // Graceful error handling - continue loading other data
       } finally {
         setUserDataLoading(false);
       }
@@ -311,8 +311,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
         setActorsLoading(false);
 
       } catch (error) {
-        console.error('Failed to load profile data:', error);
-        // В случае ошибки все равно завершаем загрузку
+        // Graceful error handling - in case of errors, stop loading spinners
         setStatsLoading(false);
         setBasicStatsLoading(false);
         setTypeBreakdownLoading(false);

@@ -127,7 +127,8 @@ export async function GET(request: NextRequest) {
     try {
       // Имитируем запрос к /api/user/stats
       const userStatsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/user/stats`, {
-        headers: { cookie: request.headers.get('cookie') || '' }
+        headers: { cookie: request.headers.get('cookie') || '' },
+        signal: AbortSignal.timeout(10000)
       });
       
       if (userStatsResponse.ok) {
@@ -147,7 +148,8 @@ export async function GET(request: NextRequest) {
     try {
       // Имитируем запрос к /api/debug/stats
       const debugStatsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/debug/stats`, {
-        headers: { cookie: request.headers.get('cookie') || '' }
+        headers: { cookie: request.headers.get('cookie') || '' },
+        signal: AbortSignal.timeout(10000)
       });
       
       if (debugStatsResponse.ok) {

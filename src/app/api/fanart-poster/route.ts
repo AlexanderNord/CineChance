@@ -27,7 +27,12 @@ export async function GET(req: Request) {
       ? `https://webservice.fanart.tv/v3/tv/${tmdbId}?api_key=${apiKey}`
       : `https://webservice.fanart.tv/v3/movies/${tmdbId}?api_key=${apiKey}`;
 
-    const res = await fetch(endpoint);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(endpoint, { signal: controller.signal });
+    
+    clearTimeout(timeoutId);
     
     if (!res.ok) {
       return NextResponse.json({ poster: null });

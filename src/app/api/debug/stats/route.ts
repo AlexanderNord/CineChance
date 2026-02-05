@@ -13,7 +13,16 @@ async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
   }
   const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU`;
   try {
-    const res = await fetch(url, { next: { revalidate: 86400 } }); // 24 часа
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const res = await fetch(url, { 
+      next: { revalidate: 86400 },
+      signal: controller.signal
+    }); // 24 часа
+    
+    clearTimeout(timeoutId);
+    
     if (!res.ok) {
       return null;
     }

@@ -26,10 +26,18 @@ export async function GET(
     }
 
     // Получаем информацию об актере
+    const personController = new AbortController();
+    const personTimeoutId = setTimeout(() => personController.abort(), 5000);
+    
     const personRes = await fetch(
       `https://api.themoviedb.org/3/person/${personId}?api_key=${apiKey}&language=ru-RU`,
-      { next: { revalidate: 86400 } }
+      { 
+        next: { revalidate: 86400 },
+        signal: personController.signal
+      }
     );
+    
+    clearTimeout(personTimeoutId);
 
     if (!personRes.ok) {
       return NextResponse.json({ error: 'Failed to fetch person' }, { status: 500 });
@@ -38,10 +46,18 @@ export async function GET(
     const personData = await personRes.json();
 
     // Получаем фильмографию актера
+    const creditsController = new AbortController();
+    const creditsTimeoutId = setTimeout(() => creditsController.abort(), 5000);
+    
     const creditsRes = await fetch(
       `https://api.themoviedb.org/3/person/${personId}/combined_credits?api_key=${apiKey}&language=ru-RU`,
-      { next: { revalidate: 86400 } }
+      { 
+        next: { revalidate: 86400 },
+        signal: creditsController.signal
+      }
     );
+    
+    clearTimeout(creditsTimeoutId);
 
     if (!creditsRes.ok) {
       return NextResponse.json({ error: 'Failed to fetch credits' }, { status: 500 });

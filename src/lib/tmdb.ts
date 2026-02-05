@@ -53,6 +53,9 @@ export const fetchTrendingMovies = async (timeWindow: 'day' | 'week' = 'week'): 
     url.searchParams.append('api_key', TMDB_API_KEY || '');
     url.searchParams.append('language', 'ru-RU');
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
     const response = await fetch(url.toString(), {
       headers: {
         'accept': 'application/json',
@@ -61,7 +64,10 @@ export const fetchTrendingMovies = async (timeWindow: 'day' | 'week' = 'week'): 
         revalidate: 3600, // ISR: обновление раз в час
         tags: ['trending-movies', 'home-page'] 
       },
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -105,10 +111,16 @@ export const fetchPopularMovies = async (page: number = 1): Promise<Media[]> => 
     url.searchParams.append('language', 'ru-RU');
     url.searchParams.append('page', page.toString());
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
-      cache: 'no-store'
+      cache: 'no-store',
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -154,10 +166,16 @@ export const searchMedia = async (query: string, page: number = 1): Promise<Medi
     url.searchParams.append('language', 'ru-RU');
     url.searchParams.append('page', page.toString());
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
       next: { revalidate: 3600 },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       logger.error('Ошибка TMDB search', { status: response.status, context: 'TMDB' });
@@ -224,10 +242,16 @@ export const fetchMediaDetails = async (
     url.searchParams.append('language', 'ru-RU');
     url.searchParams.append('append_to_response', 'credits');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(url.toString(), {
       headers: { 'accept': 'application/json' },
       next: { revalidate: 86400 }, // Кэшируем на 24 часа
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       logger.error('Ошибка TMDB details', { status: response.status, context: 'TMDB' });

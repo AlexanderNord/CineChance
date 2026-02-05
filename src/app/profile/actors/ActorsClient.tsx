@@ -83,7 +83,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
 
         // Добавляем таймаут для предотвращения зависания
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд таймаут
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 секунд таймаут
 
         const response = await fetch(`/api/user/achiev_actors?limit=${TOP_ACTORS_COUNT}&singleLoad=true`, {
           signal: controller.signal,
@@ -92,9 +92,7 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('API Error:', response.status, errorText);
-          throw new Error(`API Error: ${response.status} - ${errorText}`);
+          throw new Error(`API Error: ${response.status}`);
         }
 
         const data = await response.json();
@@ -114,8 +112,6 @@ export default function ActorsClient({ userId }: ActorsClientProps) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
         }
-        
-        console.error('Failed to fetch actors:', err);
         
         // Детальная обработка ошибок
         let errorMessage = 'Не удалось загрузить актеров';
