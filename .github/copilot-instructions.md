@@ -16,21 +16,31 @@
 |------|-----------|
 | `src/app/layout.tsx` | Root layout с React Query провайдером (LayoutClient) |
 | `src/app/page.tsx` | Главная страница, использует Server Components для данных |
+| `src/app/my-movies/page.tsx` | Страница фильмотеки (Suspense + Server Components) |
+| `src/app/stats/` | Аналитика: `/genres`, `/ratings`, `/tags` с фильтрацией и пагинацией |
 | `src/app/api/*/route.ts` | Route Handlers (экспортируйте `GET`, `POST`, `DELETE` и т.п.) |
+| `src/app/api/stats/` | API для аналитики (movies-by-genre, movies-by-rating, movies-by-tag) |
+| `src/app/admin/` | Админ-панель (проверка конкретного userId для доступа) |
 | `src/lib/prisma.ts` | **Единственный** Prisma singleton (Neon адаптер) |
+| `src/lib/calculateWeightedRating.ts` | Расчёт взвешенной оценки (учитывает пересмотры и историю) |
+| `src/lib/calculateCineChanceScore.ts` | Формула комбинирования TMDB + Cine-chance рейтингов |
+| `src/lib/recommendation-types.ts` | Типы для v2/v3 рекомендательной системы (филтры, события, сигналы) |
 | `src/auth.ts` | NextAuth конфиг, `authOptions`, `getServerAuthSession()` |
 | `src/lib/tmdb.ts` | TMDB обёртки: `fetchTrendingMovies()`, `searchMedia()` и др. |
 | `prisma/schema.prisma` | Данные модели: User, WatchList, RecommendationLog, Invitation и т.п. |
-| `src/lib/movieStatus.ts` | Логика статусов контента (want/watched/dropped) |
-| `src/middleware/rateLimit.ts` | Rate limiting для API через Upstash Redis |
+| `src/lib/movieStatusConstants.ts` | Константы статусов фильмов (ID и имена) |
+| `src/middleware/rateLimit.ts` | Rate limiting для API через Upstash Redis с настройками по эндпоинтам |
 
 ## Обязательные переменные окружения
 
-```
+```bash
 DATABASE_URL=postgresql://...       # Neon PostgreSQL
 NEXTAUTH_SECRET=<random-32-chars>   # JWT signing key (обязателен!)
 NEXTAUTH_URL=http://localhost:3000  # Для локальной разработки
 TMDB_API_KEY=...                    # TMDB v3 API key (может отсутствовать в dev)
+UPSTASH_REDIS_REST_URL=...          # Для rate limiting
+UPSTASH_REDIS_REST_TOKEN=...        # Для rate limiting
+NODE_ENV=development                # или production
 ```
 
 ## Критические конвенции кодирования
@@ -46,9 +56,17 @@ TMDB_API_KEY=...                    # TMDB v3 API key (может отсутст
 
 ## Основные модели данных
 
-- **User**: `id`, `email`, `hashedPassword` (bcryptjs), `birthDate` (для age-gating), `agreedToTerms`, `recommendationStats`, `preferencesSnapshot`
-- **WatchList**: статусы фильмов (want/watched/dropped), оценки, метаданные
-- **RecommendationLog**: источник правды о взаимодействиях с рекомендациями
+- **User**: `id`, `email`, `hashedPassword` (bcryptjs), `birthDate` (для age-gating), `agreedToTerms`, `recommendationStats`, `preferencesSnapshot`, `mlProfileVersion`
+- **WatchList**: `userId_tmdbId_mediaType` (составной ключ), `statusId`, `userRating`, `weightedRating` (учитывает пересмотры), `watchCount`, `watchedDate`
+- **RecommendationLog**: источник правды о взаимодействиях с рекомендациями; поля:
+  - `userId`, `tmdbId`, `mediaType` (movie/tv)
+  - `algorithm` (версия алгоритма), `action` (shown/opened/skipped/watched/added_to_list)
+  - `filtersSnapshot` (JSON конфиг фильтров), `temporalContext` (время суток, день недели)
+  - `mlFeatures` (для ML-моделей)
+- **RecommendationEvent**: события при показе рекомендации (click, hover, skip)
+- **IntentSignal**: сигналы о намерениях пользователя (к каким параметрам рекомендации обратил внимание)
+- **NegativeFeedback**: комплейны на рекомендации (для переобучения моделей)
+- **PredictionLog**: логирование предсказаний модели
 - **Tag**: пользовательские теги для фильмов
 - **RatingHistory**: история оценок
 - **Invitation**: система приглашений с токенами и сроком действия
@@ -59,19 +77,19 @@ TMDB_API_KEY=...                    # TMDB v3 API key (может отсутст
 
 ```typescript
 // src/app/api/my-feature/route.ts
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { rateLimit } from '@/middleware/rateLimit';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { success } = await rateLimit(request, '/api/my-feature');
   if (!success) {
     return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
   }
 
-  const session = await getServerAuthSession(authOptions);
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -84,6 +102,114 @@ export async function GET(request: Request) {
   return NextResponse.json(user);
 }
 ```
+
+## Server Components с Suspense
+
+Используйте Server Components для загрузки данных и Suspense для streaming:
+
+```typescript
+// src/app/my-feature/page.tsx
+import { Suspense } from 'react';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/auth';
+import LoaderSkeleton from '@/app/components/LoaderSkeleton';
+
+async function DataLoader({ userId }: { userId: string }) {
+  const data = await fetchUserData(userId);
+  return <DataDisplay data={data} />;
+}
+
+function DataDisplay({ data }: { data: any }) {
+  return <>{/* Клиентская логика рендера */}</>;
+}
+
+export default async function Page() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return <div>Unauthorized</div>;
+
+  return (
+    <Suspense fallback={<LoaderSkeleton variant="full" text="Загрузка..." />}>
+      <DataLoader userId={session.user.id} />
+    </Suspense>
+  );
+}
+```
+
+## Фильтрация и пагинация (Stats API)
+
+Для сложных запросов используйте параметры как в `src/app/api/stats/movies-by-genre/route.ts`:
+
+```typescript
+// Поддерживаемые параметры:
+// genreId       - ID жанра (обязателен)
+// page          - номер страницы (default 1)
+// limit         - кол-во записей (default 20, max 100)
+// showMovies    - фильтр по фильмам (true/false)
+// showTv        - фильтр по сериалам (true/false)
+// showAnime     - фильтр по аниме (true/false)
+// sortBy        - поле для сортировки (addedAt, rating, title)
+// sortOrder     - порядок (asc/desc)
+// minRating     - минимальный рейтинг
+// maxRating     - максимальный рейтинг
+// yearFrom      - год от / yearTo - год до
+// genres        - доп. жанры (CSV)
+// tags          - теги (CSV)
+
+// Важно: используйте буффер при загрузке для TMDB-фильтрации
+const recordsNeeded = Math.ceil(page * limit * 1.5) + 1;
+const records = await prisma.watchList.findMany({
+  take: Math.min(recordsNeeded, 500),
+  skip: 0,  // Всегда с начала для детерминированности
+  where: whereClause,
+});
+```
+
+## Админ-панель и доступ по ролям
+
+Используйте ID проверку для админа (см. `src/app/admin/page.tsx`):
+
+```typescript
+export default async function AdminPage() {
+  const session = await getServerSession(authOptions);
+  const ADMIN_USER_ID = 'cmkbc7sn2000104k3xd3zyf2a';
+  
+  if (session?.user?.id !== ADMIN_USER_ID) {
+    redirect('/');
+  }
+  // ... admin content
+}
+```
+
+## Расчёт рейтингов
+
+### Weighted Rating
+Модель `WatchList` содержит `weightedRating` — рейтинг пользователя с учётом всех пересмотров:
+
+```typescript
+import { calculateWeightedRating } from '@/lib/calculateWeightedRating';
+
+const { weightedRating, totalReviews } = await calculateWeightedRating(
+  userId, tmdbId, mediaType
+);
+```
+
+### Cine-chance Score
+Комбинирует TMDB рейтинг с локальным рейтингом сообщества:
+
+```typescript
+import { calculateCineChanceScore } from '@/lib/calculateCineChanceScore';
+
+const score = calculateCineChanceScore({
+  tmdbRating: 7.5,
+  tmdbVotes: 1000,
+  cineChanceRating: 8.2,  // локальный рейтинг
+  cineChanceVotes: 50,    // число оценок в CineChance
+});
+```
+
+Формула:
+- При < 50 голосов: формула IMDB с m=2
+- Влияние Cine-chance: 15% минимум, 80% максимум
 
 ## Рабочие команды
 
@@ -111,21 +237,40 @@ npx prisma db push      # Применить schema без создания ми
 - `src/app/api/auth/[...nextauth]/` ← Next.js auto-route для NextAuth
 - `src/auth.ts` ← конфиг с CredentialsProvider, JWT callbacks
 - Пароли: `bcryptjs.hash()` при регистрации, `bcryptjs.compare()` при логине
-- Сессия: `getServerAuthSession()` в Server Components/Route Handlers
+- Сессия: `getServerSession()` в Server Components/Route Handlers
 
 ### Rate limiting
-- `src/middleware/rateLimit.ts` использует Upstash Redis
+- `src/middleware/rateLimit.ts` использует Upstash Redis с настройками по эндпоинтам
 - Вызывайте в начале Route Handlers: `const { success } = await rateLimit(request, '/api/path')`
 - Возвращайте `{ status: 429 }` если rate limited
+- Лимиты примеры: /api/search (100 req/min), /api/watchlist (200 req/min), /api/cine-chance-rating (300 req/min)
 
-### Watchlist / статусы фильмов
-- `src/lib/movieStatus.ts` текущая логика статусов
-- `src/app/api/watchlist/` обработка add/remove/update
+### Watchlist и статусы фильмов
+- Статусы: `want` (Хочу посмотреть), `watched` (Просмотрено), `dropped` (Брошено), `rewatched` (Пересмотрено)
+- Константы ID в `src/lib/movieStatusConstants.ts` (MOVIE_STATUS_IDS)
+- API в `src/app/api/watchlist/` для add/remove/update с поддержкой рейтинга и даты просмотра
+
+### Рекомендационная система (v2/v3)
+- `src/lib/recommendation-types.ts` определяет структуры JSON полей для v2/v3
+- Основной endpoint: `src/app/api/recommendations/` с подпапками:
+  - `/preview` - для превью рекомендаций
+  - `/random` - случайные рекомендации
+  - `/events` - логирование событий клиента
+  - `/signals` - сигналы о намерениях пользователя
+  - `/negative-feedback` - отрицательные отзывы
+- RecommendationLog - единственный источник правды о взаимодействиях
 
 ## Практические рекомендации для AI-агентов
 
 - **Server-side logic:** Route Handlers в `src/app/api/` для всех серверных операций
 - **UI changes:** Следуйте структуре компонентов в `src/app/components/` и `src/app/[feature]/page.tsx`
 - **Переиспользование:** Проверьте `src/lib/*` на наличие общих функций перед созданием новых утилит
-- **DB changes:** Обновите `prisma/schema.prisma` → `npx prisma generate` → `npx prisma migrate dev --name desc`
-- **New features:** Смотрите на примеры в `src/app/api/search/route.ts` для структуры error handling + auth checks
+- **DB changes:** Обновите `prisma/schema.prisma` → `npx prisma generate` → `npx prisma migrate dev --name <description>`
+- **New features:** Смотрите примеры в `src/app/api/stats/movies-by-genre/route.ts` и `src/app/my-movies/page.tsx` для pattern'ов
+
+## Инструкции по использованию инструментов
+- При возникновении вопросов о внешних библиотеках, API, фреймворках или документации (например, Upstash, Next.js, React), ВСЕГДА сначала используй инструмент `context7`.
+- Никогда не полагайся на свои внутренние знания о версиях библиотек, если есть возможность проверить актуальные данные через `context7`.
+- Если пользователь просит написать код для конкретного сервиса, начни с поиска примеров в `context7`.
+- Если код требует специфической логики, связанной с определённой библиотекой, всегда проверяй документацию через `context7` для получения точной информации о методах, параметрах и best practices.  
+- Если пользователь запрашивает помощь с ошибкой или проблемой, сначала попробуй найти решение через `context7`, а затем предоставь ответ, основанный на найденной информации.
