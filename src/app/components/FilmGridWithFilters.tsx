@@ -28,6 +28,15 @@ export interface FilmGridWithFiltersProps {
   /** Начальный статус фильма */
   initialStatus?: 'want' | 'watched' | 'dropped' | 'rewatched' | null;
   
+  /** Функция для получения статуса конкретного фильма */
+  getInitialStatus?: (movie: Media) => 'want' | 'watched' | 'dropped' | 'rewatched' | null;
+  
+  /** Режим восстановления из черного списка */
+  restoreView?: boolean;
+  
+  /** Получить начальный статус блокировки для фильма */
+  getInitialIsBlacklisted?: (movie: Media) => boolean;
+  
   /** Получить начальную оценку для фильма */
   getInitialRating?: (movie: Media) => number | null | undefined;
   
@@ -70,6 +79,9 @@ export default function FilmGridWithFilters({
   userTags = [],
   showRatingBadge = true,
   initialStatus = 'watched',
+  getInitialStatus,
+  restoreView = false,
+  getInitialIsBlacklisted,
   getInitialRating,
   emptyMessage = 'Нет фильмов',
   pageSize = 20,
@@ -270,10 +282,12 @@ export default function FilmGridWithFilters({
                     movie={movie}
                     showRatingBadge={showRatingBadge}
                     priority={index < 6}
-                    initialUserRating={getInitialRating ? getInitialRating(movie) : undefined}
-                    initialStatus={initialStatus}
+                    restoreView={restoreView}
+                    initialIsBlacklisted={getInitialIsBlacklisted ? getInitialIsBlacklisted(movie) : undefined}
+                    initialStatus={getInitialStatus ? getInitialStatus(movie) : initialStatus}
                     initialAverageRating={movie.vote_average}
                     initialRatingCount={movie.vote_count}
+                    initialUserRating={getInitialRating ? getInitialRating(movie) : undefined}
                   />
                 </MovieCardErrorBoundary>
               </div>
