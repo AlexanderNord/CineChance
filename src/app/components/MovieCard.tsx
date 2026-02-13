@@ -7,6 +7,7 @@ import { Media } from '@/lib/tmdb';
 import RatingModal from './RatingModal';
 import RatingInfoModal from './RatingInfoModal';
 import { calculateCineChanceScore } from '@/lib/calculateCineChanceScore';
+import { getMediaTypeDisplay } from '@/lib/mediaType';
 import MoviePosterProxy from './MoviePosterProxy';
 import StatusOverlay from './StatusOverlay';
 import { logger } from '@/lib/logger';
@@ -102,11 +103,7 @@ export default function MovieCard({
   const date = movie.release_date || movie.first_air_date;
   const year = date ? date.split('-')[0] : '—';
   
-  // Расчитываем isAnimeQuick с fallback на undefined чтобы избежать hydration mismatch
-  const isAnimeQuick = useMemo(() => {
-    if (!movie.genre_ids || !movie.original_language) return false;
-    return movie.genre_ids.includes(16) && movie.original_language === 'ja';
-  }, [movie.genre_ids, movie.original_language]);
+  const mediaTypeConfig = useMemo(() => getMediaTypeDisplay(movie), [movie]);
 
   const combinedRating = useMemo(() => {
     return calculateCineChanceScore({
@@ -558,9 +555,11 @@ export default function MovieCard({
         productionCountries={movieDetails?.productionCountries}
         seasonNumber={movieDetails?.seasonNumber}
         mediaType={movie.media_type}
-        isAnime={movieDetails?.isAnime ?? isAnimeQuick}
+        isAnime={movieDetails?.isAnime ?? mediaTypeConfig.isAnime}
         collectionName={movieDetails?.collectionName}
         collectionId={movieDetails?.collectionId}
+        typeLabel={mediaTypeConfig.label}
+        typeBackgroundColor={mediaTypeConfig.backgroundColor}
         currentStatus={status}
         onStatusChange={(newStatus) => {
           handleStatusChange(newStatus);
@@ -583,15 +582,15 @@ export default function MovieCard({
       <div 
         ref={cardRef}
         className="w-full h-full min-w-0 relative"
-      >
+        >
         <div className="relative">
           <div 
             className="text-white text-xs font-semibold px-2 py-1.5 rounded-t-lg w-full text-center"
             style={{
-              backgroundColor: isAnimeQuick ? '#9C40FE' : (movie.media_type === 'movie' ? '#22c55e' : '#3b82f6')
+              backgroundColor: mediaTypeConfig.backgroundColor
             }}
           >
-            {isAnimeQuick ? 'Аниме' : (movie.media_type === 'movie' ? 'Фильм' : 'Сериал')}
+            {mediaTypeConfig.label}
           </div>
           
           <div 

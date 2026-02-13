@@ -1,7 +1,7 @@
 // src/app/recommendations/RecommendationInfoModal.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import ImageWithProxy from '@/app/components/ImageWithProxy';
 import Link from 'next/link';
 import { 
@@ -10,6 +10,7 @@ import {
   TagData 
 } from '@/app/actions/tagsActions';
 import { logger } from '@/lib/logger';
+import { getMediaTypeDisplay } from '@/lib/mediaType';
 
 type MediaStatus = 'want' | 'watched' | 'dropped' | 'rewatched' | null;
 
@@ -121,11 +122,29 @@ export default function RecommendationInfoModal({
   tmdbId,
   userRating,
   watchCount,
+  movie,
 }: RecommendationInfoModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const mediaTypeConfig = useMemo(() => {
+    if (!movie) return null;
+    const mediaData = {
+      id: movie.id,
+      media_type: movie.media_type === 'anime' ? 'tv' : movie.media_type,
+      title: movie.title || movie.name || '',
+      poster_path: movie.poster_path,
+      vote_average: movie.vote_average,
+      vote_count: movie.vote_count,
+      overview: movie.overview,
+      genre_ids: movie.genre_ids,
+      genres: movie.genres,
+      original_language: movie.original_language,
+    };
+    return getMediaTypeDisplay(mediaData);
+  }, [movie]);
 
   // Состояние для cast (загружаем через /api/movie-details)
   const [cast, setCast] = useState<CastMember[]>([]);
@@ -335,9 +354,13 @@ export default function RecommendationInfoModal({
                 )}
                 
                 {/* Тип фильма */}
-                {mediaType && (
-                  <span className={`text-xs sm:text-sm font-semibold px-2 py-0.5 rounded-md ${isAnime ? 'bg-[#9C40FE]' : (mediaType === 'movie' ? 'bg-green-500' : 'bg-blue-500')}`}>
-                    {isAnime ? 'Аниме' : (mediaType === 'movie' ? 'Фильм' : 'Сериал')}
+                {mediaType && mediaTypeConfig && (
+                  <span className={`text-xs sm:text-sm font-semibold px-2 py-0.5 rounded-md ${
+                    mediaTypeConfig.backgroundColor === '#9C40FE' ? 'bg-[#9C40FE]' :
+                    mediaTypeConfig.backgroundColor === '#F97316' ? 'bg-[#F97316]' :
+                    mediaTypeConfig.backgroundColor === '#22c55e' ? 'bg-green-500' : 'bg-blue-500'
+                  }`}>
+                    {mediaTypeConfig.label}
                     {seasonNumber && ` • ${seasonNumber}`}
                   </span>
                 )}

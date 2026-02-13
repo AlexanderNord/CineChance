@@ -5,6 +5,7 @@ import ImageWithProxy from '@/app/components/ImageWithProxy';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { STATIC_BLUR_PLACEHOLDER } from '@/lib/blurPlaceholder';
+import { getMediaTypeDisplay } from '@/lib/mediaType';
 const RecommendationInfoModal = dynamic(() => import('./RecommendationInfoModal'), { ssr: false });
 
 interface MovieData {
@@ -142,10 +143,25 @@ export default function RecommendationCard({
     hoverStartTime.current = 0;
   }, []);
 
-  // Определяем отображаемый тип контента
-  const displayType = isAnime ? 'anime' : (movie.media_type === 'movie' ? 'movie' : 'tv');
-  const typeLabel = isAnime ? 'Аниме' : (movie.media_type === 'movie' ? 'Фильм' : 'Сериал');
-  const typeColor = isAnime ? 'bg-[#9C40FE]' : (movie.media_type === 'movie' ? 'bg-green-500' : 'bg-blue-500');
+  const mediaData = {
+    id: movie.id,
+    media_type: movie.media_type === 'anime' ? 'tv' : movie.media_type,
+    title: movie.title,
+    poster_path: movie.poster_path,
+    vote_average: movie.vote_average,
+    vote_count: movie.vote_count,
+    overview: movie.overview,
+    genre_ids: movie.genre_ids,
+    genres: movie.genres,
+    original_language: movie.original_language,
+  };
+  const mediaTypeConfig = getMediaTypeDisplay(mediaData);
+  const typeLabel = mediaTypeConfig.label;
+  const typeColor = mediaTypeConfig.backgroundColor === '#9C40FE' ? 'bg-[#9C40FE]' 
+    : mediaTypeConfig.backgroundColor === '#F97316' ? 'bg-[#F97316]'
+    : mediaTypeConfig.backgroundColor === '#22c55e' ? 'bg-green-500' 
+    : 'bg-blue-500';
+  const displayType = isAnime ? 'anime' : mediaTypeConfig.displayType;
 
   // Формируем данные для модального окна
   const title = movie.title || movie.name;

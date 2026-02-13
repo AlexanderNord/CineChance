@@ -56,6 +56,8 @@ interface RatingInfoModalProps {
   userRating?: number | null;
   watchCount?: number;
   cast?: CastMember[];
+  typeLabel?: string;
+  typeBackgroundColor?: string;
 }
 
 const STATUS_OPTIONS: { value: MediaStatus; label: string; icon: string; colorClass: string; hoverClass: string }[] = [
@@ -96,7 +98,9 @@ export default function RatingInfoModal({
   tmdbId,
   userRating,
   watchCount,
-  cast
+  cast,
+  typeLabel,
+  typeBackgroundColor,
 }: RatingInfoModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -513,8 +517,12 @@ export default function RatingInfoModal({
                 
                 {/* Тип фильма */}
                 {mediaType && (
-                  <span className={`text-xs sm:text-sm font-semibold px-2 py-0.5 rounded-md ${isAnime ? 'bg-[#9C40FE]' : (mediaType === 'movie' ? 'bg-green-500' : 'bg-blue-500')}`}>
-                    {isAnime ? 'Аниме' : (mediaType === 'movie' ? 'Фильм' : 'Сериал')}
+                  <span className={`text-xs sm:text-sm font-semibold px-2 py-0.5 rounded-md ${
+                    typeBackgroundColor === '#9C40FE' ? 'bg-[#9C40FE]' :
+                    typeBackgroundColor === '#F97316' ? 'bg-[#F97316]' :
+                    typeBackgroundColor === '#22c55e' ? 'bg-green-500' : 'bg-blue-500'
+                  }`}>
+                    {typeLabel || (isAnime ? 'Аниме' : (mediaType === 'movie' ? 'Фильм' : 'Сериал'))}
                     {seasonNumber && ` • ${seasonNumber}`}
                   </span>
                 )}
