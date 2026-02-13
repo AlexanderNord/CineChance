@@ -255,6 +255,7 @@ export default function PersonClient({ personId }: PersonClientProps) {
                   fill
                   className="object-cover rounded-lg shadow-lg"
                   sizes="(max-width: 640px) 128px, 160px"
+                  priority
                 />
               </div>
             )}

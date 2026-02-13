@@ -3,7 +3,6 @@
 
 import { useState, memo } from 'react';
 import Image from 'next/image';
-import { logger } from '@/lib/logger';
 
 interface ImageWithProxyProps {
   src: string;
@@ -42,17 +41,9 @@ const ImageWithProxy = memo(({
   const [retryCount, setRetryCount] = useState(0);
 
   const handleImageError = () => {
-    logger.warn('Image load failed, trying proxy', { 
-      src, 
-      retryCount 
-    });
-    
     if (retryCount < 1 && !imageError) {
-      // Пробуем через наш прокси
       setRetryCount(prev => prev + 1);
     } else {
-      // Все попытки исчерпаны
-      logger.warn('All image attempts failed, showing fallback', { src });
       setImageError(true);
       onError?.();
     }
@@ -61,10 +52,8 @@ const ImageWithProxy = memo(({
   const handleImageLoad = () => {
     setImageError(false);
     onLoad?.();
-    logger.info('Image loaded successfully', { src, retryCount });
   };
 
-  // Определяем источник изображения
   const getImageSrc = () => {
     if (imageError) {
       return fallbackSrc;
@@ -92,8 +81,8 @@ const ImageWithProxy = memo(({
       className={className}
       style={style}
       loading={priority ? "eager" : "lazy"}
-      placeholder="blur"
-      blurDataURL={blurDataURL || "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="}
+      placeholder={blurDataURL ? 'blur' : undefined}
+      blurDataURL={blurDataURL}
       onError={handleImageError}
       onLoad={handleImageLoad}
       unoptimized={true}
