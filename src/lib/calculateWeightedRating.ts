@@ -80,7 +80,14 @@ export async function calculateWeightedRating(
     // Расчет взвешенной оценки
     let weightedSum = 0;
     let totalWeight = 0;
-    const calculations = [];
+    interface CalculationDetail {
+      index: number;
+      rating: number;
+      actionType: string;
+      weight: number;
+      weightedValue: number;
+    }
+    const calculations: CalculationDetail[] = [];
 
     ratingHistory.forEach((review, index) => {
       const weight = getWeightByReviewOrder(index, review.actionType);

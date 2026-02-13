@@ -4,6 +4,24 @@ import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { MOVIE_STATUS_IDS, getStatusIdByName, getStatusNameById } from '@/lib/movieStatusConstants';
 
+interface LogsData {
+  timestamp: string;
+  userId: string;
+  section: string;
+  constants: {
+    MOVIE_STATUS_IDS: typeof MOVIE_STATUS_IDS;
+    MOVIE_STATUS_NAMES: Record<number, string>;
+  };
+  statusTests: Record<string, number | null>;
+  databaseChecks: {
+    individualCounts: Record<string, number>;
+    combinedCounts: Record<string, number>;
+    sampleRecords: any;
+  };
+  apiComparison: any;
+  sampleRecords: any;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,7 +32,7 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id;
     
     // Собираем всю информацию для логов
-    const logs = {
+    const logs: LogsData = {
       timestamp: new Date().toISOString(),
       userId,
       section: '=== ПОЛНАЯ ДИАГНОСТИКА СТАТИСТИКИ ===',
@@ -33,9 +51,13 @@ export async function GET(request: NextRequest) {
         'Просмотрено': getStatusIdByName('Просмотрено'),
         'Пересмотрено': getStatusIdByName('Пересмотрено'),
       },
-      databaseChecks: {},
-      apiComparison: {},
-      sampleRecords: []
+      databaseChecks: {
+        individualCounts: {} as Record<string, number>,
+        combinedCounts: {} as Record<string, number>,
+        sampleRecords: [] as any[]
+      },
+      apiComparison: {} as Record<string, any>,
+      sampleRecords: [] as any[]
     };
 
     // Подробная проверка базы данных
@@ -142,7 +164,7 @@ export async function GET(request: NextRequest) {
         };
       }
     } catch (error) {
-      logs.apiComparison.userStatsError = error.message;
+      logs.apiComparison.userStatsError = error instanceof Error ? error.message : String(error);
     }
 
     try {
@@ -160,7 +182,7 @@ export async function GET(request: NextRequest) {
         };
       }
     } catch (error) {
-      logs.apiComparison.debugStatsError = error.message;
+      logs.apiComparison.debugStatsError = error instanceof Error ? error.message : String(error);
     }
 
     return NextResponse.json(logs);

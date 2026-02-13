@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
       if (tmdbRating < minRatingParam || tmdbRating > maxRatingParam) continue;
       if (yearFromParam && releaseYear < parseInt(yearFromParam, 10)) continue;
       if (yearToParam && releaseYear > parseInt(yearToParam, 10)) continue;
-      if (genresArray.length > 0 && !genres.some(g => genresArray.includes(g))) continue;
+      if (genresArray.length > 0 && !genres.some((g: number) => genresArray.includes(g))) continue;
 
       moviesWithGenre.push({
         record,

@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
         if (tmdbRating < minRatingParam || tmdbRating > maxRatingParam) return null;
         if (yearFromParam && releaseYear < parseInt(yearFromParam, 10)) return null;
         if (yearToParam && releaseYear > parseInt(yearToParam, 10)) return null;
-        if (genresArray.length > 0 && !genres.some(g => genresArray.includes(g))) return null;
+        if (genresArray.length > 0 && !genres.some((g: number) => genresArray.includes(g))) return null;
 
         return {
           id: record.tmdbId,
