@@ -5,223 +5,221 @@ import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
 import { rateLimit } from '@/middleware/rateLimit';
+import { withCache } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
-// Вспомогательная функция для получения деталей с TMDB
-async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return null;
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const PARALLEL_TMDB_REQUESTS = 10;
+
+async function fetchMediaDetailsBatch(
+  records: Array<{ tmdbId: number; mediaType: string }>
+): Promise<Map<string, any>> {
+  const results = new Map<string, any>();
+  
+  if (!TMDB_API_KEY) {
+    return results;
   }
-  const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU`;
-  try {
-    const res = await fetch(url, { next: { revalidate: 86400 } }); // 24 часа
-    if (!res.ok) {
-      return null;
-    }
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    return null;
+
+  const batches: Array<Array<{ tmdbId: number; mediaType: string }>> = [];
+  for (let i = 0; i < records.length; i += PARALLEL_TMDB_REQUESTS) {
+    batches.push(records.slice(i, i + PARALLEL_TMDB_REQUESTS));
   }
+
+  for (const batch of batches) {
+    const promises = batch.map(async (record) => {
+      const key = `${record.mediaType}:${record.tmdbId}`;
+      const url = `https://api.themoviedb.org/3/${record.mediaType}/${record.tmdbId}?api_key=${TMDB_API_KEY}&language=ru-RU`;
+      
+      try {
+        const res = await fetch(url, { next: { revalidate: 86400 } });
+        if (res.ok) {
+          const data = await res.json();
+          results.set(key, data);
+        }
+      } catch {
+        // Silently fail for individual requests
+      }
+    });
+    
+    await Promise.all(promises);
+  }
+
+  return results;
 }
 
-// Helper function to check if movie is anime
 function isAnime(movie: any): boolean {
   const hasAnimeGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
   const isJapanese = movie.original_language === 'ja';
   return hasAnimeGenre && isJapanese;
 }
 
-// Helper function to check if movie is cartoon (animation but not anime)
 function isCartoon(movie: any): boolean {
   const hasAnimationGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
   const isNotJapanese = movie.original_language !== 'ja';
   return hasAnimationGenre && isNotJapanese;
 }
 
+async function calculateTypeBreakdown(
+  allRecords: Array<{ tmdbId: number; mediaType: string }>
+): Promise<{ movie: number; tv: number; cartoon: number; anime: number }> {
+  const typeCounts = { movie: 0, tv: 0, cartoon: 0, anime: 0 };
+  
+  if (allRecords.length === 0) {
+    return typeCounts;
+  }
+
+  const tmdbDataMap = await fetchMediaDetailsBatch(allRecords);
+  
+  for (const record of allRecords) {
+    const key = `${record.mediaType}:${record.tmdbId}`;
+    const tmdbData = tmdbDataMap.get(key);
+    
+    if (tmdbData) {
+      if (isAnime(tmdbData)) {
+        typeCounts.anime++;
+      } else if (isCartoon(tmdbData)) {
+        typeCounts.cartoon++;
+      } else if (record.mediaType === 'movie') {
+        typeCounts.movie++;
+      } else if (record.mediaType === 'tv') {
+        typeCounts.tv++;
+      }
+    } else {
+      if (record.mediaType === 'movie') typeCounts.movie++;
+      else if (record.mediaType === 'tv') typeCounts.tv++;
+    }
+  }
+  
+  return typeCounts;
+}
+
+async function fetchStats(userId: string) {
+  const [watchedCount, wantToWatchCount, droppedCount, hiddenCount] = await Promise.all([
+    prisma.watchList.count({
+      where: {
+        userId,
+        statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
+      },
+    }),
+    prisma.watchList.count({
+      where: { userId, statusId: MOVIE_STATUS_IDS.WANT_TO_WATCH },
+    }),
+    prisma.watchList.count({
+      where: { userId, statusId: MOVIE_STATUS_IDS.DROPPED },
+    }),
+    prisma.blacklist.count({ where: { userId } }),
+  ]);
+
+  const allRecords = await prisma.watchList.findMany({
+    where: {
+      userId,
+      statusId: { 
+        in: [
+          MOVIE_STATUS_IDS.WANT_TO_WATCH, 
+          MOVIE_STATUS_IDS.WATCHED, 
+          MOVIE_STATUS_IDS.REWATCHED, 
+          MOVIE_STATUS_IDS.DROPPED
+        ] 
+      },
+    },
+    select: {
+      tmdbId: true,
+      mediaType: true,
+    },
+  });
+
+  const typeCounts = await calculateTypeBreakdown(allRecords);
+
+  const avgRatingResult = await prisma.watchList.aggregate({
+    where: {
+      userId,
+      OR: [
+        { weightedRating: { not: null } },
+        { userRating: { not: null } }
+      ]
+    },
+    _avg: { 
+      weightedRating: true,
+      userRating: true,
+    },
+    _count: { 
+      weightedRating: true,
+      userRating: true,
+    },
+  });
+
+  const avg = avgRatingResult._avg;
+  const count = avgRatingResult._count;
+  const averageRating = avg?.weightedRating ?? avg?.userRating ?? null;
+  const finalAverageRating = averageRating ? Math.round(averageRating * 10) / 10 : null;
+  const ratedCount = (count?.weightedRating || 0) + (count?.userRating || 0);
+
+  const ratingGroups = await prisma.watchList.groupBy({
+    by: ['userRating'],
+    where: {
+      userId,
+      statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
+      userRating: { not: null },
+    },
+    _count: {
+      userRating: true,
+    },
+  });
+
+  const ratingDistribution: Record<number, number> = {};
+  for (let i = 10; i >= 1; i--) {
+    ratingDistribution[i] = 0;
+  }
+
+  for (const group of ratingGroups) {
+    if (group.userRating !== null) {
+      const roundedRating = Math.round(group.userRating);
+      if (roundedRating >= 1 && roundedRating <= 10) {
+        ratingDistribution[roundedRating] = group._count.userRating;
+      }
+    }
+  }
+
+  const totalForPercentage = watchedCount + wantToWatchCount + droppedCount;
+
+  return {
+    total: {
+      watched: watchedCount,
+      wantToWatch: wantToWatchCount,
+      dropped: droppedCount,
+      hidden: hiddenCount,
+      totalForPercentage,
+    },
+    typeBreakdown: typeCounts,
+    averageRating: finalAverageRating,
+    ratedCount,
+    ratingDistribution,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const { success } = await rateLimit(request, '/api/user/stats');
+    if (!success) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const userId = session.user.id;
+    const cacheKey = `user:${userId}:stats`;
 
-    // Получаем общую статистику
-    const [watchedCount, wantToWatchCount, droppedCount, hiddenCount] = await Promise.all([
-      // Просмотрено + Пересмотрено
-      prisma.watchList.count({
-        where: {
-          userId,
-          statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
-        },
-      }),
-      // Хочу посмотреть
-      prisma.watchList.count({
-        where: { userId, statusId: MOVIE_STATUS_IDS.WANT_TO_WATCH },
-      }),
-      // Брошено
-      prisma.watchList.count({
-        where: { userId, statusId: MOVIE_STATUS_IDS.DROPPED },
-      }),
-      // Скрыто (blacklist)
-      prisma.blacklist.count({ where: { userId } }),
-    ]);
+    const responseData = await withCache(cacheKey, () => fetchStats(userId), 3600);
 
-    // Получаем соотношение по типам контента (по всем статусам кроме скрытых)
-    // Получаем все записи кроме скрытых (blacklist)
-    const allRecords = await prisma.watchList.findMany({
-      where: {
-        userId,
-        // Все статусы: WANT_TO_WATCH, WATCHED, REWATCHED, DROPPED
-        statusId: { 
-          in: [
-            MOVIE_STATUS_IDS.WANT_TO_WATCH, 
-            MOVIE_STATUS_IDS.WATCHED, 
-            MOVIE_STATUS_IDS.REWATCHED, 
-            MOVIE_STATUS_IDS.DROPPED
-          ] 
-        },
-      },
-      select: {
-        tmdbId: true,
-        mediaType: true,
-      },
-    });
-
-    // Отладочная информация
-    const typeCounts = {
-      movie: 0,
-      tv: 0,
-      cartoon: 0,
-      anime: 0,
-    };
-
-    // Для каждой записи получаем данные TMDB и определяем тип контента
-    for (const record of allRecords) {
-      const tmdbData = await fetchMediaDetails(record.tmdbId, record.mediaType as 'movie' | 'tv');
-      
-      if (tmdbData) {
-        if (isAnime(tmdbData)) {
-          typeCounts.anime++;
-        } else if (isCartoon(tmdbData)) {
-          typeCounts.cartoon++;
-        } else if (record.mediaType === 'movie') {
-          typeCounts.movie++;
-        } else if (record.mediaType === 'tv') {
-          typeCounts.tv++;
-        }
-      } else {
-        // Если не удалось получить данные TMDB, используем базовый mediaType
-        if (record.mediaType in typeCounts) {
-          typeCounts[record.mediaType as keyof typeof typeCounts]++;
-        }
-      }
-    }
-
-    // Средняя оценка пользователя (используем взвешенные оценки с fallback)
-    const avgRatingResult = await prisma.watchList.aggregate({
-      where: {
-        userId,
-        OR: [
-          { weightedRating: { not: null } },
-          { userRating: { not: null } }
-        ]
-      },
-      _avg: { 
-        weightedRating: true,  // Приоритет взвешенным
-        userRating: true,      // Fallback для старых записей
-      },
-      _count: { 
-        weightedRating: true,
-        userRating: true,
-      },
-    });
-
-    // Используем взвешенную оценку или fallback на обычную
-    const averageRating = avgRatingResult._avg.weightedRating ?? avgRatingResult._avg.userRating;
-    const finalAverageRating = averageRating ? Math.round(averageRating * 10) / 10 : null;
-
-    // Общее количество оценённых фильмов
-    const ratedCount = (avgRatingResult._count.weightedRating || 0) + (avgRatingResult._count.userRating || 0);
-
-    // Распределение оценок 10→1
-    // Группируем по userRating с фильтром статусов WATCHED/REWATCHED
-    const ratingGroups = await prisma.watchList.groupBy({
-      by: ['userRating'],
-      where: {
-        userId,
-        statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
-        userRating: { not: null },
-      },
-      _count: {
-        userRating: true,
-      },
-    });
-
-    // Нормализуем результат в словарь с ключами 10..1 и нулями по умолчанию
-    // Используем Math.round для округления дробных оценок
-    const ratingDistribution: Record<number, number> = {};
-    for (let i = 10; i >= 1; i--) {
-      ratingDistribution[i] = 0;
-    }
-
-    // Заполняем словарь данными из группировки
-    for (const group of ratingGroups) {
-      if (group.userRating !== null) {
-        const roundedRating = Math.round(group.userRating);
-        if (roundedRating >= 1 && roundedRating <= 10) {
-          ratingDistribution[roundedRating] = group._count.userRating;
-        }
-      }
-    }
-
-    // Общая сумма для расчета процентов (все статусы кроме скрытых)
-    const totalForPercentage = watchedCount + wantToWatchCount + droppedCount;
-
-    // Добавляем debug информацию в ответ
-    const debugInfo = {
-      userId,
-      statusIds: {
-        DROPPED: MOVIE_STATUS_IDS.DROPPED,
-        WANT_TO_WATCH: MOVIE_STATUS_IDS.WANT_TO_WATCH,
-        WATCHED: MOVIE_STATUS_IDS.WATCHED,
-        REWATCHED: MOVIE_STATUS_IDS.REWATCHED,
-      },
-      rawCounts: {
-        watchedCount,
-        wantToWatchCount,
-        droppedCount,
-        hiddenCount,
-        totalForPercentage,
-      },
-      timestamp: new Date().toISOString(),
-    };
-
-    const responseData = {
-      total: {
-        watched: watchedCount,
-        wantToWatch: wantToWatchCount,
-        dropped: droppedCount,
-        hidden: hiddenCount,
-        totalForPercentage,
-      },
-      typeBreakdown: typeCounts,
-      averageRating: finalAverageRating,
-      ratedCount,
-      ratingDistribution,
-      debug: debugInfo,
-    };
-
-    const response = NextResponse.json(responseData);
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    
-    return response;
+    return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error fetching user stats:', error);
+    logger.error('Error fetching user stats', { 
+      error: error instanceof Error ? error.message : String(error),
+      context: 'UserStatsAPI'
+    });
     return NextResponse.json(
       { error: 'Failed to fetch stats' },
       { status: 500 }

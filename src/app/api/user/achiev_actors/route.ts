@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
+import { withCache } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = 'https://api.themoviedb.org/3';
@@ -188,410 +190,367 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get('userId') || userId;
     
-    // Параметры пагинации
-    const limit = Math.min(parseInt(searchParams.get('limit') || '24'), 50); // Максимум 50
+    const limit = Math.min(parseInt(searchParams.get('limit') || '24'), 50);
     const offset = Math.max(parseInt(searchParams.get('offset') || '0'), 0);
-    const singleLoad = searchParams.get('singleLoad') === 'true'; // Единовременная загрузка
+    const singleLoad = searchParams.get('singleLoad') === 'true';
 
-    // Получаем все фильмы и сериалы пользователя со статусами для анализа качества
-    const [watchedMoviesData, rewatchedMoviesData, droppedMoviesData] = await Promise.all([
-      // Просмотренные фильмы (без пересмотренных)
-      prisma.watchList.findMany({
-        where: {
-          userId: targetUserId,
-          statusId: MOVIE_STATUS_IDS.WATCHED,
-          mediaType: { in: ['movie', 'tv'] },
-        },
-        select: {
-          tmdbId: true,
-          mediaType: true,
-          userRating: true,
-        },
-      }),
-      // Пересмотренные фильмы
-      prisma.watchList.findMany({
-        where: {
-          userId: targetUserId,
-          statusId: MOVIE_STATUS_IDS.REWATCHED,
-          mediaType: { in: ['movie', 'tv'] },
-        },
-        select: {
-          tmdbId: true,
-          mediaType: true,
-          userRating: true,
-        },
-      }),
-      // Брошенные фильмы
-      prisma.watchList.findMany({
-        where: {
-          userId: targetUserId,
-          statusId: MOVIE_STATUS_IDS.DROPPED,
-          mediaType: { in: ['movie', 'tv'] },
-        },
-        select: {
-          tmdbId: true,
-          mediaType: true,
-          userRating: true,
-        },
-      }),
-    ]);
+    const cacheKey = `user:${targetUserId}:achiev_actors:${limit}:${offset}:${singleLoad}`;
 
-    if (watchedMoviesData.length === 0 && rewatchedMoviesData.length === 0) {
-      return NextResponse.json([]);
-    }
+    const fetchActors = async () => {
+      // Получаем все фильмы и сериалы пользователя со статусами для анализа качества
+      const [watchedMoviesData, rewatchedMoviesData, droppedMoviesData] = await Promise.all([
+        prisma.watchList.findMany({
+          where: {
+            userId: targetUserId,
+            statusId: MOVIE_STATUS_IDS.WATCHED,
+            mediaType: { in: ['movie', 'tv'] },
+          },
+          select: {
+            tmdbId: true,
+            mediaType: true,
+            userRating: true,
+          },
+        }),
+        prisma.watchList.findMany({
+          where: {
+            userId: targetUserId,
+            statusId: MOVIE_STATUS_IDS.REWATCHED,
+            mediaType: { in: ['movie', 'tv'] },
+          },
+          select: {
+            tmdbId: true,
+            mediaType: true,
+            userRating: true,
+          },
+        }),
+        prisma.watchList.findMany({
+          where: {
+            userId: targetUserId,
+            statusId: MOVIE_STATUS_IDS.DROPPED,
+            mediaType: { in: ['movie', 'tv'] },
+          },
+          select: {
+            tmdbId: true,
+            mediaType: true,
+            userRating: true,
+          },
+        }),
+      ]);
 
-    // Map для хранения актеров и их фильмов с оценками
-    const actorMap = new Map<number, {
-      name: string;
-      profile_path: string | null;
-      watchedIds: Set<number>;
-      rewatchedIds: Set<number>;
-      droppedIds: Set<number>;
-      ratings: number[];
-    }>();
+      if (watchedMoviesData.length === 0 && rewatchedMoviesData.length === 0) {
+        return { actors: [], hasMore: false, total: 0 };
+      }
 
-    // Оптимизированная параллельная загрузка данных об актерах
-    const BATCH_SIZE = 10;
-    for (let i = 0; i < watchedMoviesData.length; i += BATCH_SIZE) {
-      const batch = watchedMoviesData.slice(i, i + BATCH_SIZE);
-      
-      const results = await Promise.all(
-        batch.map(async (movie) => {
-          // Получаем детали для фильтрации мультфильмов и аниме
-          const mediaDetails = await fetchMediaDetails(movie.tmdbId, movie.mediaType as 'movie' | 'tv');
-          
-          // Пропускаем мультфильмы и аниме
-          if (mediaDetails && (isAnime(mediaDetails) || isCartoon(mediaDetails))) {
-            return { credits: null, rating: movie.userRating };
-          }
-          
-          const credits = await fetchMovieCredits(movie.tmdbId, movie.mediaType as 'movie' | 'tv');
-          return { credits, rating: movie.userRating };
-        })
-      );
+      const actorMap = new Map<number, {
+        name: string;
+        profile_path: string | null;
+        watchedIds: Set<number>;
+        rewatchedIds: Set<number>;
+        droppedIds: Set<number>;
+        ratings: number[];
+      }>();
 
-      for (const { credits, rating } of results) {
-        if (credits?.cast) {
-          // Берем только топ-5 актеров из фильма/сериала
-          const topActors = credits.cast.slice(0, 5);
-          
-          for (const actor of topActors) {
-            if (!actorMap.has(actor.id)) {
-              actorMap.set(actor.id, {
-                name: actor.name,
-                profile_path: actor.profile_path,
-                watchedIds: new Set(),
-                rewatchedIds: new Set(),
-                droppedIds: new Set(),
-                ratings: [],
-              });
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < watchedMoviesData.length; i += BATCH_SIZE) {
+        const batch = watchedMoviesData.slice(i, i + BATCH_SIZE);
+        
+        const results = await Promise.all(
+          batch.map(async (movie) => {
+            const mediaDetails = await fetchMediaDetails(movie.tmdbId, movie.mediaType as 'movie' | 'tv');
+            
+            if (mediaDetails && (isAnime(mediaDetails) || isCartoon(mediaDetails))) {
+              return { credits: null, rating: movie.userRating };
             }
             
-            actorMap.get(actor.id)!.watchedIds.add(credits.id);
-            if (rating !== null && rating !== undefined) {
-              actorMap.get(actor.id)!.ratings.push(rating);
+            const credits = await fetchMovieCredits(movie.tmdbId, movie.mediaType as 'movie' | 'tv');
+            return { credits, rating: movie.userRating };
+          })
+        );
+
+        for (const { credits, rating } of results) {
+          if (credits?.cast) {
+            const topActors = credits.cast.slice(0, 5);
+            
+            for (const actor of topActors) {
+              if (!actorMap.has(actor.id)) {
+                actorMap.set(actor.id, {
+                  name: actor.name,
+                  profile_path: actor.profile_path,
+                  watchedIds: new Set(),
+                  rewatchedIds: new Set(),
+                  droppedIds: new Set(),
+                  ratings: [],
+                });
+              }
+              
+              actorMap.get(actor.id)!.watchedIds.add(credits.id);
+              if (rating !== null && rating !== undefined) {
+                actorMap.get(actor.id)!.ratings.push(rating);
+              }
             }
           }
         }
+
+        if (i + BATCH_SIZE < watchedMoviesData.length) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
       }
 
-      // Уменьшенная пауза между батчами
-      if (i + BATCH_SIZE < watchedMoviesData.length) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
-    }
-
-    // Обрабатываем пересмотренные фильмы
-    for (let i = 0; i < rewatchedMoviesData.length; i += BATCH_SIZE) {
-      const batch = rewatchedMoviesData.slice(i, i + BATCH_SIZE);
-      
-      const results = await Promise.all(
-        batch.map(async (movie) => {
-          const rating = movie.userRating;
-          const credits = await fetchPersonCredits(movie.tmdbId);
-          
-          if (credits?.cast) {
-            const topActors = credits.cast.slice(0, 5);
+      for (let i = 0; i < rewatchedMoviesData.length; i += BATCH_SIZE) {
+        const batch = rewatchedMoviesData.slice(i, i + BATCH_SIZE);
+        
+        const results = await Promise.all(
+          batch.map(async (movie) => {
+            const rating = movie.userRating;
+            const credits = await fetchPersonCredits(movie.tmdbId);
             
-            for (const actor of topActors) {
-              if (actorMap.has(actor.id)) {
-                actorMap.get(actor.id)!.rewatchedIds.add(credits.id);
-                if (rating !== null && rating !== undefined) {
-                  actorMap.get(actor.id)!.ratings.push(rating);
+            if (credits?.cast) {
+              const topActors = credits.cast.slice(0, 5);
+              
+              for (const actor of topActors) {
+                if (actorMap.has(actor.id)) {
+                  actorMap.get(actor.id)!.rewatchedIds.add(credits.id);
+                  if (rating !== null && rating !== undefined) {
+                    actorMap.get(actor.id)!.ratings.push(rating);
+                  }
                 }
               }
             }
-          }
-          
-          return credits;
-        })
-      );
-
-      // Уменьшенная пауза между батчами
-      if (i + BATCH_SIZE < rewatchedMoviesData.length) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
-    }
-
-    // Обрабатываем брошенные фильмы
-    for (let i = 0; i < droppedMoviesData.length; i += BATCH_SIZE) {
-      const batch = droppedMoviesData.slice(i, i + BATCH_SIZE);
-      
-      const results = await Promise.all(
-        batch.map(async (movie) => {
-          const credits = await fetchPersonCredits(movie.tmdbId);
-          
-          if (credits?.cast) {
-            const topActors = credits.cast.slice(0, 5);
             
-            for (const actor of topActors) {
-              if (actorMap.has(actor.id)) {
-                actorMap.get(actor.id)!.droppedIds.add(credits.id);
-                // Брошенные фильмы не влияют на средний рейтинг (это негативный фактор)
-              }
-            }
-          }
-          
-          return credits;
-        })
-      );
+            return credits;
+          })
+        );
 
-      // Уменьшенная пауза между батчами
-      if (i + BATCH_SIZE < droppedMoviesData.length) {
-        await new Promise(resolve => setTimeout(resolve, 20));
+        if (i + BATCH_SIZE < rewatchedMoviesData.length) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
       }
-    }
 
-    // Берем всех актеров для сортировки
-    const allActors = Array.from(actorMap.entries())
-      .sort((a, b) => b[1].watchedIds.size - a[1].watchedIds.size);
-    
-    // Подготавливаем базовые данные без фильмографии для всех актеров
-    const baseActorsData = allActors.map(([actorId, actorData]) => ({
-      id: actorId,
-      name: actorData.name,
-      profile_path: actorData.profile_path,
-      watched_movies: actorData.watchedIds.size + actorData.rewatchedIds.size, // Считаем и просмотренные, и пересмотренные
-      rewatched_movies: actorData.rewatchedIds.size,
-      dropped_movies: actorData.droppedIds.size,
-      total_movies: 0, // Будет загружено позже
-      progress_percent: 0, // Будет пересчитано позже
-      average_rating: actorData.ratings.length > 0
-        ? Number((actorData.ratings.reduce((a, b) => a + b, 0) / actorData.ratings.length).toFixed(1))
-        : null,
-    }));
-
-    // Загружаем полную фильмографию для актеров
-    if (singleLoad) {
-      console.log(`Starting singleLoad for ${baseActorsData.length} actors with limit ${limit}`);
-      
-      // Оптимизация: обрабатываем только необходимое количество для баланса производительности
-      // Для профиля (limit=20) и страницы актеров (limit=50) этого достаточно для корректной сортировки
-      const maxActorsToProcess = Math.min(baseActorsData.length, limit);
-      const actorsToProcess = baseActorsData.slice(0, maxActorsToProcess);
-      
-      console.log(`Processing ${actorsToProcess.length} actors for singleLoad (will return top ${limit})`);
-      
-      // Единовременная загрузка - обрабатываем актеров пачками для оптимизации
-      const batchSize = 10; // Обрабатываем по 10 актеров за раз
-      const achievementsPromises = [];
-      
-      for (let i = 0; i < actorsToProcess.length; i += batchSize) {
-        const batch = actorsToProcess.slice(i, i + batchSize);
-        console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(actorsToProcess.length / batchSize)}`);
+      for (let i = 0; i < droppedMoviesData.length; i += BATCH_SIZE) {
+        const batch = droppedMoviesData.slice(i, i + BATCH_SIZE);
         
-        const batchPromises = batch.map(async (actor) => {
-          try {
-            console.log(`Processing actor ${actor.id}: ${actor.name}`);
-            const credits = await fetchPersonCredits(actor.id);
+        const results = await Promise.all(
+          batch.map(async (movie) => {
+            const credits = await fetchPersonCredits(movie.tmdbId);
             
-            // Фильтруем мультфильмы и аниме из фильмографии актера (с батчингом запросов)
-            let filteredCast = credits?.cast || [];
-            console.log(`Actor ${actor.name} has ${filteredCast.length} total movies before filtering`);
-            
-            if (filteredCast.length > 0) {
-              // Ограничиваем фильмографию для ускорения обработки
-              const moviesToProcess = filteredCast.slice(0, 100);
+            if (credits?.cast) {
+              const topActors = credits.cast.slice(0, 5);
               
-              // Обрабатываем фильмы батчами по 5 штук для контроля нагрузки
-              const FETCH_BATCH_SIZE = 5;
-              const filteredCastDetails = [];
-              
-              for (let j = 0; j < moviesToProcess.length; j += FETCH_BATCH_SIZE) {
-                const movieBatch = moviesToProcess.slice(j, j + FETCH_BATCH_SIZE);
-                
-                const batchResults = await Promise.all(
-                  movieBatch.map(async (movie) => {
-                    // Определяем тип медиа: если есть release_date - это фильм, иначе сериал
-                    const mediaType = movie.release_date ? 'movie' : 'tv';
-                    const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
-                    return {
-                      movie,
-                      isAnime: mediaDetails ? isAnime(mediaDetails) : false,
-                      isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
-                    };
-                  })
-                );
-                
-                filteredCastDetails.push(...batchResults);
-                
-                // Небольшая добавка между батчами для предотвращения rate limiting
-                if (j + FETCH_BATCH_SIZE < moviesToProcess.length) {
-                  await new Promise(resolve => setTimeout(resolve, 10));
+              for (const actor of topActors) {
+                if (actorMap.has(actor.id)) {
+                  actorMap.get(actor.id)!.droppedIds.add(credits.id);
                 }
               }
-              
-              filteredCast = filteredCastDetails
-                .filter(({ isAnime, isCartoon }) => !isAnime && !isCartoon)
-                .map(({ movie }) => movie);
-              
-              console.log(`Actor ${actor.name} has ${filteredCast.length} movies after filtering (removed anime/cartoon)`);
             }
             
-            const totalMovies = filteredCast.length;
-            const watchedMovies = actor.watched_movies; // Теперь включает и пересмотренные!
-            
-            const progressPercent = totalMovies > 0 
-              ? Math.round((watchedMovies / totalMovies) * 100)
-              : 0;
+            return credits;
+          })
+        );
 
-            console.log(`Actor ${actor.name}: watched=${watchedMovies}, total=${totalMovies}, progress=${progressPercent}%`);
-
-            return {
-              ...actor,
-              total_movies: totalMovies,
-              progress_percent: progressPercent,
-            };
-          } catch (error) {
-            console.error(`Error processing actor ${actor.id} (${actor.name}):`, error);
-            // Возвращаем базовые данные в случае ошибки, но сохраняем watched_movies
-            return {
-              ...actor,
-              total_movies: actor.watched_movies, // Минимум - количество просмотренных
-              progress_percent: actor.watched_movies > 0 ? 100 : 0, // Если есть просмотренные, считаем что 100%
-            };
-          }
-        });
-        
-        achievementsPromises.push(Promise.all(batchPromises));
+        if (i + BATCH_SIZE < droppedMoviesData.length) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
       }
 
-      const allActorsWithFullData = (await Promise.all(achievementsPromises)).flat();
+      const allActors = Array.from(actorMap.entries())
+        .sort((a, b) => b[1].watchedIds.size - a[1].watchedIds.size);
       
-      // Рассчитываем улучшенную оценку для каждого актера
-      const actorsWithScores = allActorsWithFullData.map(actor => ({
-        ...actor,
-        actor_score: calculateActorScore(actor)
+      const baseActorsData = allActors.map(([actorId, actorData]) => ({
+        id: actorId,
+        name: actorData.name,
+        profile_path: actorData.profile_path,
+        watched_movies: actorData.watchedIds.size + actorData.rewatchedIds.size,
+        rewatched_movies: actorData.rewatchedIds.size,
+        dropped_movies: actorData.droppedIds.size,
+        total_movies: 0,
+        progress_percent: 0,
+        average_rating: actorData.ratings.length > 0
+          ? Number((actorData.ratings.reduce((a, b) => a + b, 0) / actorData.ratings.length).toFixed(1))
+          : null,
       }));
-      
-      // Сортируем по улучшенной оценке (по убыванию)
-      actorsWithScores.sort((a, b) => b.actor_score - a.actor_score);
 
-      // Возвращаем только запрошенное количество (limit) но из правильно отсортированного списка
-      const result = actorsWithScores.slice(0, limit);
-
-      console.log(`Successfully processed ${allActorsWithFullData.length} actors, returning top ${result.length}`);
-
-      return NextResponse.json({
-        actors: result,
-        hasMore: false, // При единовременной загрузке нет пагинации
-        total: allActorsWithFullData.length,
-        singleLoad: true,
-      });
-    }
-
-    // Загружаем полную фильмографию для актеров в пределах пагинации + небольшой запас для корректной сортировки
-    // Берем actors с запасом, чтобы сортировка была точной
-    const actorsForProcessing = baseActorsData.slice(0, Math.min(offset + limit + 50, baseActorsData.length));
-    
-    const achievementsPromises = actorsForProcessing.map(async (actor) => {
-      const credits = await fetchPersonCredits(actor.id);
-      
-      // Фильтруем мультфильмы и аниме из фильмографии актера (с батчингом запросов)
-      let filteredCast = credits?.cast || [];
-      if (filteredCast.length > 0) {
-        // Ограничиваем фильмографию для ускорения обработки
-        const moviesToProcess = filteredCast.slice(0, 100);
+      if (singleLoad) {
+        const maxActorsToProcess = Math.min(baseActorsData.length, limit);
+        const actorsToProcess = baseActorsData.slice(0, maxActorsToProcess);
         
-        // Обрабатываем фильмы батчами по 5 штук для контроля нагрузки
-        const FETCH_BATCH_SIZE = 5;
-        const filteredCastDetails = [];
+        const batchSize = 10;
+        const achievementsPromises = [];
         
-        for (let j = 0; j < moviesToProcess.length; j += FETCH_BATCH_SIZE) {
-          const movieBatch = moviesToProcess.slice(j, j + FETCH_BATCH_SIZE);
+        for (let i = 0; i < actorsToProcess.length; i += batchSize) {
+          const batch = actorsToProcess.slice(i, i + batchSize);
           
-          const batchResults = await Promise.all(
-            movieBatch.map(async (movie) => {
-              // Определяем тип медиа: если есть release_date - это фильм, иначе сериал
-              const mediaType = movie.release_date ? 'movie' : 'tv';
-              const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
+          const batchPromises = batch.map(async (actor) => {
+            try {
+              const credits = await fetchPersonCredits(actor.id);
+              
+              let filteredCast = credits?.cast || [];
+              
+              if (filteredCast.length > 0) {
+                const moviesToProcess = filteredCast.slice(0, 100);
+                
+                const FETCH_BATCH_SIZE = 5;
+                const filteredCastDetails = [];
+                
+                for (let j = 0; j < moviesToProcess.length; j += FETCH_BATCH_SIZE) {
+                  const movieBatch = moviesToProcess.slice(j, j + FETCH_BATCH_SIZE);
+                  
+                  const batchResults = await Promise.all(
+                    movieBatch.map(async (movie) => {
+                      const mediaType = movie.release_date ? 'movie' : 'tv';
+                      const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
+                      return {
+                        movie,
+                        isAnime: mediaDetails ? isAnime(mediaDetails) : false,
+                        isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
+                      };
+                    })
+                  );
+                  
+                  filteredCastDetails.push(...batchResults);
+                  
+                  if (j + FETCH_BATCH_SIZE < moviesToProcess.length) {
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                  }
+                }
+                
+                filteredCast = filteredCastDetails
+                  .filter(({ isAnime, isCartoon }) => !isAnime && !isCartoon)
+                  .map(({ movie }) => movie);
+              }
+              
+              const totalMovies = filteredCast.length;
+              const watchedMovies = actor.watched_movies;
+              
+              const progressPercent = totalMovies > 0 
+                ? Math.round((watchedMovies / totalMovies) * 100)
+                : 0;
+
               return {
-                movie,
-                isAnime: mediaDetails ? isAnime(mediaDetails) : false,
-                isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
+                ...actor,
+                total_movies: totalMovies,
+                progress_percent: progressPercent,
               };
-            })
-          );
+            } catch (error) {
+              return {
+                ...actor,
+                total_movies: actor.watched_movies,
+                progress_percent: actor.watched_movies > 0 ? 100 : 0,
+              };
+            }
+          });
           
-          filteredCastDetails.push(...batchResults);
+          achievementsPromises.push(Promise.all(batchPromises));
+        }
+
+        const allActorsWithFullData = (await Promise.all(achievementsPromises)).flat();
+        
+        const actorsWithScores = allActorsWithFullData.map(actor => ({
+          ...actor,
+          actor_score: calculateActorScore(actor)
+        }));
+        
+        actorsWithScores.sort((a, b) => b.actor_score - a.actor_score);
+
+        const result = actorsWithScores.slice(0, limit);
+
+        return {
+          actors: result,
+          hasMore: false,
+          total: allActorsWithFullData.length,
+          singleLoad: true,
+        };
+      }
+
+      const actorsForProcessing = baseActorsData.slice(0, Math.min(offset + limit + 50, baseActorsData.length));
+      
+      const achievementsPromises = actorsForProcessing.map(async (actor) => {
+        const credits = await fetchPersonCredits(actor.id);
+        
+        let filteredCast = credits?.cast || [];
+        if (filteredCast.length > 0) {
+          const moviesToProcess = filteredCast.slice(0, 100);
           
-          // Небольшая добавка между батчами для предотвращения rate limiting
-          if (j + FETCH_BATCH_SIZE < moviesToProcess.length) {
-            await new Promise(resolve => setTimeout(resolve, 10));
+          const FETCH_BATCH_SIZE = 5;
+          const filteredCastDetails = [];
+          
+          for (let j = 0; j < moviesToProcess.length; j += FETCH_BATCH_SIZE) {
+            const movieBatch = moviesToProcess.slice(j, j + FETCH_BATCH_SIZE);
+            
+            const batchResults = await Promise.all(
+              movieBatch.map(async (movie) => {
+                const mediaType = movie.release_date ? 'movie' : 'tv';
+                const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
+                return {
+                  movie,
+                  isAnime: mediaDetails ? isAnime(mediaDetails) : false,
+                  isCartoon: mediaDetails ? isCartoon(mediaDetails) : false,
+                };
+              })
+            );
+            
+            filteredCastDetails.push(...batchResults);
+            
+            if (j + FETCH_BATCH_SIZE < moviesToProcess.length) {
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
           }
+          
+          filteredCast = filteredCastDetails
+            .filter(({ isAnime, isCartoon }) => !isAnime && !isCartoon)
+            .map(({ movie }) => movie);
         }
         
-        filteredCast = filteredCastDetails
-          .filter(({ isAnime, isCartoon }) => !isAnime && !isCartoon)
-          .map(({ movie }) => movie);
-      }
+        const totalMovies = filteredCast.length;
+        const watchedMovies = actor.watched_movies;
+        
+        const progressPercent = totalMovies > 0 
+          ? Math.round((watchedMovies / totalMovies) * 100)
+          : 0;
+
+        return {
+          ...actor,
+          total_movies: totalMovies,
+          progress_percent: progressPercent,
+        };
+      });
+
+      const actorsWithFullData = await Promise.all(achievementsPromises);
       
-      const totalMovies = filteredCast.length;
-      const watchedMovies = actor.watched_movies;
-      
-      const progressPercent = totalMovies > 0 
-        ? Math.round((watchedMovies / totalMovies) * 100)
-        : 0;
+      actorsWithFullData.sort((a, b) => {
+        if (a.average_rating !== null && b.average_rating !== null) {
+          if (b.average_rating !== a.average_rating) {
+            return b.average_rating - a.average_rating;
+          }
+        } else if (a.average_rating === null && b.average_rating !== null) {
+          return 1;
+        } else if (a.average_rating !== null && b.average_rating === null) {
+          return -1;
+        }
+        
+        if (b.progress_percent !== a.progress_percent) {
+          return b.progress_percent - a.progress_percent;
+        }
+        
+        return a.name.localeCompare(b.name, 'ru');
+      });
+
+      const result = actorsWithFullData.slice(offset, Math.min(offset + limit, actorsWithFullData.length));
 
       return {
-        ...actor,
-        total_movies: totalMovies,
-        progress_percent: progressPercent,
+        actors: result,
+        hasMore: offset + limit < baseActorsData.length,
+        total: baseActorsData.length,
       };
-    });
+    };
 
-    const actorsWithFullData = await Promise.all(achievementsPromises);
-    
-    // Сортируем обработанных актеров по полным данным
-    actorsWithFullData.sort((a, b) => {
-      if (a.average_rating !== null && b.average_rating !== null) {
-        if (b.average_rating !== a.average_rating) {
-          return b.average_rating - a.average_rating;
-        }
-      } else if (a.average_rating === null && b.average_rating !== null) {
-        return 1;
-      } else if (a.average_rating !== null && b.average_rating === null) {
-        return -1;
-      }
-      
-      if (b.progress_percent !== a.progress_percent) {
-        return b.progress_percent - a.progress_percent;
-      }
-      
-      return a.name.localeCompare(b.name, 'ru');
-    });
-
-    // Применяем пагинацию к отсортированным данным
-    const result = actorsWithFullData.slice(offset, Math.min(offset + limit, actorsWithFullData.length));
-
-    return NextResponse.json({
-      actors: result,
-      hasMore: offset + limit < baseActorsData.length, // Используем общее количество для hasMore
-      total: baseActorsData.length, // Используем общее количество для total
-    });
+    const result = await withCache(cacheKey, fetchActors, 3600);
+    return NextResponse.json(result);
 
   } catch (error) {
-    console.error('Ошибка при получении актеров:', error);
+    logger.error('Ошибка при получении актеров', { 
+      error: error instanceof Error ? error.message : String(error),
+      context: 'AchievActorsAPI'
+    });
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 }

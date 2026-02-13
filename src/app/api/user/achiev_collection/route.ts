@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
+import { withCache } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = 'https://api.themoviedb.org/3';
@@ -89,189 +91,176 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get('userId') || userId;
     
-    // Параметры пагинации
-    const limit = Math.min(parseInt(searchParams.get('limit') || '24'), 50); // Максимум 50
+    const limit = Math.min(parseInt(searchParams.get('limit') || '24'), 50);
     const offset = Math.max(parseInt(searchParams.get('offset') || '0'), 0);
-    const singleLoad = searchParams.get('singleLoad') === 'true'; // Единовременная загрузка
+    const singleLoad = searchParams.get('singleLoad') === 'true';
 
-    // Получаем все фильмы пользователя со статусом "Просмотрено"
-    const watchedMovies = await prisma.watchList.findMany({
-      where: {
-        userId: targetUserId,
-        statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
-      },
-      select: {
-        tmdbId: true,
-        mediaType: true,
-        userRating: true,
-      },
-    });
+    const cacheKey = `user:${targetUserId}:achiev_collection:${limit}:${offset}:${singleLoad}`;
 
-    if (watchedMovies.length === 0) {
-      return NextResponse.json([]);
-    }
-
-    // Map для хранения коллекций и их фильмов
-    const collectionMap = new Map<number, { 
-      name: string; 
-      poster_path: string | null; 
-      watchedIds: Set<number>;
-      ratings: number[];
-    }>();
-
-    // Оптимизированная параллельная загрузка данных о коллекциях
-    const BATCH_SIZE = 10;
-    for (let i = 0; i < watchedMovies.length; i += BATCH_SIZE) {
-      const batch = watchedMovies.slice(i, i + BATCH_SIZE);
-      
-      const results = await Promise.all(
-        batch.map(async (movie) => {
-          if (movie.mediaType !== 'movie') return null;
-          const details = await fetchMovieWithCollection(movie.tmdbId);
-          return { details, rating: movie.userRating };
-        })
-      );
-
-      for (const result of results) {
-        if (!result) continue;
-        const { details, rating } = result;
-        if (details?.belongs_to_collection) {
-          const collection = details.belongs_to_collection;
-          
-          if (!collectionMap.has(collection.id)) {
-            collectionMap.set(collection.id, {
-              name: collection.name,
-              poster_path: collection.poster_path,
-              watchedIds: new Set(),
-              ratings: [],
-            });
-          }
-          
-          collectionMap.get(collection.id)!.watchedIds.add(details.id);
-          
-          if (rating !== null && rating !== undefined) {
-            collectionMap.get(collection.id)!.ratings.push(rating);
-          }
-        }
-      }
-
-      // Уменьшенная пауза между батчами
-      if (i + BATCH_SIZE < watchedMovies.length) {
-        await new Promise(resolve => setTimeout(resolve, 15));
-      }
-    }
-
-    // Параллельная загрузка данных о коллекциях
-    const collectionEntries = Array.from(collectionMap.entries());
-    const achievementsPromises = collectionEntries.map(async ([collectionId, collectionData]) => {
-      const collectionMovies = await fetchCollectionMovies(collectionId);
-      const totalMovies = collectionMovies.length;
-      const watchedInCollection = collectionData.watchedIds.size;
-
-      const averageRating = collectionData.ratings.length > 0
-        ? parseFloat((collectionData.ratings.reduce((sum, r) => sum + r, 0) / collectionData.ratings.length).toFixed(1))
-        : null;
-
-      return {
-        id: collectionId,
-        name: collectionData.name,
-        poster_path: collectionData.poster_path,
-        total_movies: totalMovies,
-        added_movies: watchedInCollection,
-        watched_movies: watchedInCollection,
-        progress_percent: totalMovies > 0 
-          ? Math.round((watchedInCollection / totalMovies) * 100)
-          : 0,
-        average_rating: averageRating,
-      };
-    });
-
-    // Ждем завершения всех запросов параллельно
-    const achievements = await Promise.all(achievementsPromises);
-
-    // Применяем умную формулу рейтинга коллекции - качество решает!
-    const achievementsWithScore = achievements.map((collection) => {
-      const calculateCollectionScore = (collection: any) => {
-        const avgRating = collection.average_rating || 0;
-        const watchedMovies = collection.watched_movies || 0;
-        const progress = collection.progress_percent || 0;
-        
-        // Базовый рейтинг качества (0-10) - главный фактор
-        let qualityScore = avgRating;
-        
-        // Минимальный бонус за объем (только для разрешения ничьих)
-        // 1 фильм = +0.03, 5 фильмов = +0.08, 10 фильмов = +0.1, 20 фильмов = +0.13
-        const volumeBonus = Math.log10(Math.max(1, watchedMovies)) * 0.05;
-        
-        // Маленький бонус за прогресс (легкая мотивация)
-        // 0% = 0, 50% = +0.07, 100% = +0.15
-        const progressBonus = (progress / 100) * 0.15;
-        
-        // Итоговый рейтинг - качество главное!
-        let finalScore = qualityScore + volumeBonus + progressBonus;
-        
-        // Ограничиваем диапазон 0-10
-        return Math.max(0, Math.min(10, finalScore));
-      };
-      
-      return {
-        ...collection,
-        calculated_score: calculateCollectionScore(collection)
-      };
-    });
-
-    // Сортировка результатов по умному рейтингу
-    achievementsWithScore.sort((a, b) => {
-      // Сначала по умному рейтингу (desc) - качество решает!
-      if (b.calculated_score !== a.calculated_score) {
-        return b.calculated_score - a.calculated_score;
-      }
-      
-      // Если умный рейтинг равен, сортируем по средней оценке (desc)
-      if (a.average_rating !== null && b.average_rating !== null) {
-        if (b.average_rating !== a.average_rating) {
-          return b.average_rating - a.average_rating;
-        }
-      } else if (a.average_rating === null && b.average_rating !== null) {
-        return 1;
-      } else if (a.average_rating !== null && b.average_rating === null) {
-        return -1;
-      }
-      
-      // Если и средние оценки равны, сортируем по прогрессу (desc)
-      if (b.progress_percent !== a.progress_percent) {
-        return b.progress_percent - a.progress_percent;
-      }
-      
-      // Если и прогресс одинаковый, сортируем по алфавиту (asc)
-      return a.name.localeCompare(b.name, 'ru');
-    });
-
-    // Единовременная загрузка - возвращаем все коллекции сразу
-    if (singleLoad) {
-      console.log(`Starting singleLoad for collections, returning top ${limit}`);
-      
-      const result = achievementsWithScore.slice(0, limit);
-      
-      return NextResponse.json({
-        collections: result,
-        total: result.length,
-        hasMore: false,
-        singleLoad: true
+    const fetchCollections = async () => {
+      // Получаем все фильмы пользователя со статусом "Просмотрено"
+      const watchedMovies = await prisma.watchList.findMany({
+        where: {
+          userId: targetUserId,
+          statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
+        },
+        select: {
+          tmdbId: true,
+          mediaType: true,
+          userRating: true,
+        },
       });
-    }
 
-    // Применяем пагинацию к отсортированным данным
-    const paginatedAchievements = achievementsWithScore.slice(offset, offset + limit);
+      if (watchedMovies.length === 0) {
+        return { collections: [], hasMore: false, total: 0 };
+      }
 
-    return NextResponse.json({
-      collections: paginatedAchievements,
-      hasMore: offset + limit < achievementsWithScore.length,
-      total: achievementsWithScore.length,
-    });
+      // Map для хранения коллекций и их фильмов
+      const collectionMap = new Map<number, { 
+        name: string; 
+        poster_path: string | null; 
+        watchedIds: Set<number>;
+        ratings: number[];
+      }>();
+
+      // Оптимизированная параллельная загрузка данных о коллекциях
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < watchedMovies.length; i += BATCH_SIZE) {
+        const batch = watchedMovies.slice(i, i + BATCH_SIZE);
+        
+        const results = await Promise.all(
+          batch.map(async (movie) => {
+            if (movie.mediaType !== 'movie') return null;
+            const details = await fetchMovieWithCollection(movie.tmdbId);
+            return { details, rating: movie.userRating };
+          })
+        );
+
+        for (const result of results) {
+          if (!result) continue;
+          const { details, rating } = result;
+          if (details?.belongs_to_collection) {
+            const collection = details.belongs_to_collection;
+            
+            if (!collectionMap.has(collection.id)) {
+              collectionMap.set(collection.id, {
+                name: collection.name,
+                poster_path: collection.poster_path,
+                watchedIds: new Set(),
+                ratings: [],
+              });
+            }
+            
+            collectionMap.get(collection.id)!.watchedIds.add(details.id);
+            
+            if (rating !== null && rating !== undefined) {
+              collectionMap.get(collection.id)!.ratings.push(rating);
+            }
+          }
+        }
+
+        if (i + BATCH_SIZE < watchedMovies.length) {
+          await new Promise(resolve => setTimeout(resolve, 15));
+        }
+      }
+
+      // Параллельная загрузка данных о коллекциях
+      const collectionEntries = Array.from(collectionMap.entries());
+      const achievementsPromises = collectionEntries.map(async ([collectionId, collectionData]) => {
+        const collectionMovies = await fetchCollectionMovies(collectionId);
+        const totalMovies = collectionMovies.length;
+        const watchedInCollection = collectionData.watchedIds.size;
+
+        const averageRating = collectionData.ratings.length > 0
+          ? parseFloat((collectionData.ratings.reduce((sum, r) => sum + r, 0) / collectionData.ratings.length).toFixed(1))
+          : null;
+
+        return {
+          id: collectionId,
+          name: collectionData.name,
+          poster_path: collectionData.poster_path,
+          total_movies: totalMovies,
+          added_movies: watchedInCollection,
+          watched_movies: watchedInCollection,
+          progress_percent: totalMovies > 0 
+            ? Math.round((watchedInCollection / totalMovies) * 100)
+            : 0,
+          average_rating: averageRating,
+        };
+      });
+
+      const achievements = await Promise.all(achievementsPromises);
+
+      const achievementsWithScore = achievements.map((collection) => {
+        const calculateCollectionScore = (collection: any) => {
+          const avgRating = collection.average_rating || 0;
+          const watchedMovies = collection.watched_movies || 0;
+          const progress = collection.progress_percent || 0;
+          
+          let qualityScore = avgRating;
+          const volumeBonus = Math.log10(Math.max(1, watchedMovies)) * 0.05;
+          const progressBonus = (progress / 100) * 0.15;
+          
+          let finalScore = qualityScore + volumeBonus + progressBonus;
+          
+          return Math.max(0, Math.min(10, finalScore));
+        };
+        
+        return {
+          ...collection,
+          calculated_score: calculateCollectionScore(collection)
+        };
+      });
+
+      achievementsWithScore.sort((a, b) => {
+        if (b.calculated_score !== a.calculated_score) {
+          return b.calculated_score - a.calculated_score;
+        }
+        
+        if (a.average_rating !== null && b.average_rating !== null) {
+          if (b.average_rating !== a.average_rating) {
+            return b.average_rating - a.average_rating;
+          }
+        } else if (a.average_rating === null && b.average_rating !== null) {
+          return 1;
+        } else if (a.average_rating !== null && b.average_rating === null) {
+          return -1;
+        }
+        
+        if (b.progress_percent !== a.progress_percent) {
+          return b.progress_percent - a.progress_percent;
+        }
+        
+        return a.name.localeCompare(b.name, 'ru');
+      });
+
+      if (singleLoad) {
+        const result = achievementsWithScore.slice(0, limit);
+        return {
+          collections: result,
+          total: result.length,
+          hasMore: false,
+          singleLoad: true
+        };
+      }
+
+      const paginatedAchievements = achievementsWithScore.slice(offset, offset + limit);
+
+      return {
+        collections: paginatedAchievements,
+        hasMore: offset + limit < achievementsWithScore.length,
+        total: achievementsWithScore.length,
+      };
+    };
+
+    const result = await withCache(cacheKey, fetchCollections, 3600);
+    return NextResponse.json(result);
 
   } catch (error) {
-    console.error('Ошибка при получении достижений:', error);
+    logger.error('Ошибка при получении достижений коллекций', { 
+      error: error instanceof Error ? error.message : String(error),
+      context: 'AchievCollectionAPI'
+    });
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 }

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/middleware/rateLimit";
 import { calculateWeightedRating } from "@/lib/calculateWeightedRating";
+import { invalidateUserCache } from "@/lib/redis";
 
 // Маппинг: Код клиента -> Название в БД
 const STATUS_TO_DB: Record<string, string> = {
@@ -424,6 +425,7 @@ export async function POST(req: Request) {
       });
     }
 
+    await invalidateUserCache(session.user.id);
     return NextResponse.json({ success: true, record });
   } catch (error) {
     logger.error('WatchList POST error', { 
@@ -464,6 +466,7 @@ export async function DELETE(req: Request) {
       },
     });
 
+    await invalidateUserCache(session.user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
     logger.error('WatchList DELETE error', { 

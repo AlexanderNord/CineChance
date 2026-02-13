@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
+import { withCache } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,76 +20,76 @@ export async function GET(request: NextRequest) {
     
     const limit = limitParam ? parseInt(limitParam, 10) : 10;
     
-    // Определяем фильтр по статусам
-    let statusFilter = {};
-    if (statusesParam) {
-      const statusList = statusesParam.split(',').map(s => s.trim().toLowerCase());
-      
-      if (statusList.includes('watched') || statusList.includes('rewatched')) {
-        statusFilter = {
-          statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] }
-        };
+    const cacheKey = `user:${userId}:tag_usage:${limit}:${statusesParam || 'all'}`;
+
+    const fetchTags = async () => {
+      let statusFilter = {};
+      if (statusesParam) {
+        const statusList = statusesParam.split(',').map(s => s.trim().toLowerCase());
+        
+        if (statusList.includes('watched') || statusList.includes('rewatched')) {
+          statusFilter = {
+            statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] }
+          };
+        }
       }
-    }
 
-    // Получаем теги пользователя с подсчётом реального использования
-    const tags = await prisma.tag.findMany({
-      where: {
-        userId,
-      },
-      orderBy: {
-        usageCount: 'desc'
-      },
-      take: limit,
-    });
-
-    // Получаем реальное количество использований для каждого тега (с применением фильтра по статусам если нужно)
-    const tagIds = tags.map(t => t.id);
-    
-    let tagUsageCounts: Record<string, number> = {};
-    
-    if (tagIds.length > 0) {
-      const watchListsWithTags = await prisma.watchList.findMany({
+      const tags = await prisma.tag.findMany({
         where: {
           userId,
-          tags: {
-            some: {
-              id: { in: tagIds }
-            }
-          },
-          ...statusFilter
         },
-        select: {
-          tags: true
-        }
+        orderBy: {
+          usageCount: 'desc'
+        },
+        take: limit,
       });
 
-      // Подсчитываем использования
-      for (const item of watchListsWithTags) {
-        for (const tag of item.tags) {
-          tagUsageCounts[tag.id] = (tagUsageCounts[tag.id] || 0) + 1;
+      const tagIds = tags.map(t => t.id);
+      
+      let tagUsageCounts: Record<string, number> = {};
+      
+      if (tagIds.length > 0) {
+        const watchListsWithTags = await prisma.watchList.findMany({
+          where: {
+            userId,
+            tags: {
+              some: {
+                id: { in: tagIds }
+              }
+            },
+            ...statusFilter
+          },
+          select: {
+            tags: true
+          }
+        });
+
+        for (const item of watchListsWithTags) {
+          for (const tag of item.tags) {
+            tagUsageCounts[tag.id] = (tagUsageCounts[tag.id] || 0) + 1;
+          }
         }
       }
-    }
 
-    // Форматируем результат
-    const formattedTags = tags
-      .map(tag => ({
-        id: tag.id,
-        name: tag.name,
-        count: tagUsageCounts[tag.id] || 0,
-      }))
-      .filter(tag => tag.count > 0) // Только теги с использованием
-      .sort((a, b) => b.count - a.count); // Сортируем по реальному количеству
+      const formattedTags = tags
+        .map(tag => ({
+          id: tag.id,
+          name: tag.name,
+          count: tagUsageCounts[tag.id] || 0,
+        }))
+        .filter(tag => tag.count > 0)
+        .sort((a, b) => b.count - a.count);
 
-    const response = NextResponse.json({ tags: formattedTags });
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    
-    return response;
+      return { tags: formattedTags };
+    };
+
+    const result = await withCache(cacheKey, fetchTags, 1800);
+    return NextResponse.json(result);
   } catch (error) {
-    console.error('Error fetching tag usage:', error);
+    logger.error('Error fetching tag usage', { 
+      error: error instanceof Error ? error.message : String(error),
+      context: 'TagUsageAPI'
+    });
     return NextResponse.json(
       { error: 'Failed to fetch tag usage' },
       { status: 500 }

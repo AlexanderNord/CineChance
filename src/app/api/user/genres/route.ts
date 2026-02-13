@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
+import { withCache } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 // Genre ID to name mapping (TMDb + Anime genres)
 const GENRE_MAP: Record<number, string> = {
@@ -67,78 +69,76 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const searchParams = request.nextUrl.searchParams;
     const statusesParam = searchParams.get('statuses');
     const limitParam = searchParams.get('limit');
     
-    // Определяем фильтр по статусам
-    let whereClause: any = { userId: session.user.id };
-    
-    if (statusesParam) {
-      const statusList = statusesParam.split(',').map(s => s.trim().toLowerCase());
-      
-      if (statusList.includes('watched') || statusList.includes('rewatched')) {
-        whereClause.statusId = { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] };
-      }
-    }
-
-    // Ограничиваем количество записей для анализа (по умолчанию 50)
     const limit = limitParam ? parseInt(limitParam, 10) : 50;
 
-    // Fetch movie entries from user's watch lists
-    const watchListRecords = await prisma.watchList.findMany({
-      where: whereClause,
-      select: { tmdbId: true, mediaType: true },
-      take: limit,
-    });
+    const cacheKey = `user:${userId}:genres:${limit}:${statusesParam || 'all'}`;
 
-    if (watchListRecords.length === 0) {
-      return NextResponse.json({ genres: [] });
-    }
-
-    // Load TMDB details for records in parallel batches (обрабатываем по 3 одновременно)
-    const genreCounts = new Map<number, number>();
-    const genreNames = new Map<number, string>();
-    
-    const BATCH_SIZE = 3; // Обрабатываем по 3 фильма одновременно
-
-    // Обрабатываем записи батчами
-    for (let i = 0; i < watchListRecords.length; i += BATCH_SIZE) {
-      const batch = watchListRecords.slice(i, i + BATCH_SIZE);
+    const fetchGenres = async () => {
+      let whereClause: any = { userId };
       
-      // Выполняем все запросы в батче параллельно
-      const batchResults = await Promise.all(
-        batch.map(record => fetchMediaDetails(record.tmdbId, record.mediaType as 'movie' | 'tv'))
-      );
+      if (statusesParam) {
+        const statusList = statusesParam.split(',').map(s => s.trim().toLowerCase());
+        
+        if (statusList.includes('watched') || statusList.includes('rewatched')) {
+          whereClause.statusId = { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] };
+        }
+      }
+
+      const watchListRecords = await prisma.watchList.findMany({
+        where: whereClause,
+        select: { tmdbId: true, mediaType: true },
+        take: limit,
+      });
+
+      if (watchListRecords.length === 0) {
+        return { genres: [] };
+      }
+
+      const genreCounts = new Map<number, number>();
+      const genreNames = new Map<number, string>();
       
-      // Обрабатываем результаты
-      for (const tmdbData of batchResults) {
-        if (tmdbData?.genres) {
-          for (const genre of tmdbData.genres) {
-            genreCounts.set(genre.id, (genreCounts.get(genre.id) || 0) + 1);
-            genreNames.set(genre.id, genre.name);
+      const BATCH_SIZE = 3;
+
+      for (let i = 0; i < watchListRecords.length; i += BATCH_SIZE) {
+        const batch = watchListRecords.slice(i, i + BATCH_SIZE);
+        
+        const batchResults = await Promise.all(
+          batch.map(record => fetchMediaDetails(record.tmdbId, record.mediaType as 'movie' | 'tv'))
+        );
+        
+        for (const tmdbData of batchResults) {
+          if (tmdbData?.genres) {
+            for (const genre of tmdbData.genres) {
+              genreCounts.set(genre.id, (genreCounts.get(genre.id) || 0) + 1);
+              genreNames.set(genre.id, genre.name);
+            }
           }
         }
       }
-    }
 
-    // Convert to array with names and counts
-    const genres = Array.from(genreCounts.entries())
-      .map(([id, count]) => ({
-        id,
-        name: genreNames.get(id) || GENRE_MAP[id] || `Genre ${id}`,
-        count,
-      }))
-      .sort((a, b) => b.count - a.count); // Сортируем по количеству (desc)
+      const genres = Array.from(genreCounts.entries())
+        .map(([id, count]) => ({
+          id,
+          name: genreNames.get(id) || GENRE_MAP[id] || `Genre ${id}`,
+          count,
+        }))
+        .sort((a, b) => b.count - a.count);
 
-    const response = NextResponse.json({ genres });
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    
-    return response;
+      return { genres };
+    };
+
+    const result = await withCache(cacheKey, fetchGenres, 1800);
+    return NextResponse.json(result);
   } catch (error) {
-    console.error('Error fetching user genres:', error);
+    logger.error('Error fetching user genres', { 
+      error: error instanceof Error ? error.message : String(error),
+      context: 'GenresAPI'
+    });
     return NextResponse.json(
       { error: 'Failed to fetch genres' },
       { status: 500 }
