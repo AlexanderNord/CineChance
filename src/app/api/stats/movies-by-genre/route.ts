@@ -92,17 +92,26 @@ export async function GET(request: NextRequest) {
     };
 
     // Если есть теги для фильтрации, добавляем их в where clause
+    // Теги хранятся в поле tags как связь many-to-many
+    let tagsFilter = undefined;
     if (tagsArray.length > 0) {
-      whereClause.tags = {
+      tagsFilter = {
         some: {
-          id: { in: tagsArray }
+          tags: {
+            some: {
+              id: { in: tagsArray }
+            }
+          }
         }
       };
     }
 
     // Получаем записи с буфером для фильтрации по жанру
     const watchListRecords = await prisma.watchList.findMany({
-      where: whereClause,
+      where: {
+        ...whereClause,
+        ...(tagsFilter && { AND: [tagsFilter] }),
+      },
       select: {
         id: true,
         tmdbId: true,
