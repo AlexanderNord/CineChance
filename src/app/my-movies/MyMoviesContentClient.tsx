@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 const RatingModal = dynamic(() => import('../components/RatingModal'), { ssr: false });
 import FilmGridWithFilters, { FilmGridFilters } from '@/app/components/FilmGridWithFilters';
-import { getMoviesCounts, updateWatchStatus } from './actions';
 import { getUserTags } from '../actions/tagsActions';
 import { Media } from '@/lib/tmdb';
 
@@ -133,18 +132,27 @@ export default function MyMoviesContentClient({
       : 'Пересмотрено';
 
     try {
-      await updateWatchStatus(
-        userId,
-        acceptedRecommendation.tmdbId,
-        acceptedRecommendation.mediaType,
-        newStatus,
-        rating,
-        acceptedRecommendation.logId
-      );
+      await fetch('/api/my-movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateWatchStatus',
+          tmdbId: acceptedRecommendation.tmdbId,
+          mediaType: acceptedRecommendation.mediaType,
+          newStatus,
+          rating,
+          recommendationLogId: acceptedRecommendation.logId,
+        }),
+      });
 
       await logRecommendationAction('accepted_yes');
 
-      const newCounts = await getMoviesCounts(userId);
+      const countsRes = await fetch('/api/my-movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getMoviesCounts' }),
+      });
+      const newCounts = await countsRes.json();
       setCurrentCounts(newCounts);
     } catch (error) {
       console.error('Error updating watch status:', error);
