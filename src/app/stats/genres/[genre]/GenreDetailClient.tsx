@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import FilmGridWithFilters, { FilmGridFilters } from '@/app/components/FilmGridWithFilters';
+import { getUserGenres } from '@/app/my-movies/actions';
+import { getUserTags } from '@/app/actions/tagsActions';
 
 interface GenreDetailClientProps {
   userId: string;
@@ -21,7 +23,6 @@ export default function GenreDetailClient({ userId, genreId, genreName }: GenreD
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { getUserGenres } = await import('@/app/my-movies/actions');
         const genres = await getUserGenres(userId);
         setAvailableGenres(genres);
       } catch (error) {
@@ -29,7 +30,6 @@ export default function GenreDetailClient({ userId, genreId, genreName }: GenreD
       }
 
       try {
-        const { getUserTags } = await import('@/app/actions/tagsActions');
         const result = await getUserTags(userId);
         if (result.success && result.data) {
           setUserTags(result.data.map(tag => ({
