@@ -60,7 +60,7 @@ export default function ProfileTagsGenres() {
 
         if (genresRes.ok) {
           const data = await genresRes.json();
-          setGenres((data.genres || []).slice(0, 10));
+          setGenres(data.genres || []);
         }
       } catch (error) {
         console.error('Error loading tags and genres:', error);

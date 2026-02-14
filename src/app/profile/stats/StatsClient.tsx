@@ -367,7 +367,7 @@ export default function StatsClient({ userId }: StatsClientProps) {
               <h3 className="text-sm font-medium text-white">Теги пользователя</h3>
             </div>
             <div className="space-y-3">
-              {tagUsage.slice(0, 15).map((tag) => {
+              {tagUsage.map((tag) => {
                 const totalTags = tagUsage.reduce((sum, t) => sum + t.count, 0);
                 const percentage = totalTags > 0 ? (tag.count / totalTags) * 100 : 0;
                 
@@ -416,7 +416,7 @@ export default function StatsClient({ userId }: StatsClientProps) {
               <h3 className="text-sm font-medium text-white">Жанры просмотренного</h3>
             </div>
             <div className="space-y-3">
-              {watchedGenres.slice(0, 15).map((genre) => {
+              {watchedGenres.map((genre) => {
                 const totalWatched = watchedGenres.reduce((sum, g) => sum + g.count, 0);
                 const percentage = totalWatched > 0 ? (genre.count / totalWatched) * 100 : 0;
                 
