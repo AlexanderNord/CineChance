@@ -49,8 +49,8 @@ export default function ProfileTagsGenres() {
       try {
         // Загружаем теги и жанры параллельно
         const [tagsRes, genresRes] = await Promise.all([
-          fetch('/api/user/tag-usage?limit=10'),
-          fetch('/api/user/genres?statuses=watched,rewatched&limit=50'),
+          fetch('/api/user/tag-usage'),
+          fetch('/api/user/genres'),
         ]);
 
         if (tagsRes.ok) {

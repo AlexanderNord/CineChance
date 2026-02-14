@@ -21,7 +21,7 @@ export default function TagDetailClient({ userId, tagId, tagName }: TagDetailCli
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const genresRes = await fetch('/api/user/genres?statuses=watched,rewatched&limit=100');
+        const genresRes = await fetch('/api/user/genres');
         if (genresRes.ok) {
           const genresData = await genresRes.json();
           setAvailableGenres(genresData.genres || []);
@@ -31,7 +31,7 @@ export default function TagDetailClient({ userId, tagId, tagName }: TagDetailCli
       }
 
       try {
-        const tagsRes = await fetch('/api/user/tag-usage?limit=100');
+        const tagsRes = await fetch('/api/user/tag-usage');
         if (tagsRes.ok) {
           const tagsData = await tagsRes.json();
           setUserTags((tagsData.tags || []).map((tag: any) => ({
