@@ -55,9 +55,11 @@ export default function MyMoviesContentClient({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { getUserGenres } = await import('./actions');
-        const genres = await getUserGenres(userId);
-        setAvailableGenres(genres);
+        const genresRes = await fetch('/api/user/genres?statuses=watched,rewatched&limit=100');
+        if (genresRes.ok) {
+          const genresData = await genresRes.json();
+          setAvailableGenres(genresData.genres || []);
+        }
       } catch (error) {
         console.error('Error fetching genres:', error);
       }
