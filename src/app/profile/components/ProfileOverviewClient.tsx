@@ -6,7 +6,7 @@ import { ru } from 'date-fns/locale';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 const TermsOfServiceModal = dynamic(() => import('@/app/components/TermsOfServiceModal'), { ssr: false });
-import { Settings, ArrowRight, TrendingUp, Monitor, Tv, Smile, CheckIcon, XIcon, Clock as ClockIcon, EyeOff as EyeOffIcon, PieChart as PieChartIcon, Film, Users } from 'lucide-react';
+import { Settings, ArrowRight, TrendingUp, Monitor, Tv, Smile, CheckIcon, XIcon, Clock as ClockIcon, EyeOff as EyeOffIcon, PieChart as PieChartIcon, Film, Users, BarChart3 } from 'lucide-react';
 import NicknameEditor from './NicknameEditor';
 
 interface UserStats {
@@ -72,7 +72,7 @@ function TypeBreakdownSkeleton() {
         <div className="w-4 h-4 bg-gray-700 rounded"></div>
         <div className="h-4 w-24 bg-gray-700 rounded"></div>
       </div>
-      <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="flex items-center gap-3">
             <div className="w-5 h-5 bg-gray-700 rounded"></div>
@@ -92,31 +92,14 @@ function TypeBreakdownSkeleton() {
   );
 }
 
-function CountCardSkeleton() {
-  return (
-    <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 animate-pulse">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-4 h-4 bg-gray-700 rounded"></div>
-        <div className="h-4 w-20 bg-gray-700 rounded"></div>
-      </div>
-      <div className="h-8 w-12 bg-gray-700 rounded"></div>
-    </div>
-  );
-}
-
 export default function ProfileOverviewClient({ userId }: ProfileOverviewClientProps) {
   const [userData, setUserData] = useState<UserStatsData | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
   
   const [userDataLoading, setUserDataLoading] = useState(true);
   const [basicStatsLoading, setBasicStatsLoading] = useState(true);
   const [typeBreakdownLoading, setTypeBreakdownLoading] = useState(true);
-  const [collectionsCount, setCollectionsCount] = useState<number | null>(null);
-  const [collectionsLoading, setCollectionsLoading] = useState(true);
-  const [actorsCount, setActorsCount] = useState<number | null>(null);
-  const [actorsLoading, setActorsLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -147,11 +130,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
   useEffect(() => {
     const loadDataInParallel = async () => {
       try {
-        const [statsRes, collectionsRes, actorsRes] = await Promise.all([
-          fetch('/api/user/stats'),
-          fetch('/api/user/collections/count'),
-          fetch('/api/user/actors/count'),
-        ]);
+        const statsRes = await fetch('/api/user/stats');
 
         if (statsRes.ok) {
           const data = await statsRes.json();
@@ -174,23 +153,9 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
         setBasicStatsLoading(false);
         setTypeBreakdownLoading(false);
 
-        if (collectionsRes.ok) {
-          const data = await collectionsRes.json();
-          setCollectionsCount(data.count || 0);
-        }
-        setCollectionsLoading(false);
-
-        if (actorsRes.ok) {
-          const data = await actorsRes.json();
-          setActorsCount(data.count || 0);
-        }
-        setActorsLoading(false);
-
       } catch (error) {
         setBasicStatsLoading(false);
         setTypeBreakdownLoading(false);
-        setCollectionsLoading(false);
-        setActorsLoading(false);
       }
     };
 
@@ -337,101 +302,94 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           ) : null}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+        <div className="w-full">
           {typeBreakdownLoading ? (
-            <>
-              <TypeBreakdownSkeleton />
-              <div className="hidden md:block">
-                <TypeBreakdownSkeleton />
-              </div>
-            </>
+            <TypeBreakdownSkeleton />
           ) : stats?.typeBreakdown ? (
-            <>
-              <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
-                <div className="flex items-center gap-2 mb-4">
-                  <PieChartIcon className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-medium text-white">Типы контента</h3>
+            <div className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800">
+              <div className="flex items-center gap-2 mb-4">
+                <PieChartIcon className="w-4 h-4 text-purple-400" />
+                <h3 className="text-sm font-medium text-white">Типы контента</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="flex items-center gap-3">
+                  <Monitor className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Фильмы</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.movie}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.movie / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <Monitor className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Фильмы</span>
-                        <span className="text-white text-xs">{stats.typeBreakdown.movie}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total?.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.movie / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                <div className="flex items-center gap-3">
+                  <Tv className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Сериалы</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.tv}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.tv / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Tv className="w-5 h-5 text-green-400 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Сериалы</span>
-                        <span className="text-white text-xs">{stats.typeBreakdown.tv}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-green-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total?.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.tv / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Smile className="w-5 h-5 text-orange-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Мультфильмы</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.cartoon}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.cartoon / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Smile className="w-5 h-5 text-orange-400 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Мультфильмы</span>
-                        <span className="text-white text-xs">{stats.typeBreakdown.cartoon}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total?.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.cartoon / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="w-5 h-5 text-purple-400 text-sm font-bold">あ</span>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-gray-300 text-sm">Аниме</span>
+                      <span className="text-white text-xs">{stats.typeBreakdown.anime}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="w-5 h-5 text-purple-400 text-sm font-bold">あ</span>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300 text-sm">Аниме</span>
-                        <span className="text-white text-xs">{stats.typeBreakdown.anime}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-purple-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${stats.total?.totalForPercentage > 0 
-                              ? (stats.typeBreakdown.anime / stats.total.totalForPercentage) * 100 
-                              : 0}%` 
-                          }}
-                        />
-                      </div>
+                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${stats.total?.totalForPercentage > 0 
+                            ? (stats.typeBreakdown.anime / stats.total.totalForPercentage) * 100 
+                            : 0}%` 
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           ) : null}
         </div>
 
@@ -439,52 +397,40 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
           href="/profile/stats"
           className="flex items-center justify-center gap-2 w-full py-3 bg-gray-900 hover:bg-gray-800 rounded-lg border border-gray-800 hover:border-blue-500/50 transition text-gray-400 hover:text-white text-sm"
         >
+          <BarChart3 className="w-4 h-4" />
           <span>Показать всю статистику</span>
           <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
-        {collectionsLoading ? (
-          <>
-            <CountCardSkeleton />
-            <CountCardSkeleton />
-          </>
-        ) : (
-          <Link
-            href="/profile/collections"
-            className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-purple-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-7 h-7 bg-purple-400/20 rounded-full flex items-center justify-center flex-shrink-0">
-                <Film className="w-4 h-4 text-purple-400" />
-              </div>
-              <p className="text-gray-400 text-xs md:text-sm">Кинофраншизы</p>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white pl-10">
-              {collectionsCount ?? 0}
-            </p>
-          </Link>
-        )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+        <Link
+          href="/profile/collections"
+          className="flex items-center gap-3 bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-purple-500/50 hover:bg-gray-800/80 transition cursor-pointer"
+        >
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-purple-400/20 rounded-full flex items-center justify-center flex-shrink-0">
+            <Film className="w-5 h-5 text-purple-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-white font-medium text-sm md:text-base">Кинофраншизы</p>
+            <p className="text-gray-500 text-xs md:text-sm">Просмотренные коллекции</p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-gray-500 flex-shrink-0" />
+        </Link>
 
-        {actorsLoading ? (
-          <CountCardSkeleton />
-        ) : (
-          <Link
-            href="/profile/actors"
-            className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-amber-500/50 hover:bg-gray-800/80 transition cursor-pointer block"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-7 h-7 bg-amber-400/20 rounded-full flex items-center justify-center flex-shrink-0">
-                <Users className="w-4 h-4 text-amber-400" />
-              </div>
-              <p className="text-gray-400 text-xs md:text-sm">Любимые актеры</p>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white pl-10">
-              {actorsCount ?? 0}
-            </p>
-          </Link>
-        )}
+        <Link
+          href="/profile/actors"
+          className="flex items-center gap-3 bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-amber-500/50 hover:bg-gray-800/80 transition cursor-pointer"
+        >
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-amber-400/20 rounded-full flex items-center justify-center flex-shrink-0">
+            <Users className="w-5 h-5 text-amber-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-white font-medium text-sm md:text-base">Любимые актеры</p>
+            <p className="text-gray-500 text-xs md:text-sm">Ваши любимые актеры</p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-gray-500 flex-shrink-0" />
+        </Link>
       </div>
     </div>
   );
