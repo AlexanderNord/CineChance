@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Star, Tag as TagIcon, Music, ArrowLeft } from 'lucide-react';
@@ -113,15 +113,57 @@ export default function StatsClient({ userId }: StatsClientProps) {
   const [tagUsageLoading, setTagUsageLoading] = useState(true);
   const [watchedGenres, setWatchedGenres] = useState<GenreData[]>([]);
   const [watchedGenresLoading, setWatchedGenresLoading] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getProgressMessage = () => {
+    if (progress < 20) return '📊 Собираем статистику оценок...';
+    if (progress < 40) return '🏷️ Анализируем теги...';
+    if (progress < 60) return '🎬 Обрабатываем жанры...';
+    if (progress < 80) return '⭐ Формируем рейтинги...';
+    if (progress < 95) return '📈 Готовим данные...';
+    return '✨ Почти готово...';
+  };
+
+  const getProgressSubtext = () => {
+    if (progress < 20) return 'Считаем ваши оценки и их распределение';
+    if (progress < 40) return 'Анализируем использование тегов';
+    if (progress < 60) return 'Определяем любимые жанры';
+    if (progress < 80) return 'Вычисляем средние значения';
+    if (progress < 95) return 'Подготавливаем визуализацию';
+    return 'Скоро покажем результат!';
+  };
 
   useEffect(() => {
     const loadDataInParallel = async () => {
       try {
+        setProgress(0);
+        setProgressMessage(getProgressMessage());
+
+        progressIntervalRef.current = setInterval(() => {
+          setProgress(prev => {
+            if (prev < 70) {
+              return Math.min(prev + Math.random() * 3 + 1, 70);
+            } else if (prev < 85) {
+              return Math.min(prev + Math.random() * 1 + 0.5, 85);
+            } else {
+              return prev;
+            }
+          });
+        }, 200);
+
         const [statsRes, tagUsageRes, genresRes] = await Promise.all([
           fetch('/api/user/stats'),
-          fetch('/api/user/tag-usage?limit=100'),
-          fetch('/api/user/genres?statuses=watched,rewatched&limit=100'),
+          fetch('/api/user/tag-usage'),
+          fetch('/api/user/genres'),
         ]);
+
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
+
+        setProgress(90);
 
         if (statsRes.ok) {
           const data = await statsRes.json();
@@ -159,16 +201,32 @@ export default function StatsClient({ userId }: StatsClientProps) {
         }
         setWatchedGenresLoading(false);
 
+        setProgress(100);
+        setTimeout(() => setProgress(0), 500);
+
       } catch (error) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
+        
         setStatsLoading(false);
         setAverageRatingLoading(false);
         setTagUsageLoading(false);
         setWatchedGenresLoading(false);
+        setProgress(0);
       }
     };
 
     loadDataInParallel();
+
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
   }, []);
+
+  const isLoading = statsLoading || averageRatingLoading || tagUsageLoading || watchedGenresLoading;
 
   return (
     <div className="space-y-6">
@@ -179,6 +237,28 @@ export default function StatsClient({ userId }: StatsClientProps) {
         <ArrowLeft className="w-4 h-4" />
         <span>Вернуться в профиль</span>
       </Link>
+
+      {isLoading && progress > 0 && (
+        <div className="flex flex-col items-center justify-center py-8">
+          <div className="w-full max-w-xs">
+            <div className="h-2 bg-gray-800 rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-150 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-gray-400 text-xs text-center">{Math.round(progress)}%</p>
+          </div>
+          <div className="text-center mt-4">
+            <p className="text-gray-300 text-sm mb-1">
+              {getProgressMessage()}
+            </p>
+            <p className="text-gray-500 text-xs">
+              {getProgressSubtext()}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {averageRatingLoading ? (

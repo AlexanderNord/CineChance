@@ -82,11 +82,11 @@ export async function GET(request: NextRequest) {
     // Парсим теги если переданы
     const tagsArray = tagsParam ? tagsParam.split(',').filter(t => t.length > 0) : [];
 
-    // Получаем фильмы пользователя (watched/rewatched статусы по умолчанию)
+    // Получаем фильмы пользователя (включая все статусы для полной статистики)
     const whereClause: any = {
       userId,
       statusId: {
-        in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED],
+        in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED, MOVIE_STATUS_IDS.DROPPED],
       },
       mediaType: { in: mediaTypes },
     };

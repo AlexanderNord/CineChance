@@ -72,16 +72,18 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id;
     const searchParams = request.nextUrl.searchParams;
     const statusesParam = searchParams.get('statuses');
-    const limitParam = searchParams.get('limit');
     
-    const limit = limitParam ? parseInt(limitParam, 10) : 50;
-
-    const cacheKey = `user:${userId}:genres:${limit}:${statusesParam || 'all'}`;
+    const cacheKey = `user:${userId}:genres:all:${statusesParam || 'default'}`;
 
     const fetchGenres = async () => {
       let whereClause: any = { userId };
       
-      if (statusesParam) {
+      // По умолчанию включаем все значимые статусы для статистики
+      if (!statusesParam) {
+        whereClause.statusId = { 
+          in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED, MOVIE_STATUS_IDS.DROPPED] 
+        };
+      } else {
         const statusList = statusesParam.split(',').map(s => s.trim().toLowerCase());
         
         if (statusList.includes('watched') || statusList.includes('rewatched')) {
@@ -92,7 +94,6 @@ export async function GET(request: NextRequest) {
       const watchListRecords = await prisma.watchList.findMany({
         where: whereClause,
         select: { tmdbId: true, mediaType: true },
-        take: limit,
       });
 
       if (watchListRecords.length === 0) {

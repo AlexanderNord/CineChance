@@ -20,10 +20,13 @@ export async function GET(request: NextRequest) {
     
     const limit = limitParam ? parseInt(limitParam, 10) : 10;
     
-    const cacheKey = `user:${userId}:tag_usage:${limit}:${statusesParam || 'all'}`;
+    const cacheKey = `user:${userId}:tag_usage:all:${statusesParam || 'default'}`;
 
     const fetchTags = async () => {
-      let statusFilter = {};
+      // По умолчанию включаем все значимые статусы для статистики
+      let statusFilter = {
+        statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED, MOVIE_STATUS_IDS.DROPPED] }
+      };
       if (statusesParam) {
         const statusList = statusesParam.split(',').map(s => s.trim().toLowerCase());
         
@@ -34,6 +37,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Получаем все теги пользователя без лимита
       const tags = await prisma.tag.findMany({
         where: {
           userId,
@@ -41,7 +45,6 @@ export async function GET(request: NextRequest) {
         orderBy: {
           usageCount: 'desc'
         },
-        take: limit,
       });
 
       const tagIds = tags.map(t => t.id);

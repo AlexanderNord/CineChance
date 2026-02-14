@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     const whereClause = {
       userId,
       userRating: targetRating,
-      statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
+      statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED, MOVIE_STATUS_IDS.DROPPED] },
       mediaType: { in: mediaTypes },
       ...(tagsArray.length > 0 && {
         tags: {
