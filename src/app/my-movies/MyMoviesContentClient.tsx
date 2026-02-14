@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 const RatingModal = dynamic(() => import('../components/RatingModal'), { ssr: false });
 import FilmGridWithFilters, { FilmGridFilters } from '@/app/components/FilmGridWithFilters';
-import { getUserTags } from '../actions/tagsActions';
 import { Media } from '@/lib/tmdb';
 
 interface MyMoviesContentClientProps {
@@ -64,12 +63,13 @@ export default function MyMoviesContentClient({
       }
 
       try {
-        const result = await getUserTags(userId);
-        if (result.success && result.data) {
-          setUserTags(result.data.map(tag => ({
+        const tagsRes = await fetch('/api/user/tag-usage?limit=100');
+        if (tagsRes.ok) {
+          const tagsData = await tagsRes.json();
+          setUserTags((tagsData.tags || []).map((tag: any) => ({
             id: tag.id,
             name: tag.name,
-            count: tag.usageCount
+            count: tag.count
           })));
         }
       } catch (error) {
