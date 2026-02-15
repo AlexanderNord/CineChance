@@ -431,6 +431,24 @@ export async function GET(request: Request) {
         };
       }
 
+      baseCreatorsData.sort((a, b) => {
+        if (a.average_rating !== null && b.average_rating !== null) {
+          if (b.average_rating !== a.average_rating) {
+            return b.average_rating - a.average_rating;
+          }
+        } else if (a.average_rating === null && b.average_rating !== null) {
+          return 1;
+        } else if (a.average_rating !== null && b.average_rating === null) {
+          return -1;
+        }
+        
+        if (b.progress_percent !== a.progress_percent) {
+          return b.progress_percent - a.progress_percent;
+        }
+        
+        return a.name.localeCompare(b.name, 'ru');
+      });
+
       const result = baseCreatorsData.slice(offset, Math.min(offset + limit, baseCreatorsData.length));
 
       return {
