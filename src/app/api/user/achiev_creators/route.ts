@@ -206,7 +206,7 @@ export async function GET(request: Request) {
         watchedIds: Set<number>;
         rewatchedIds: Set<number>;
         droppedIds: Set<number>;
-        ratings: number[];
+        ratingsByJobType: Map<CreatorJobType, number[]>;
       }>();
 
       const BATCH_SIZE = 10;
@@ -239,16 +239,19 @@ export async function GET(request: Request) {
                   watchedIds: new Set(),
                   rewatchedIds: new Set(),
                   droppedIds: new Set(),
-                  ratings: [],
+                  ratingsByJobType: new Map([[jobType, rating !== null && rating !== undefined ? [rating] : []]]),
                 });
               } else {
                 creatorMap.get(member.id)!.job_types.add(jobType);
+                const existingRatings = creatorMap.get(member.id)!.ratingsByJobType.get(jobType);
+                if (existingRatings && rating !== null && rating !== undefined) {
+                  existingRatings.push(rating);
+                } else if (rating !== null && rating !== undefined) {
+                  creatorMap.get(member.id)!.ratingsByJobType.set(jobType, [rating]);
+                }
               }
               
               creatorMap.get(member.id)!.watchedIds.add(credits.id);
-              if (rating !== null && rating !== undefined) {
-                creatorMap.get(member.id)!.ratings.push(rating);
-              }
             }
           }
         }
@@ -274,8 +277,11 @@ export async function GET(request: Request) {
                 if (creatorMap.has(member.id)) {
                   creatorMap.get(member.id)!.rewatchedIds.add(credits.id);
                   creatorMap.get(member.id)!.job_types.add(jobType);
-                  if (rating !== null && rating !== undefined) {
-                    creatorMap.get(member.id)!.ratings.push(rating);
+                  const existingRatings = creatorMap.get(member.id)!.ratingsByJobType.get(jobType);
+                  if (existingRatings && rating !== null && rating !== undefined) {
+                    existingRatings.push(rating);
+                  } else if (rating !== null && rating !== undefined) {
+                    creatorMap.get(member.id)!.ratingsByJobType.set(jobType, [rating]);
                   }
                 }
               }
@@ -319,20 +325,32 @@ export async function GET(request: Request) {
       const allCreators = Array.from(creatorMap.entries())
         .sort((a, b) => b[1].watchedIds.size - a[1].watchedIds.size);
       
-      const baseCreatorsData = allCreators.map(([creatorId, creatorData]) => ({
-        id: creatorId,
-        name: creatorData.name,
-        profile_path: creatorData.profile_path,
-        job_types: Array.from(creatorData.job_types),
-        watched_movies: creatorData.watchedIds.size + creatorData.rewatchedIds.size,
-        rewatched_movies: creatorData.rewatchedIds.size,
-        dropped_movies: creatorData.droppedIds.size,
-        total_movies: 0,
-        progress_percent: 0,
-        average_rating: creatorData.ratings.length > 0
-          ? Number((creatorData.ratings.reduce((a, b) => a + b, 0) / creatorData.ratings.length).toFixed(1))
-          : null,
-      }));
+      const baseCreatorsData = allCreators.map(([creatorId, creatorData]) => {
+        // Собираем рейтинги только по тем job_types, которые есть у человека
+        const relevantRatings: number[] = [];
+        const jobTypesArray = Array.from(creatorData.job_types);
+        for (const jobType of jobTypesArray) {
+          const ratings = creatorData.ratingsByJobType.get(jobType);
+          if (ratings) {
+            relevantRatings.push(...ratings);
+          }
+        }
+        
+        return {
+          id: creatorId,
+          name: creatorData.name,
+          profile_path: creatorData.profile_path,
+          job_types: Array.from(creatorData.job_types),
+          watched_movies: creatorData.watchedIds.size + creatorData.rewatchedIds.size,
+          rewatched_movies: creatorData.rewatchedIds.size,
+          dropped_movies: creatorData.droppedIds.size,
+          total_movies: 0,
+          progress_percent: 0,
+          average_rating: relevantRatings.length > 0
+            ? Number((relevantRatings.reduce((a, b) => a + b, 0) / relevantRatings.length).toFixed(1))
+            : null,
+        };
+      });
 
       if (singleLoad) {
         const maxCreatorsToProcess = Math.min(baseCreatorsData.length, limit);
@@ -414,14 +432,26 @@ export async function GET(request: Request) {
 
         const allCreatorsWithFullData = (await Promise.all(achievementsPromises)).flat();
         
-        const creatorsWithScores = allCreatorsWithFullData.map(creator => ({
-          ...creator,
-          creator_score: calculateCreatorScore(creator)
-        }));
-        
-        creatorsWithScores.sort((a, b) => b.creator_score - a.creator_score);
+        // Сортировка по average_rating как у актеров
+        allCreatorsWithFullData.sort((a, b) => {
+          if (a.average_rating !== null && b.average_rating !== null) {
+            if (b.average_rating !== a.average_rating) {
+              return b.average_rating - a.average_rating;
+            }
+          } else if (a.average_rating === null && b.average_rating !== null) {
+            return 1;
+          } else if (a.average_rating !== null && b.average_rating === null) {
+            return -1;
+          }
+          
+          if (b.progress_percent !== a.progress_percent) {
+            return b.progress_percent - a.progress_percent;
+          }
+          
+          return a.name.localeCompare(b.name, 'ru');
+        });
 
-        const result = creatorsWithScores.slice(0, limit);
+        const result = allCreatorsWithFullData.slice(0, limit);
 
         return {
           creators: result,
