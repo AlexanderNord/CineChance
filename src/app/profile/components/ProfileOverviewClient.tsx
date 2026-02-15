@@ -406,7 +406,7 @@ export default function ProfileOverviewClient({ userId }: ProfileOverviewClientP
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
         <Link
           href="/profile/collections"
           className="flex items-center gap-3 bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-purple-500/50 hover:bg-gray-800/80 transition cursor-pointer"
