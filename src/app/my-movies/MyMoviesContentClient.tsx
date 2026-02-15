@@ -4,8 +4,6 @@ import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 const RatingModal = dynamic(() => import('../components/RatingModal'), { ssr: false });
 import FilmGridWithFilters, { FilmGridFilters } from '@/app/components/FilmGridWithFilters';
-import { getMoviesCounts, updateWatchStatus } from './actions';
-import { getUserTags } from '../actions/tagsActions';
 import { Media } from '@/lib/tmdb';
 
 interface MyMoviesContentClientProps {
@@ -55,20 +53,23 @@ export default function MyMoviesContentClient({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { getUserGenres } = await import('./actions');
-        const genres = await getUserGenres(userId);
-        setAvailableGenres(genres);
+        const genresRes = await fetch('/api/user/genres');
+        if (genresRes.ok) {
+          const genresData = await genresRes.json();
+          setAvailableGenres(genresData.genres || []);
+        }
       } catch (error) {
         console.error('Error fetching genres:', error);
       }
 
       try {
-        const result = await getUserTags(userId);
-        if (result.success && result.data) {
-          setUserTags(result.data.map(tag => ({
+        const tagsRes = await fetch('/api/user/tag-usage');
+        if (tagsRes.ok) {
+          const tagsData = await tagsRes.json();
+          setUserTags((tagsData.tags || []).map((tag: any) => ({
             id: tag.id,
             name: tag.name,
-            count: tag.usageCount
+            count: tag.count
           })));
         }
       } catch (error) {
@@ -131,18 +132,27 @@ export default function MyMoviesContentClient({
       : 'Пересмотрено';
 
     try {
-      await updateWatchStatus(
-        userId,
-        acceptedRecommendation.tmdbId,
-        acceptedRecommendation.mediaType,
-        newStatus,
-        rating,
-        acceptedRecommendation.logId
-      );
+      await fetch('/api/my-movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateWatchStatus',
+          tmdbId: acceptedRecommendation.tmdbId,
+          mediaType: acceptedRecommendation.mediaType,
+          newStatus,
+          rating,
+          recommendationLogId: acceptedRecommendation.logId,
+        }),
+      });
 
       await logRecommendationAction('accepted_yes');
 
-      const newCounts = await getMoviesCounts(userId);
+      const countsRes = await fetch('/api/my-movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getMoviesCounts' }),
+      });
+      const newCounts = await countsRes.json();
       setCurrentCounts(newCounts);
     } catch (error) {
       console.error('Error updating watch status:', error);

@@ -21,21 +21,23 @@ export default function TagDetailClient({ userId, tagId, tagName }: TagDetailCli
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { getUserGenres } = await import('@/app/my-movies/actions');
-        const genres = await getUserGenres(userId);
-        setAvailableGenres(genres);
+        const genresRes = await fetch('/api/user/genres');
+        if (genresRes.ok) {
+          const genresData = await genresRes.json();
+          setAvailableGenres(genresData.genres || []);
+        }
       } catch (error) {
         console.error('Error fetching genres:', error);
       }
 
       try {
-        const { getUserTags } = await import('@/app/actions/tagsActions');
-        const result = await getUserTags(userId);
-        if (result.success && result.data) {
-          setUserTags(result.data.map(tag => ({
+        const tagsRes = await fetch('/api/user/tag-usage');
+        if (tagsRes.ok) {
+          const tagsData = await tagsRes.json();
+          setUserTags((tagsData.tags || []).map((tag: any) => ({
             id: tag.id,
             name: tag.name,
-            count: tag.usageCount
+            count: tag.count
           })));
         }
       } catch (error) {

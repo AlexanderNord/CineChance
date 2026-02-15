@@ -188,7 +188,13 @@ export async function GET(req: Request) {
     });
 
   } catch (error) {
-    console.error('Image proxy error:', error);
+    // Не логируем таймауты как ошибки - это ожидаемое поведение при проблемах с сетью
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isTimeout = errorMessage.includes('timed out') || errorMessage.includes('ETIMEDOUT') || errorMessage.includes('abort');
+    
+    if (!isTimeout) {
+      console.error('Image proxy error:', error);
+    }
     
     // Если у нас есть TMDB ID, пробуем получить постер из FANART_TV как fallback
     if (tmdbId && tmdbId > 0) {

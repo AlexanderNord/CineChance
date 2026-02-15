@@ -40,7 +40,11 @@ export async function GET(
     clearTimeout(personTimeoutId);
 
     if (!personRes.ok) {
-      return NextResponse.json({ error: 'Failed to fetch person' }, { status: 500 });
+      const status = personRes.status;
+      if (status === 404) {
+        return NextResponse.json({ error: 'Person not found' }, { status: 404 });
+      }
+      return NextResponse.json({ error: `Failed to fetch person (${status})` }, { status: 500 });
     }
 
     const personData = await personRes.json();
@@ -60,7 +64,19 @@ export async function GET(
     clearTimeout(creditsTimeoutId);
 
     if (!creditsRes.ok) {
-      return NextResponse.json({ error: 'Failed to fetch credits' }, { status: 500 });
+      // Если не удалось получить фильмографию, возвращаем данные актера без неё
+      return NextResponse.json({
+        id: personData.id,
+        name: personData.name,
+        biography: personData.biography,
+        profile_path: personData.profile_path,
+        birthday: personData.birthday,
+        deathday: personData.deathday,
+        place_of_birth: personData.place_of_birth,
+        known_for_department: personData.known_for_department,
+        filmography: [],
+        error: 'Filmography unavailable'
+      });
     }
 
     const creditsData = await creditsRes.json();
@@ -114,10 +130,17 @@ export async function GET(
       filmography,
     });
   } catch (error) {
-    logger.error('Person API error', { 
-      error: error instanceof Error ? error.message : String(error),
-      context: 'Person'
-    });
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isAbort = errorMessage.includes('abort') || errorMessage.includes('timed out');
+    
+    // Не логируем таймауты - это ожидаемое поведение при проблемах с сетью
+    if (!isAbort) {
+      logger.error('Person API error', { 
+        error: errorMessage,
+        context: 'Person'
+      });
+    }
+    
+    return NextResponse.json({ error: 'Failed to fetch person data' }, { status: 500 });
   }
 }

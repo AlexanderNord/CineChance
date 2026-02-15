@@ -131,12 +131,7 @@ export default function MovieCard({
           }
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger.error('Failed to fetch CineChance rating', {
-          tmdbId: movie.id,
-          mediaType: movie.media_type,
-          error: errorMessage
-        });
+        // Silently fail - CineChance rating is not critical functionality
       }
     };
 

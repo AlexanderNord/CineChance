@@ -447,3 +447,124 @@ function sortMovies(
     return sortOrder === 'desc' ? comparison : -comparison;
   });
 }
+
+// POST endpoint for updating watch status
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const body = await request.json();
+    
+    const { action, tmdbId, mediaType, newStatus, rating, recommendationLogId } = body;
+
+    if (action === 'updateWatchStatus') {
+      // Находим или создаем запись в WatchList
+      let watchListEntry = await prisma.watchList.findUnique({
+        where: {
+          userId_tmdbId_mediaType: { userId, tmdbId, mediaType },
+        },
+      });
+
+      if (!watchListEntry) {
+        // Если записи нет, создаем новую
+        const tmdbData = await fetchMediaDetails(tmdbId, mediaType);
+        const status = await prisma.movieStatus.findUnique({
+          where: { name: newStatus },
+        });
+
+        if (!status) {
+          return NextResponse.json({ error: `Статус ${newStatus} не найден` }, { status: 400 });
+        }
+
+        watchListEntry = await prisma.watchList.create({
+          data: {
+            userId,
+            tmdbId,
+            mediaType,
+            title: tmdbData?.title || tmdbData?.name || 'Без названия',
+            voteAverage: tmdbData?.vote_average || 0,
+            statusId: status.id,
+            watchCount: 1,
+            watchedDate: new Date(),
+          },
+        });
+      } else {
+        // Обновляем существующую запись
+        const previousWatchCount = watchListEntry.watchCount;
+        const status = await prisma.movieStatus.findUnique({
+          where: { name: newStatus },
+        });
+
+        if (status) {
+          await prisma.watchList.update({
+            where: { id: watchListEntry.id },
+            data: {
+              watchCount: previousWatchCount + 1,
+              watchedDate: new Date(),
+              statusId: status.id,
+            },
+          });
+        }
+      }
+
+      // Создаем запись в RewatchLog
+      await prisma.rewatchLog.create({
+        data: {
+          userId,
+          tmdbId,
+          mediaType,
+          watchedAt: new Date(),
+          previousWatchCount: watchListEntry.watchCount,
+          recommendationLogId: recommendationLogId || null,
+        },
+      });
+
+      // Если оценка передана, создаем запись в RatingHistory
+      if (rating !== undefined) {
+        await prisma.ratingHistory.create({
+          data: {
+            userId,
+            tmdbId,
+            mediaType,
+            rating,
+            previousRating: watchListEntry.userRating,
+            actionType: 'update',
+          },
+        });
+
+        // Обновляем оценку в WatchList
+        await prisma.watchList.update({
+          where: { id: watchListEntry.id },
+          data: { userRating: rating },
+        });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'getMoviesCounts') {
+      const [watched, wantToWatch, dropped, hidden] = await Promise.all([
+        prisma.watchList.count({
+          where: {
+            userId,
+            statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
+          },
+        }),
+        prisma.watchList.count({ where: { userId, statusId: MOVIE_STATUS_IDS.WANT_TO_WATCH } }),
+        prisma.watchList.count({ where: { userId, statusId: MOVIE_STATUS_IDS.DROPPED } }),
+        prisma.blacklist.count({ where: { userId } }),
+      ]);
+
+      return NextResponse.json({ watched, wantToWatch, dropped, hidden });
+    }
+
+    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  } catch (error) {
+    console.error('Error in my-movies POST:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

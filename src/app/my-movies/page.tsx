@@ -4,8 +4,24 @@ import { Suspense } from 'react';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import MyMoviesContentClient from './MyMoviesContentClient';
-import { getMoviesCounts } from './actions';
 import LoaderSkeleton from '@/app/components/LoaderSkeleton';
+import { prisma } from '@/lib/prisma';
+import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
+
+async function getMoviesCounts(userId: string) {
+  const [watched, wantToWatch, dropped, hidden] = await Promise.all([
+    prisma.watchList.count({
+      where: {
+        userId,
+        statusId: { in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED] },
+      },
+    }),
+    prisma.watchList.count({ where: { userId, statusId: MOVIE_STATUS_IDS.WANT_TO_WATCH } }),
+    prisma.watchList.count({ where: { userId, statusId: MOVIE_STATUS_IDS.DROPPED } }),
+    prisma.blacklist.count({ where: { userId } }),
+  ]);
+  return { watched, wantToWatch, dropped, hidden };
+}
 
 interface PageProps {
   searchParams: Promise<{ tab?: string }>;

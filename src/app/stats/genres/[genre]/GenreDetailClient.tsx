@@ -21,21 +21,23 @@ export default function GenreDetailClient({ userId, genreId, genreName }: GenreD
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { getUserGenres } = await import('@/app/my-movies/actions');
-        const genres = await getUserGenres(userId);
-        setAvailableGenres(genres);
+        const genresRes = await fetch('/api/user/genres');
+        if (genresRes.ok) {
+          const genresData = await genresRes.json();
+          setAvailableGenres(genresData.genres || []);
+        }
       } catch (error) {
         console.error('Error fetching genres:', error);
       }
 
       try {
-        const { getUserTags } = await import('@/app/actions/tagsActions');
-        const result = await getUserTags(userId);
-        if (result.success && result.data) {
-          setUserTags(result.data.map(tag => ({
+        const tagsRes = await fetch('/api/user/tag-usage');
+        if (tagsRes.ok) {
+          const tagsData = await tagsRes.json();
+          setUserTags((tagsData.tags || []).map((tag: any) => ({
             id: tag.id,
             name: tag.name,
-            count: tag.usageCount
+            count: tag.count
           })));
         }
       } catch (error) {
@@ -79,7 +81,11 @@ export default function GenreDetailClient({ userId, genreId, genreName }: GenreD
         }
 
         const response = await fetch(`/api/stats/movies-by-genre?${params.toString()}`);
-        if (!response.ok) throw new Error('Failed to fetch movies');
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('movies-by-genre fetch error:', response.status, errorText, params.toString());
+          throw new Error('Failed to fetch movies');
+        }
 
         const data = await response.json();
         
