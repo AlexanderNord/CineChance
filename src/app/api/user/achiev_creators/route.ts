@@ -231,8 +231,9 @@ export async function GET(request: Request) {
               const jobType = getJobType(member.job, member.department);
               if (!jobType) continue;
 
-              if (!creatorMap.has(member.id)) {
-                creatorMap.set(member.id, {
+              const memberId = Number(member.id);
+              if (!creatorMap.has(memberId)) {
+                creatorMap.set(memberId, {
                   name: member.name,
                   profile_path: member.profile_path,
                   job_types: new Set([jobType]),
@@ -242,16 +243,22 @@ export async function GET(request: Request) {
                   ratingsByJobType: new Map([[jobType, rating !== null && rating !== undefined ? [rating] : []]]),
                 });
               } else {
-                creatorMap.get(member.id)!.job_types.add(jobType);
-                const existingRatings = creatorMap.get(member.id)!.ratingsByJobType.get(jobType);
+                const existing = creatorMap.get(memberId)!;
+                existing.job_types.add(jobType);
+                // Обновляем name и profile_path если они отсутствуют
+                if (!existing.profile_path && member.profile_path) {
+                  existing.name = member.name;
+                  existing.profile_path = member.profile_path;
+                }
+                const existingRatings = existing.ratingsByJobType.get(jobType);
                 if (existingRatings && rating !== null && rating !== undefined) {
                   existingRatings.push(rating);
                 } else if (rating !== null && rating !== undefined) {
-                  creatorMap.get(member.id)!.ratingsByJobType.set(jobType, [rating]);
+                  existing.ratingsByJobType.set(jobType, [rating]);
                 }
               }
               
-              creatorMap.get(member.id)!.watchedIds.add(credits.id);
+              creatorMap.get(memberId)!.watchedIds.add(credits.id);
             }
           }
         }
@@ -274,14 +281,20 @@ export async function GET(request: Request) {
                 const jobType = getJobType(member.job, member.department);
                 if (!jobType) continue;
 
-                if (creatorMap.has(member.id)) {
-                  creatorMap.get(member.id)!.rewatchedIds.add(credits.id);
-                  creatorMap.get(member.id)!.job_types.add(jobType);
-                  const existingRatings = creatorMap.get(member.id)!.ratingsByJobType.get(jobType);
+                const memberId = Number(member.id);
+                if (creatorMap.has(memberId)) {
+                  const existing = creatorMap.get(memberId)!;
+                  existing.rewatchedIds.add(credits.id);
+                  existing.job_types.add(jobType);
+                  if (!existing.profile_path && member.profile_path) {
+                    existing.name = member.name;
+                    existing.profile_path = member.profile_path;
+                  }
+                  const existingRatings = existing.ratingsByJobType.get(jobType);
                   if (existingRatings && rating !== null && rating !== undefined) {
                     existingRatings.push(rating);
                   } else if (rating !== null && rating !== undefined) {
-                    creatorMap.get(member.id)!.ratingsByJobType.set(jobType, [rating]);
+                    existing.ratingsByJobType.set(jobType, [rating]);
                   }
                 }
               }
@@ -307,9 +320,15 @@ export async function GET(request: Request) {
                 const jobType = getJobType(member.job, member.department);
                 if (!jobType) continue;
 
-                if (creatorMap.has(member.id)) {
-                  creatorMap.get(member.id)!.droppedIds.add(credits.id);
-                  creatorMap.get(member.id)!.job_types.add(jobType);
+                const memberId = Number(member.id);
+                if (creatorMap.has(memberId)) {
+                  const existing = creatorMap.get(memberId)!;
+                  existing.droppedIds.add(credits.id);
+                  existing.job_types.add(jobType);
+                  if (!existing.profile_path && member.profile_path) {
+                    existing.name = member.name;
+                    existing.profile_path = member.profile_path;
+                  }
                 }
               }
             }
