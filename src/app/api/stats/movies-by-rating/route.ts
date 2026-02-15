@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
+import { MOVIE_STATUS_IDS, getStatusNameById } from '@/lib/movieStatusConstants';
 import { rateLimit } from '@/middleware/rateLimit';
 
 // Вспомогательная функция для получения деталей с TMDB
@@ -129,6 +129,7 @@ export async function GET(request: NextRequest) {
         mediaType: true,
         title: true,
         userRating: true,
+        statusId: true,
         addedAt: true,
         tags: { select: { id: true, name: true } },
       },
@@ -167,6 +168,8 @@ export async function GET(request: NextRequest) {
           genre_ids: genres,
           original_language: tmdbData?.original_language || '',
           userRating: record.userRating,
+          statusId: record.statusId,
+          statusName: getStatusNameById(record.statusId) || 'Просмотрено',
           addedAt: record.addedAt?.toISOString() || '',
           tags: record.tags || [],
         };

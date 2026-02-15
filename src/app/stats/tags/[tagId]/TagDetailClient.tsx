@@ -110,6 +110,14 @@ export default function TagDetailClient({ userId, tagId, tagName }: TagDetailCli
       showRatingBadge={true}
       getInitialRating={(movie) => (movie as any).userRating}
       hideTagsFilter={source === 'tags'}
+      getInitialStatus={(movie) => {
+        const statusName = (movie as any).statusName;
+        if (statusName === 'Пересмотрено') return 'rewatched';
+        if (statusName === 'Просмотрено') return 'watched';
+        if (statusName === 'Хочу посмотреть') return 'want';
+        if (statusName === 'Брошено') return 'dropped';
+        return 'watched';
+      }}
     />
   );
 }
