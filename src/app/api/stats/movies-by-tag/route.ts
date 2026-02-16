@@ -162,10 +162,15 @@ export async function GET(request: NextRequest) {
         // Фильтрация по типу контента на основе TMDB данных
         const isAnimeItem = isAnime(tmdbData);
         const isCartoonItem = isCartoon(tmdbData);
+        const isRegularContent = !isAnimeItem && !isCartoonItem;
         
-        if (showAnimeParam && !showCartoonParam && !isAnimeItem) return null;
-        if (showCartoonParam && !showAnimeParam && !isCartoonItem) return null;
-        if (!showAnimeParam && !showCartoonParam && (isAnimeItem || isCartoonItem)) return null;
+        // Показываем аниме только если включен showAnime
+        if (isAnimeItem && !showAnimeParam) return null;
+        // Показываем мульты только если включен showCartoon  
+        if (isCartoonItem && !showCartoonParam) return null;
+        // Показываем обычные фильмы/сериалы только если включены showMovies или showTv
+        if (isRegularContent && !showMoviesParam && record.mediaType === 'movie') return null;
+        if (isRegularContent && !showTvParam && record.mediaType === 'tv') return null;
 
         // Проверяем фильтры
         if (tmdbRating < minRatingParam || tmdbRating > maxRatingParam) return null;

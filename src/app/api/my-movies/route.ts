@@ -197,15 +197,19 @@ export async function GET(request: NextRequest) {
         // Type filter
         if (typesParam) {
           const types = typesParam.split(',');
-          if (isAnime) {
-            if (!types.includes('anime')) return false;
-          } else if (isCartoon) {
-            if (!types.includes('cartoon')) return false;
-          } else if (record.mediaType === 'movie') {
-            if (!types.includes('movie')) return false;
-          } else if (record.mediaType === 'tv') {
-            if (!types.includes('tv')) return false;
-          }
+          const isAnimeItem = isAnime;
+          const isCartoonItem = isCartoon;
+          const isMovieItem = record.mediaType === 'movie';
+          const isTvItem = record.mediaType === 'tv';
+
+          // Если это аниме - показываем только если аниме в типах
+          if (isAnimeItem && !types.includes('anime')) return false;
+          // Если это мульт - показываем только если мульт в типах
+          if (isCartoonItem && !types.includes('cartoon')) return false;
+          // Если это обычный фильм - показываем только если movie в типах
+          if (isMovieItem && !types.includes('movie')) return false;
+          // Если это обычный сериал - показываем только если tv в типах
+          if (isTvItem && !types.includes('tv')) return false;
         }
 
         // Year filter
@@ -339,15 +343,19 @@ export async function GET(request: NextRequest) {
       // Type filter
       if (typesParam) {
         const types = typesParam.split(',');
-        if (isAnime) {
-          if (!types.includes('anime')) return false;
-        } else if (isCartoon) {
-          if (!types.includes('cartoon')) return false;
-        } else if (record.mediaType === 'movie') {
-          if (!types.includes('movie')) return false;
-        } else if (record.mediaType === 'tv') {
-          if (!types.includes('tv')) return false;
-        }
+        const isAnimeItem = isAnime;
+        const isCartoonItem = isCartoon;
+        const isMovieItem = record.mediaType === 'movie';
+        const isTvItem = record.mediaType === 'tv';
+
+        // Если это аниме - показываем только если аниме в типах
+        if (isAnimeItem && !types.includes('anime')) return false;
+        // Если это мульт - показываем только если мульт в типах
+        if (isCartoonItem && !types.includes('cartoon')) return false;
+        // Если это обычный фильм - показываем только если movie в типах
+        if (isMovieItem && !types.includes('movie')) return false;
+        // Если это обычный сериал - показываем только если tv в типах
+        if (isTvItem && !types.includes('tv')) return false;
       }
 
       // Year filter
