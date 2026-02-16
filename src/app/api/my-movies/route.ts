@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate records to load based on filters
-    const hasTypeFilters = typesParam && typesParam.split(',').length < 3;
+    const hasTypeFilters = typesParam && typesParam !== 'all' && typesParam.split(',').length < 4;
     const hasOtherFilters = genresParam || yearFrom || yearTo || (minRating > 0 || maxRating < 10);
     
     // Load enough records to handle in-memory filtering, but at least 50 for efficiency
@@ -194,8 +194,8 @@ export async function GET(request: NextRequest) {
       const filteredMovies = moviesWithDetails.filter(({ record, tmdbData, isAnime, isCartoon }) => {
         if (!tmdbData) return false;
 
-        // Type filter
-        if (typesParam) {
+        // Type filter - пропускаем если typesParam равен 'all' или null
+        if (typesParam && typesParam !== 'all') {
           const types = typesParam.split(',');
           const isAnimeItem = isAnime;
           const isCartoonItem = isCartoon;
@@ -340,8 +340,8 @@ export async function GET(request: NextRequest) {
     const filteredMovies = moviesWithDetails.filter(({ record, tmdbData, isAnime, isCartoon }) => {
       if (!tmdbData) return false;
 
-      // Type filter
-      if (typesParam) {
+      // Type filter - пропускаем если typesParam равен 'all' или null
+      if (typesParam && typesParam !== 'all') {
         const types = typesParam.split(',');
         const isAnimeItem = isAnime;
         const isCartoonItem = isCartoon;
