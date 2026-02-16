@@ -45,15 +45,27 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
 
   // Filter state
   const [currentFilters, setCurrentFilters] = useState<FilterState | null>(null);
+  const [debouncedFilters, setDebouncedFilters] = useState<FilterState | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   
+  // Debounce фильтров - задержка 300ms перед отправкой
+  useEffect(() => {
+    if (!currentFilters) return;
+    
+    const timer = setTimeout(() => {
+      setDebouncedFilters(currentFilters);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [currentFilters]);
+
   // Scroll tracking
   const scrollYRef = useRef(0);
   const batchDataRef = useRef<Record<string, any>>({});
 
   // Build search params
   const buildSearchParams = () => {
-    const filters = currentFilters;
+    const filters = debouncedFilters;
     
     let typeValue = 'all';
     if (filters) {
@@ -64,7 +76,7 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
       if (filters.showCartoon) types.push('cartoon');
       typeValue = types.length > 0 ? types.join(',') : 'all';
     }
-
+    
     const genresString = filters?.genres && filters.genres.length > 0 
       ? filters.genres.join(',') 
       : '';
@@ -128,7 +140,8 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
   return (
     <>
       <SearchFilters 
-        onFiltersChange={setCurrentFilters} 
+        onFiltersChange={setCurrentFilters}
+        initialFilters={currentFilters}
         totalResults={searchQuery.totalResults} 
       />
 

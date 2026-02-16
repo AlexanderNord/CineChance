@@ -1,10 +1,11 @@
 // src/app/search/SearchFilters.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SearchFiltersProps {
   onFiltersChange: (filters: FilterState) => void;
+  initialFilters?: FilterState;
   totalResults: number;
 }
 
@@ -61,9 +62,9 @@ const YEAR_QUICK_FILTERS = [
   { value: '1960s', label: '60-е' },
 ];
 
-export default function SearchFilters({ onFiltersChange, totalResults }: SearchFiltersProps) {
+export default function SearchFilters({ onFiltersChange, initialFilters, totalResults }: SearchFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
+  const [filters, setFilters] = useState<FilterState>(initialFilters || {
     type: 'all',
     showMovies: true,
     showTv: true,
@@ -79,6 +80,13 @@ export default function SearchFilters({ onFiltersChange, totalResults }: SearchF
     sortOrder: 'desc',
     listStatus: 'all',
   });
+
+  // Sync with initialFilters when they change
+  useEffect(() => {
+    if (initialFilters) {
+      setFilters(initialFilters);
+    }
+  }, [initialFilters]);
 
   const handleFilterChange = (key: keyof FilterState, value: any) => {
     const newFilters = { ...filters, [key]: value };
