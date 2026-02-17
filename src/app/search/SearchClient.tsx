@@ -8,6 +8,7 @@ import { useSearch, useBatchData } from '@/hooks';
 import { Media } from '@/lib/tmdb';
 import { useSession } from 'next-auth/react';
 import LoaderSkeleton from '@/app/components/LoaderSkeleton';
+import { AppErrorBoundary } from '@/app/components/ErrorBoundary';
 
 interface SearchClientProps {
   initialQuery: string;
@@ -138,7 +139,19 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
   }
 
   return (
-    <>
+    <AppErrorBoundary
+      fallback={
+        <div className="border-2 border-red-500/50 rounded-lg p-8 text-center">
+          <p className="text-red-400 text-lg mb-4">Не удалось загрузить результаты поиска</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+          >
+            Обновить страницу
+          </button>
+        </div>
+      }
+    >
       <SearchFilters 
         onFiltersChange={setCurrentFilters}
         initialFilters={currentFilters ?? undefined}
@@ -196,6 +209,6 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
           <p className="text-gray-500 text-xs">Попробуйте другой запрос</p>
         </div>
       )}
-    </>
+    </AppErrorBoundary>
   );
 }
