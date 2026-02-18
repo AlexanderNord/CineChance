@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
@@ -193,7 +193,7 @@ export async function GET(request: Request) {
       const achievements = await Promise.all(achievementsPromises);
 
       const achievementsWithScore = achievements.map((collection) => {
-        const calculateCollectionScore = (collection: any) => {
+        const calculateCollectionScore = (collection: unknown) => {
           const avgRating = collection.average_rating || 0;
           const watchedMovies = collection.watched_movies || 0;
           const progress = collection.progress_percent || 0;

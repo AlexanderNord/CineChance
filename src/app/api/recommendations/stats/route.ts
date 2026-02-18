@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
 
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
 }
 
 async function getTableStats(
-  model: any,
+  model: unknown,
   dateField: string
 ) {
   const total = await model.count();

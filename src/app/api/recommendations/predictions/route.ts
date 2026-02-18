@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         modelVersion,
         predictedScore,
         actualAction,
-        featureVector: featureVector as any,
+        featureVector: featureVector as unknown,
       },
     });
 

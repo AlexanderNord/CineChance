@@ -1,5 +1,5 @@
 // src/app/api/user/stats/route.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
@@ -14,8 +14,8 @@ const PARALLEL_TMDB_REQUESTS = 10;
 
 async function fetchMediaDetailsBatch(
   records: Array<{ tmdbId: number; mediaType: string }>
-): Promise<Map<string, any>> {
-  const results = new Map<string, any>();
+): Promise<Map<string, unknown>> {
+  const results = new Map<string, unknown>();
   
   if (!TMDB_API_KEY) {
     return results;
@@ -48,14 +48,14 @@ async function fetchMediaDetailsBatch(
   return results;
 }
 
-function isAnime(movie: any): boolean {
-  const hasAnimeGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+function isAnime(movie: unknown): boolean {
+  const hasAnimeGenre = movie.genres?.some((g: unknown) => g.id === 16) ?? false;
   const isJapanese = movie.original_language === 'ja';
   return hasAnimeGenre && isJapanese;
 }
 
-function isCartoon(movie: any): boolean {
-  const hasAnimationGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+function isCartoon(movie: unknown): boolean {
+  const hasAnimationGenre = movie.genres?.some((g: unknown) => g.id === 16) ?? false;
   const isNotJapanese = movie.original_language !== 'ja';
   return hasAnimationGenre && isNotJapanese;
 }

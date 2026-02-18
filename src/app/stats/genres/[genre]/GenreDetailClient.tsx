@@ -35,7 +35,7 @@ export default function GenreDetailClient({ userId, genreId, genreName }: GenreD
         const tagsRes = await fetch('/api/user/tag-usage');
         if (tagsRes.ok) {
           const tagsData = await tagsRes.json();
-          setUserTags((tagsData.tags || []).map((tag: any) => ({
+          setUserTags((tagsData.tags || []).map((tag: unknown) => ({
             id: tag.id,
             name: tag.name,
             count: tag.count
@@ -114,10 +114,10 @@ export default function GenreDetailClient({ userId, genreId, genreName }: GenreD
       availableGenres={availableGenres}
       userTags={userTags}
       showRatingBadge={true}
-      getInitialRating={(movie) => (movie as any).userRating}
+      getInitialRating={(movie) => (movie as unknown).userRating}
       hideGenresFilter={source === 'genres'}
       getInitialStatus={(movie) => {
-        const statusName = (movie as any).statusName;
+        const statusName = (movie as unknown).statusName;
         if (statusName === 'Пересмотрено') return 'rewatched';
         if (statusName === 'Просмотрено') return 'watched';
         if (statusName === 'Хочу посмотреть') return 'want';

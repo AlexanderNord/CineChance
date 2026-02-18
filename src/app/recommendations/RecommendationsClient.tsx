@@ -69,7 +69,7 @@ interface RecommendationResponse {
     dbRecords: number;
     cached: boolean;
     fetchDuration: number;
-    filters: any;
+    filters: unknown;
   };
 }
 

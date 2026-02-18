@@ -1,5 +1,5 @@
 // src/app/api/collection/[id]/route.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
@@ -85,12 +85,12 @@ export async function GET(
     }
 
     // Формируем данные о фильмах
-    const moviesWithStatus = (data.parts || []).map((movie: any) => {
+    const moviesWithStatus = (data.parts || []).map((movie: unknown) => {
       const watchlistKey = `movie_${movie.id}`;
       const watchlistData = watchlistMap.get(watchlistKey);
       const isBlacklisted = blacklistedIds.has(movie.id);
 
-      const movieData: any = {
+      const movieData: Record<string, unknown> = {
         id: movie.id,
         media_type: 'movie',
         title: movie.title,

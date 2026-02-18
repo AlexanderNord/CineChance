@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
@@ -53,7 +53,7 @@ function calculateActorScore(actor: {
 }
 
 // Простое кэширование в памяти для фильмографии актеров
-const actorCreditsCache = new Map<number, { data: any; timestamp: number }>();
+const actorCreditsCache = new Map<number, { data: unknown; timestamp: number }>();
 const CACHE_DURATION = 86400000; // 24 часа в миллисекундах
 
 // Вспомогательная функция для получения деталей с TMDB
@@ -71,15 +71,15 @@ async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
 }
 
 // Helper function to check if movie is anime
-function isAnime(movie: any): boolean {
-  const hasAnimeGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+function isAnime(movie: unknown): boolean {
+  const hasAnimeGenre = movie.genres?.some((g: unknown) => g.id === 16) ?? false;
   const isJapanese = movie.original_language === 'ja';
   return hasAnimeGenre && isJapanese;
 }
 
 // Helper function to check if movie is cartoon (animation but not anime)
-function isCartoon(movie: any): boolean {
-  const hasAnimationGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+function isCartoon(movie: unknown): boolean {
+  const hasAnimationGenre = movie.genres?.some((g: unknown) => g.id === 16) ?? false;
   const isNotJapanese = movie.original_language !== 'ja';
   return hasAnimationGenre && isNotJapanese;
 }

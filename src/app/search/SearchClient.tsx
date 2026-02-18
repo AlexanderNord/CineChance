@@ -63,7 +63,7 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
 
   // Scroll tracking
   const scrollYRef = useRef(0);
-  const batchDataRef = useRef<Record<string, any>>({});
+  const batchDataRef = useRef<Record<string, unknown>>({});
 
   // Build search params
   const buildSearchParams = () => {

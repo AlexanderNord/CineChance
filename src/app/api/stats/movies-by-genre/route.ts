@@ -1,5 +1,5 @@
 // src/app/api/stats/movies-by-genre/route.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
@@ -22,14 +22,14 @@ async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
   }
 }
 
-function isAnime(movie: any): boolean {
-  const hasAnimeGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+function isAnime(movie: unknown): boolean {
+  const hasAnimeGenre = movie.genres?.some((g: unknown) => g.id === 16) ?? false;
   const isJapanese = movie.original_language === 'ja';
   return hasAnimeGenre && isJapanese;
 }
 
-function isCartoon(movie: any): boolean {
-  const hasAnimationGenre = movie.genres?.some((g: any) => g.id === 16) ?? false;
+function isCartoon(movie: unknown): boolean {
+  const hasAnimationGenre = movie.genres?.some((g: unknown) => g.id === 16) ?? false;
   const isNotJapanese = movie.original_language !== 'ja';
   return hasAnimationGenre && isNotJapanese;
 }
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     const tagsArray = tagsParam ? tagsParam.split(',').filter(t => t.length > 0) : [];
 
     // Получаем фильмы пользователя (включая все статусы для полной статистики)
-    const whereClause: any = {
+    const whereClause: Record<string, unknown> = {
       userId,
       statusId: {
         in: [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED, MOVIE_STATUS_IDS.DROPPED],
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
 
     // Параллельная загрузка TMDB данных с батчингом
     const BATCH_SIZE = 5;
-    const moviesWithGenre: Array<{ record: any; tmdbData: any }> = [];
+    const moviesWithGenre: Array<{ record: unknown; tmdbData: unknown }> = [];
     
     for (let i = 0; i < watchListRecords.length; i += BATCH_SIZE) {
       const batch = watchListRecords.slice(i, i + BATCH_SIZE);
@@ -156,11 +156,11 @@ export async function GET(request: NextRequest) {
         const record = batch[j];
         const tmdbData = batchResults[j];
         
-        if (!tmdbData?.genres?.some((g: any) => g.id === genreId)) continue;
+        if (!tmdbData?.genres?.some((g: unknown) => g.id === genreId)) continue;
         
         const tmdbRating = tmdbData?.vote_average || 0;
         const releaseYear = new Date(tmdbData?.release_date || tmdbData?.first_air_date || '').getFullYear();
-        const genres = tmdbData?.genres?.map((g: any) => g.id) || [];
+        const genres = tmdbData?.genres?.map((g: unknown) => g.id) || [];
 
         // Фильтрация по типу контента на основе TMDB данных
         const isAnimeItem = isAnime(tmdbData);
@@ -199,7 +199,7 @@ export async function GET(request: NextRequest) {
 
     // Загружаем теги только для записей, которые попадут в ответ
     const recordIdsForTags = paginatedMovies.map(m => m.record.id);
-    const tagsMap = new Map<string, any[]>();
+    const tagsMap = new Map<string, unknown[]>();
     
     if (recordIdsForTags.length > 0) {
       const tagsData = await prisma.watchList.findMany({
@@ -227,7 +227,7 @@ export async function GET(request: NextRequest) {
       release_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
       first_air_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
       overview: tmdbData?.overview || '',
-      genre_ids: tmdbData?.genres?.map((g: any) => g.id) || [],
+      genre_ids: tmdbData?.genres?.map((g: unknown) => g.id) || [],
       original_language: tmdbData?.original_language || '',
       userRating: record.userRating,
       addedAt: record.addedAt?.toISOString() || '',
@@ -283,10 +283,10 @@ export async function GET(request: NextRequest) {
 }
 
 function applySorting(
-  movies: Array<{ record: any; tmdbData: any }>,
+  movies: Array<{ record: unknown; tmdbData: unknown }>,
   sortBy: string,
   sortOrder: string
-): Array<{ record: any; tmdbData: any }> {
+): Array<{ record: unknown; tmdbData: unknown }> {
   const order = sortOrder === 'asc' ? 1 : -1;
 
   return [...movies].sort((a, b) => {

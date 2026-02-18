@@ -1,5 +1,5 @@
 // src/app/api/person/[id]/route.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
@@ -87,12 +87,12 @@ export async function GET(
     
     // Объединяем cast и crew
     const allCredits = [
-      ...(creditsData.cast || []).map((item: any) => ({ ...item, role_type: 'cast' })),
-      ...(creditsData.crew || []).map((item: any) => ({ ...item, role_type: 'crew' }))
+      ...(creditsData.cast || []).map((item: unknown) => ({ ...item, role_type: 'cast' })),
+      ...(creditsData.crew || []).map((item: unknown) => ({ ...item, role_type: 'crew' }))
     ];
     
     const filmography = allCredits
-      ?.filter((item: any) => {
+      ?.filter((item: unknown) => {
         // Только с постером
         if (!item.poster_path) return false;
         
@@ -102,7 +102,7 @@ export async function GET(
         seen.add(key);
         return true;
       })
-      ?.sort((a: any, b: any) => {
+      ?.sort((a: unknown, b: unknown) => {
         // Сначала сортируем по популярности, затем по дате
         if (b.popularity !== a.popularity) {
           return b.popularity - a.popularity;
@@ -112,7 +112,7 @@ export async function GET(
         const dateB = b.release_date || b.first_air_date || '';
         return dateB.localeCompare(dateA);
       })
-      ?.map((item: any) => ({
+      ?.map((item: unknown) => ({
         id: item.id,
         media_type: item.media_type,
         title: item.title || item.name,

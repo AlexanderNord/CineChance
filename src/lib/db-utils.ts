@@ -20,7 +20,7 @@ export function chunkArray<T>(array: T[], chunkSize: number): T[][] {
 export async function processInChunks<T, R>(
   items: T[],
   chunkSize: number,
-  processor: (chunk: T[]) => Promise<R>,
+  processor: (_chunk: T[]) => Promise<R>,
   parallelChunks: number = 1
 ): Promise<R[]> {
   const chunks = chunkArray(items, chunkSize);

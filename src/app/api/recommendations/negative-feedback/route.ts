@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { prisma } from '@/lib/prisma';
 import { ContextualFactors, CorrectiveAction } from '@/lib/recommendation-types';
 import { logger } from '@/lib/logger';
@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
         recommendationLogId,
         feedbackType,
         detailedReason,
-        contextualFactors: contextualFactors as any,
-        correctiveAction: correctiveAction as any,
+        contextualFactors: contextualFactors as unknown,
+        correctiveAction: correctiveAction as unknown,
       },
     });
 
@@ -256,7 +256,7 @@ export async function PUT(request: NextRequest) {
     await prisma.negativeFeedback.update({
       where: { id: feedbackId },
       data: {
-        correctiveAction: correctiveAction as any,
+        correctiveAction: correctiveAction as unknown,
       },
     });
 

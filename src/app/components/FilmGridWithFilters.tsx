@@ -1,6 +1,5 @@
 // src/app/components/FilmGridWithFilters.tsx
 'use client';
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import MovieCard from './MovieCard';
@@ -267,7 +266,7 @@ export default function FilmGridWithFilters({
           setAdditionalFilters(filters);
           setSelectedGenres(genres);
           // Извлекаем selectedTags из filters если они присутствуют
-          const tagsFromFilters = (filters as any).selectedTags || [];
+          const tagsFromFilters = (filters as unknown).selectedTags || [];
           setSelectedTags(tagsFromFilters);
         }}
         availableGenres={availableGenres}

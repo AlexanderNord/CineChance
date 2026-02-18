@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const stream = new ReadableStream({
     start(controller) {
       // Функция для отправки событий
-      const sendEvent = (type: string, data: any) => {
+      const sendEvent = (type: string, data: unknown) => {
         const eventData = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
         controller.enqueue(encoder.encode(eventData));
       };

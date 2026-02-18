@@ -43,7 +43,7 @@ const RECOMMENDATION_COOLDOWN_DAYS = 7;
 const MIN_RATING_THRESHOLD = 6.5;
 
 // Функция для отправки прогресса (если доступно)
-function sendProgress(stage: string, progress: number, details?: any) {
+function sendProgress(stage: string, progress: number, details?: unknown) {
   // В будущем здесь будет интеграция с SSE
   // Пока просто логируем для отладки
   logger.info('Progress update', { stage, progress, details });
@@ -112,9 +112,9 @@ function parseFilterParams(url: URL): FilterParams {
 /**
  * Проверка является ли фильм аниме
  */
-function isAnime(tmdbData: any): boolean {
+function isAnime(tmdbData: unknown): boolean {
   const isAnimation = (tmdbData.genre_ids?.includes(16) || 
-    tmdbData.genres?.some((g: any) => g.id === 16));
+    tmdbData.genres?.some((g: unknown) => g.id === 16));
   const isJapanese = tmdbData.original_language === 'ja';
   return isAnimation && isJapanese;
 }
@@ -145,8 +145,8 @@ function calculateCandidatePoolMetrics(
   afterTypeFilter: number,
   afterCooldown: number,
   afterAdditionalFilters: number,
-  watchListItems: any[],
-  filteredItems: any[]
+  watchListItems: unknown[],
+  filteredItems: unknown[]
 ): CandidatePoolMetrics {
   // Расчёт распределения рейтингов
   const ratingDistribution: Record<number, number> = {};
@@ -173,8 +173,8 @@ function calculateCandidatePoolMetrics(
  */
 function calculateMLFeatures(
   userId: string,
-  selectedMovie: any,
-  watchListItems: any[]
+  selectedMovie: unknown,
+  watchListItems: unknown[]
 ): MLFeatures {
   // Базовая схожесть с ранее принятыми рекомендациями
   const similarityScore = 0.5; // TODO: Рассчитывать на основе истории
@@ -286,11 +286,11 @@ export async function GET(req: Request) {
     // 2. Получаем дату рождения пользователя для фильтрации контента
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { birthDate: true } as any,
+      select: { birthDate: true } as unknown,
     });
 
     // Проверяем, нужно ли фильтровать взрослый контент
-    const filterAdult = shouldFilterAdult((user as any)?.birthDate ?? null, true);
+    const filterAdult = shouldFilterAdult((user as unknown)?.birthDate ?? null, true);
 
     // 3. Формируем условия для статусов используя ID вместо имен
     const statusIds = getRecommendationStatusIds(lists);
@@ -411,8 +411,7 @@ export async function GET(req: Request) {
             }
             
             // Сначала проверяем кэш
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let details: any = getCachedMediaDetails(item.tmdbId, item.mediaType);
+            let details: unknown = getCachedMediaDetails(item.tmdbId, item.mediaType);
             
             if (!details) {
               // Если в кэше нет, запрашиваем из TMDB
@@ -843,11 +842,11 @@ export async function GET(req: Request) {
         mediaType: selected.mediaType,
         algorithm: 'random_v1',
         action: 'shown',
-        context: extendedContext as any,
-        filtersSnapshot: filtersSnapshot as any,
-        candidatePoolMetrics: candidatePoolMetrics as any,
-        temporalContext: temporalContext as any,
-        mlFeatures: mlFeatures as any,
+        context: extendedContext as unknown,
+        filtersSnapshot: filtersSnapshot as unknown,
+        candidatePoolMetrics: candidatePoolMetrics as unknown,
+        temporalContext: temporalContext as unknown,
+        mlFeatures: mlFeatures as unknown,
       },
     });
 

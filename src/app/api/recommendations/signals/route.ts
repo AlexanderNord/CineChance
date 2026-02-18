@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { prisma } from '@/lib/prisma';
 import { ElementContext, SignalTemporalContext, PredictedIntent } from '@/lib/recommendation-types';
 import { logger } from '@/lib/logger';
@@ -106,9 +106,9 @@ async function handleSingle(body: Record<string, unknown>) {
         recommendationLogId: recommendationLogId || undefined,
         signalType,
         intensityScore: 0.5,
-        elementContext: elementContext as any,
-        temporalContext: temporalContext as any,
-        predictedIntent: predictedIntent as any,
+        elementContext: elementContext as unknown,
+        temporalContext: temporalContext as unknown,
+        predictedIntent: predictedIntent as unknown,
       },
     });
 
@@ -164,7 +164,7 @@ async function handleBatch(batch: Record<string, unknown>[]) {
               recommendationLogId: undefined,
               signalType: 'error',
               intensityScore: 0,
-              elementContext: { error: 'Invalid signal data', original: item } as any,
+              elementContext: { error: 'Invalid signal data', original: item } as unknown,
             },
           });
         }
@@ -175,9 +175,9 @@ async function handleBatch(batch: Record<string, unknown>[]) {
             recommendationLogId: recommendationLogId || undefined,
             signalType,
             intensityScore: 0.5,
-            elementContext: elementContext as any,
-            temporalContext: temporalContext as any,
-            predictedIntent: predictedIntent as any,
+            elementContext: elementContext as unknown,
+            temporalContext: temporalContext as unknown,
+            predictedIntent: predictedIntent as unknown,
           },
         });
       })

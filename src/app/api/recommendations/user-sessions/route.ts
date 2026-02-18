@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { prisma } from '@/lib/prisma';
 import { DeviceContext, SessionFlow, SessionOutcomeMetrics } from '@/lib/recommendation-types';
 import { logger } from '@/lib/logger';
@@ -59,9 +59,9 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         sessionId,
-        deviceContext: deviceContext as any,
-        sessionFlow: sessionFlow as any,
-        outcomeMetrics: outcomeMetrics as any,
+        deviceContext: deviceContext as unknown,
+        sessionFlow: sessionFlow as unknown,
+        outcomeMetrics: outcomeMetrics as unknown,
         startedAt: new Date(),
       },
     });
@@ -220,8 +220,8 @@ export async function PATCH(request: NextRequest) {
     await prisma.userSession.update({
       where: { id: sessionId },
       data: {
-        sessionFlow: sessionFlow as any,
-        outcomeMetrics: outcomeMetrics as any,
+        sessionFlow: sessionFlow as unknown,
+        outcomeMetrics: outcomeMetrics as unknown,
         endedAt: endedAt ? new Date(endedAt) : new Date(),
         durationMs,
       },

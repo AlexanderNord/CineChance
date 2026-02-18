@@ -118,7 +118,7 @@ export default function FilterStateManager({
   const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
     const defaultValue = defaultFilters[key as keyof FilterState];
     if (Array.isArray(value)) {
-      return value.length !== (defaultValue as any)?.length;
+      return value.length !== (defaultValue as unknown)?.length;
     }
     if (key === 'additionalFilters') {
       const additional = value as AdditionalFilters;

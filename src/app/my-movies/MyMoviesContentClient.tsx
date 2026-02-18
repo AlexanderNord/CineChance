@@ -67,7 +67,7 @@ export default function MyMoviesContentClient({
         const tagsRes = await fetch('/api/user/tag-usage');
         if (tagsRes.ok) {
           const tagsData = await tagsRes.json();
-          setUserTags((tagsData.tags || []).map((tag: any) => ({
+          setUserTags((tagsData.tags || []).map((tag: unknown) => ({
             id: tag.id,
             name: tag.name,
             count: tag.count
@@ -347,16 +347,16 @@ export default function MyMoviesContentClient({
           availableGenres={availableGenres}
           userTags={userTags}
           showRatingBadge={true}
-          getInitialRating={(movie) => (movie as any).userRating}
+          getInitialRating={(movie) => (movie as unknown).userRating}
           getInitialStatus={(movie) => {
-            const statusName = (movie as any).statusName;
+            const statusName = (movie as unknown).statusName;
             if (statusName === 'Пересмотрено') return 'rewatched';
             if (statusName === 'Просмотрено') return 'watched';
             if (statusName === 'Хочу посмотреть') return 'want';
             if (statusName === 'Брошено') return 'dropped';
             return initialStatus;
           }}
-          getInitialIsBlacklisted={(movie) => (movie as any).isBlacklisted === true}
+          getInitialIsBlacklisted={(movie) => (movie as unknown).isBlacklisted === true}
           restoreView={isRestoreView}
           initialStatus={initialStatus}
           emptyMessage={

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
@@ -18,10 +18,10 @@ interface LogsData {
   databaseChecks: {
     individualCounts: Record<string, number>;
     combinedCounts: Record<string, number>;
-    sampleRecords: any;
+    sampleRecords: unknown;
   };
-  apiComparison: any;
-  sampleRecords: any;
+  apiComparison: unknown;
+  sampleRecords: unknown;
 }
 
 export async function GET(request: NextRequest) {
@@ -56,10 +56,10 @@ export async function GET(request: NextRequest) {
       databaseChecks: {
         individualCounts: {} as Record<string, number>,
         combinedCounts: {} as Record<string, number>,
-        sampleRecords: [] as any[]
+        sampleRecords: [] as unknown[]
       },
-      apiComparison: {} as Record<string, any>,
-      sampleRecords: [] as any[]
+      apiComparison: {} as Record<string, unknown>,
+      sampleRecords: [] as unknown[]
     };
 
     // Подробная проверка базы данных
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(logs);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Logs endpoint error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to fetch logs', details: error.message }, 

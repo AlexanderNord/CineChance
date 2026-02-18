@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
 
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     
     if (posters.length > 0) {
       // Sort by language (prefer original/en, then any available)
-      const sorted = posters.sort((a: any, b: any) => {
+      const sorted = posters.sort((a: unknown, b: unknown) => {
         const langOrder = { en: 0, '': 1, default: 2 };
         const aLang = langOrder[a.lang as keyof typeof langOrder] ?? 2;
         const bLang = langOrder[b.lang as keyof typeof langOrder] ?? 2;

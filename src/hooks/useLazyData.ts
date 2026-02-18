@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger';
  */
 export function useLazyData<T>(
   fetcher: () => Promise<T>,
-  dependencies: unknown[] = [],
+  _dependencies: unknown[] = [],
   options: IntersectionObserverInit = { rootMargin: '200px', threshold: 0.01 }
 ) {
   const [data, setData] = useState<T | null>(null);
@@ -87,7 +87,7 @@ export function useLazyData<T>(
  */
 export function useSequentialLoad<T>(
   items: T[],
-  fetcher: (item: T, index: number) => Promise<T>,
+  fetcher: (_item: T, _index: number) => Promise<T>,
   options: { delay?: number; batchSize?: number } = { delay: 100, batchSize: 2 }
 ) {
   const { delay = 100, batchSize = 2 } = options;
@@ -102,7 +102,6 @@ export function useSequentialLoad<T>(
     const processItems = async () => {
       setLoading(true);
       
-      const delayBetween = 0;
       let loadedInBatch = 0;
 
       for (let i = 0; i < items.length; i++) {

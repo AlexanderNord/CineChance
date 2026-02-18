@@ -102,7 +102,6 @@ describe('calculateWeightedRating', () => {
 
   it('returns null when no record found', async () => {
     const mockFindUnique = prisma.watchList.findUnique as ReturnType<typeof vi.fn>;
-    const mockFindMany = prisma.ratingHistory.findMany as ReturnType<typeof vi.fn>;
 
     mockFindUnique.mockResolvedValue(null);
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { prisma } from '@/lib/prisma';
 import { RecommendationEventData } from '@/lib/recommendation-types';
 import { logger } from '@/lib/logger';
@@ -104,7 +104,7 @@ async function handleSingle(request: NextRequest, body: Record<string, unknown>)
         userId,
         parentLogId: recommendationLogId || undefined,
         eventType,
-        eventData: eventData as any,
+        eventData: eventData as unknown,
         timestamp: timestamp ? new Date(timestamp) : new Date(),
       },
     });
@@ -158,7 +158,7 @@ async function handleBatch(request: NextRequest, batch: Record<string, unknown>[
               userId: userId || 'unknown',
               parentLogId: undefined,
               eventType: 'error',
-              eventData: { error: 'Invalid event data', original: item } as any,
+              eventData: { error: 'Invalid event data', original: item } as unknown,
               timestamp: new Date(),
             },
           });
@@ -169,7 +169,7 @@ async function handleBatch(request: NextRequest, batch: Record<string, unknown>[
             userId,
             parentLogId: recommendationLogId || undefined,
             eventType,
-            eventData: eventData as any,
+            eventData: eventData as unknown,
             timestamp: timestamp ? new Date(timestamp) : new Date(),
           },
         });

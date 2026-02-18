@@ -1,5 +1,4 @@
 // src/app/api/my-movies/route.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
@@ -57,26 +56,26 @@ async function fetchCineChanceRatings(tmdbIds: number[]) {
 }
 
 // Helper function to check if movie is anime
-function isAnime(movie: any): boolean {
+function isAnime(movie: unknown): boolean {
   let hasAnimeGenre = false;
   
   if (Array.isArray(movie.genre_ids)) {
     hasAnimeGenre = movie.genre_ids.includes(16);
   } else if (Array.isArray(movie.genres)) {
-    hasAnimeGenre = movie.genres.some((g: any) => g.id === 16);
+    hasAnimeGenre = movie.genres.some((g: unknown) => g.id === 16);
   }
   
   return hasAnimeGenre && movie.original_language === 'ja';
 }
 
 // Helper function to check if movie is cartoon (animation but not Japanese)
-function isCartoon(movie: any): boolean {
+function isCartoon(movie: unknown): boolean {
   let hasAnimationGenre = false;
   
   if (Array.isArray(movie.genre_ids)) {
     hasAnimationGenre = movie.genre_ids.includes(16);
   } else if (Array.isArray(movie.genres)) {
-    hasAnimationGenre = movie.genres.some((g: any) => g.id === 16);
+    hasAnimationGenre = movie.genres.some((g: unknown) => g.id === 16);
   }
   
   return hasAnimationGenre && movie.original_language !== 'ja';
@@ -109,7 +108,7 @@ export async function GET(request: NextRequest) {
     const tagsParam = searchParams.get('tags');
 
     // Build where clause
-    const whereClause: any = { userId };
+    const whereClause: Record<string, unknown> = { userId };
 
     if (statusNameParam) {
       const statusNames = statusNameParam.split(',');
@@ -250,7 +249,7 @@ export async function GET(request: NextRequest) {
           release_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
           first_air_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
           overview: tmdbData?.overview || '',
-          genre_ids: tmdbData?.genres?.map((g: any) => g.id) || [],
+          genre_ids: tmdbData?.genres?.map((g: unknown) => g.id) || [],
           original_language: tmdbData?.original_language || '',
           combinedRating,
           averageRating: cineChanceRating,
@@ -386,7 +385,7 @@ export async function GET(request: NextRequest) {
       // Genre filter
       if (genresParam) {
         const genreIds = genresParam.split(',').map(Number);
-        const movieGenres = tmdbData.genres?.map((g: any) => g.id) || [];
+        const movieGenres = tmdbData.genres?.map((g: unknown) => g.id) || [];
         const hasMatchingGenre = genreIds.some(genreId => movieGenres.includes(genreId));
         if (!hasMatchingGenre) return false;
       }
@@ -419,7 +418,7 @@ export async function GET(request: NextRequest) {
         release_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
         first_air_date: tmdbData?.release_date || tmdbData?.first_air_date || '',
         overview: tmdbData?.overview || '',
-        genre_ids: tmdbData?.genres?.map((g: any) => g.id) || [],
+        genre_ids: tmdbData?.genres?.map((g: unknown) => g.id) || [],
         original_language: tmdbData?.original_language || '',
         statusName: getStatusNameById(record.statusId) || 'Unknown',
         combinedRating,
@@ -454,10 +453,10 @@ export async function GET(request: NextRequest) {
 }
 
 function sortMovies(
-  movies: any[],
+  movies: unknown[],
   sortBy: string,
   sortOrder: string
-): any[] {
+): unknown[] {
   return [...movies].sort((a, b) => {
     let comparison = 0;
 

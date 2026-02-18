@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { prisma } from '@/lib/prisma';
@@ -77,7 +76,7 @@ export async function GET(request: NextRequest) {
     const cacheKey = `user:${userId}:genres:all:${statusesParam || 'default'}`;
 
     const fetchGenres = async () => {
-      const whereClause: any = { userId };
+      const whereClause: Record<string, unknown> = { userId };
       
       // По умолчанию включаем все значимые статусы для статистики
       if (!statusesParam) {
