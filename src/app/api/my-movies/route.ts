@@ -128,19 +128,6 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Calculate records to load based on filters
-    const hasTypeFilters = typesParam && typesParam !== 'all' && typesParam.split(',').length < 4;
-    const hasOtherFilters = genresParam || yearFrom || yearTo || (minRating > 0 || maxRating < 10);
-    
-    // Load enough records to handle in-memory filtering, but at least 50 for efficiency
-    let recordsToLoadPerPage = limit;
-    if (hasTypeFilters) {
-      recordsToLoadPerPage = Math.max(limit * 5, 50); // 5x for type filters
-    } else if (hasOtherFilters) {
-      recordsToLoadPerPage = Math.max(limit * 2, 50); // 2x for other filters  
-    }
-    recordsToLoadPerPage = Math.min(recordsToLoadPerPage, 500);
-
     if (includeHidden) {
       // For hidden tab, we use blacklist
       // Load enough to fill current page with buffer
@@ -279,20 +266,9 @@ export async function GET(request: NextRequest) {
     }
 
     // For regular tabs (watched, wantToWatch, dropped)
-    // First count total
-    const totalCount = await prisma.watchList.count({ where: whereClause });
-
-    // Simple pagination: load exactly 'limit' records
+    // Simple pagination: load limit + 1 to detect hasMore
     const skip = (page - 1) * limit;
-    
-    // Check if we've reached the end
-    if (skip >= totalCount) {
-      return NextResponse.json({
-        movies: [],
-        hasMore: false,
-        totalCount,
-      });
-    }
+    const take = limit + 1;
 
     const watchListRecords = await prisma.watchList.findMany({
       where: whereClause,
@@ -310,7 +286,7 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [{ addedAt: 'desc' }, { id: 'desc' }],
       skip,
-      take: recordsToLoadPerPage,
+      take,
     });
 
     // Early exit if no records
@@ -438,8 +414,8 @@ export async function GET(request: NextRequest) {
     const pageEndIndex = pageStartIndex + limit;
     const paginatedMovies = sortedMovies.slice(pageStartIndex, pageEndIndex);
     
-    // hasMore: true if there are more filtered movies
-    const hasMore = sortedMovies.length > pageEndIndex;
+    // hasMore: true if DB returned more than limit (meaning there's more data)
+    const hasMore = watchListRecords.length > limit;
 
     return NextResponse.json({
       movies: paginatedMovies,
