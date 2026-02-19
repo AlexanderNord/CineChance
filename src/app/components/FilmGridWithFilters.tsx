@@ -146,26 +146,14 @@ export default function FilmGridWithFilters({
         const data = await fetchMovies(page, filters);
         const newMovies = data.movies || [];
 
-        // DEBUG: Log pagination data
-        console.log('[DEBUG CLIENT]', {
-          page,
-          newMoviesCount: newMovies.length,
-          hasMore: data.hasMore,
-          firstMovieId: newMovies[0]?.id,
-          lastMovieId: newMovies[newMovies.length - 1]?.id
-        });
-
         if (page === 1) {
           setMovies(newMovies);
         } else {
+          // Prevent duplicates by checking IDs
           setMovies((prev) => {
-            const combined = [...prev, ...newMovies];
-            console.log('[DEBUG SETMOVIES]', {
-              prevCount: prev.length,
-              newCount: newMovies.length,
-              combinedCount: combined.length
-            });
-            return combined;
+            const existingIds = new Set(prev.map(m => `${m.id}-${m.media_type}`));
+            const uniqueNewMovies = newMovies.filter(m => !existingIds.has(`${m.id}-${m.media_type}`));
+            return [...prev, ...uniqueNewMovies];
           });
         }
 
