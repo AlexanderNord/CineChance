@@ -280,11 +280,20 @@ export async function GET(request: NextRequest) {
     // For regular tabs (watched, wantToWatch, dropped)
     // Load enough records to fill current page with buffer for filtering
     // We need to fetch from start because filtering happens after getting TMDB data
-    const recordsNeeded = Math.min(Math.ceil(page * limit * 1.5) + 1, 500);
+    const hasFilters = (
+      (typesParam && typesParam !== 'all' && typesParam.trim() !== '') ||
+      (yearFrom || yearTo) ||
+      (minRating > 0 || maxRating < 10) ||
+      (genresParam)
+    );
+    
+    // Use larger buffer when filters are applied (they reduce result set significantly)
+    const bufferMultiplier = hasFilters ? 3.0 : 1.5;
+    const recordsNeeded = Math.min(Math.ceil(page * limit * bufferMultiplier) + 1, 1000);
     const skip = 0;
     const take = recordsNeeded;
 
-    console.log('[API DEBUG] Pagination strategy:', { page, limit, recordsNeeded, skip, take });
+    console.log('[API DEBUG] Pagination strategy:', { page, limit, hasFilters, bufferMultiplier, recordsNeeded, skip, take });
 
     const watchListRecords = await prisma.watchList.findMany({
       where: whereClause,
