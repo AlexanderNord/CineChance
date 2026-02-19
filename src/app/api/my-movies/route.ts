@@ -278,9 +278,13 @@ export async function GET(request: NextRequest) {
     }
 
     // For regular tabs (watched, wantToWatch, dropped)
-    // Simple pagination: load limit + 1 to detect hasMore
-    const skip = (page - 1) * limit;
-    const take = limit + 1;
+    // Load enough records to fill current page with buffer for filtering
+    // We need to fetch from start because filtering happens after getting TMDB data
+    const recordsNeeded = Math.min(Math.ceil(page * limit * 1.5) + 1, 500);
+    const skip = 0;
+    const take = recordsNeeded;
+
+    console.log('[API DEBUG] Pagination strategy:', { page, limit, recordsNeeded, skip, take });
 
     const watchListRecords = await prisma.watchList.findMany({
       where: whereClause,
@@ -429,13 +433,13 @@ export async function GET(request: NextRequest) {
     const pageEndIndex = pageStartIndex + limit;
     const paginatedMovies = sortedMovies.slice(pageStartIndex, pageEndIndex);
     
-    // hasMore: simple and reliable logic
-    // If we fetched take=limit+1 and got limit+1 records, there's more data
-    const hasMore = watchListRecords.length > limit;
+    // hasMore: Check if more movies exist in filtered result OR if we loaded full batch from DB
+    const hasMore = sortedMovies.length > pageEndIndex || watchListRecords.length === recordsNeeded;
 
     console.log('[API DEBUG]', {
       page,
       limit,
+      recordsNeeded,
       watchListRecordsLength: watchListRecords.length,
       sortedMoviesLength: sortedMovies.length,
       paginatedMoviesLength: paginatedMovies.length,
