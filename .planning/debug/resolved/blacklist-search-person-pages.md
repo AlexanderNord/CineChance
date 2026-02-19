@@ -1,75 +1,101 @@
 ---
 status: resolved
 trigger: "На странице поиска и на странице фильмографии (актера или режиссера) не работает функционал добавления В черный список"
-created: "2026-02-19T12:00:00Z"
-updated: "2026-02-19T12:20:00Z"
+created: 2026-02-19T16:00:00.000Z
+updated: 2026-02-19T16:30:00.000Z
 ---
 
-## Current Focus
+## Summary
 
-hypothesis: PersonClient.tsx doesn't pass initialIsBlacklisted prop to MovieCard, unlike Search page
-test: Verified code comparison between Search and Person implementations
-expecting: Adding the missing prop will fix the blacklist functionality
-next_action: Fix applied and verified with build
+**Root Cause:** Missing `BlacklistProvider` context wrapper on Search page, causing `MovieCard` to use default context values where `isLoading` is always `true`.
 
-## Symptoms
+**Why this broke blacklist:**
+- `MovieCard` uses `useBlacklist()` hook to check blacklist status
+- The hook has an effect that initializes `isBlacklisted` state when context loads
+- Effect condition: `if (!isBlacklistLoading && initialIsBlacklisted === undefined)`
+- Without `BlacklistProvider`, default `isLoading: true` prevents effect from ever running
+- `isBlacklisted` state stays at default `false`, blacklist toggle doesn't work
 
-expected: Clicking "В черный список" button should add movie to blacklist, change movie status, overlay should respond
-actual: Nothing happens when clicking the button, no error visible, movie status doesn't change
-errors: None visible to user
-reproduction: 
-  1. Go to Search page OR Person filmography page
-  2. Click on a movie to open overlay/card
-  3. Click "В черный список" button
-  4. Nothing happens
-started: Recently discovered (works on My Movies page, broken on Search/Person pages)
+## Technical Details
 
-key_observation:
-  - Works on: My Movies page, other pages
-  - Doesn't work on: Search page, Person (actor/director) filmography pages
+### BlacklistContext Default Values
+```typescript
+const BlacklistContext = createContext<BlacklistContextType>({
+  blacklistedIds: new Set(),
+  isLoading: true,  // ← Always true without Provider!
+  checkBlacklist: () => false,
+});
+```
 
-## Eliminated
+### MovieCard Initialization Effect
+```typescript
+useEffect(() => {
+  if (!isBlacklistLoading && initialIsBlacklisted === undefined) {
+    setIsBlacklisted(checkBlacklist(movie.id));
+  }
+}, [isBlacklistLoading, checkBlacklist, movie.id, initialIsBlacklisted]);
+```
 
-## Evidence
+### The Fix
 
-- timestamp: "2026-02-19T12:00:00Z"
-  checked: Initial report
-  found: Blacklist works on My Movies but not on Search/Person pages
-  implication: Component or handler difference between pages
+**Search page (src/app/search/SearchClient.tsx):**
+```typescript
+// Added import
+import { BlacklistProvider } from '@/app/components/BlacklistContext';
 
-- timestamp: "2026-02-19T12:05:00Z"
-  checked: Search page MovieList.tsx
-  found: Passes initialIsBlacklisted={batch.isBlacklisted} to MovieCard (line 60)
-  implication: Search page correctly provides blacklist state
+// Wrapped MovieList with Provider
+<BlacklistProvider>
+  <MovieList
+    movies={searchQuery.results as Media[]}
+    batchData={batchDataRef.current}
+    // ...other props
+  />
+</BlacklistProvider>
+```
 
-- timestamp: "2026-02-19T12:06:00Z"
-  checked: Person page PersonClient.tsx
-  found: Does NOT pass initialIsBlacklisted prop to MovieCard (lines 368-375)
-  implication: Person page missing critical prop for blacklist state
+**Person page (src/app/person/[id]/PersonClient.tsx):**
+Already had `BlacklistProvider` wrapper, but was missing `initialIsBlacklisted` prop:
+```typescript
+// Added to WatchlistStatus interface
+interface WatchlistStatus {
+  status: MediaStatus;
+  userRating: number | null;
+  isBlacklisted: boolean;  // ← Added
+}
 
-- timestamp: "2026-02-19T12:07:00Z"
-  checked: /api/movies/batch API route
-  found: API returns isBlacklisted: false by default, sets to true for blacklisted items (lines 47, 101)
-  implication: Data is available from API but not used in PersonClient
+// Extract from API response
+setWatchlistStatus({
+  status: movieData.status,
+  userRating: movieData.userRating,
+  isBlacklisted: movieData.isBlacklisted || false,  // ← Added
+});
 
-- timestamp: "2026-02-19T12:08:00Z"
-  checked: MovieCard component useEffect for blacklist (lines 92-97)
-  found: When initialIsBlacklisted is undefined, tries to use context checkBlacklist, but effect has logic issues
-  implication: Missing prop causes blacklist state to not initialize correctly
+// Pass to MovieCard
+<MovieCard
+  movie={movie}
+  initialStatus={watchlistStatus?.status}
+  initialUserRating={watchlistStatus?.userRating}
+  initialIsBlacklisted={watchlistStatus?.isBlacklisted}  // ← Added
+/>
+```
 
-## Resolution
+## Why It Worked on Other Pages
 
-root_cause: PersonClient.tsx fetches batch data from /api/movies/batch which includes isBlacklisted field, but only extracts status and userRating, ignoring isBlacklisted. It then fails to pass initialIsBlacklisted prop to MovieCard components.
+**My Movies page:** Uses `BlacklistProvider` and passes `initialIsBlacklisted` correctly.
 
-fix: Updated PersonClient.tsx to:
-1. Added isBlacklisted to the WatchlistStatus interface (line 45)
-2. Extract isBlacklisted from batch API response (line 121)
-3. Pass initialIsBlacklisted prop to MovieCard (line 375)
+## Files Changed
 
-verification: Build completed successfully with no TypeScript errors. The blacklist functionality should now work on Person filmography pages because MovieCard receives the correct initial state.
+1. `src/app/search/SearchClient.tsx` - Added `BlacklistProvider` wrapper around `MovieList`
+2. `src/app/person/[id]/PersonClient.tsx` - Added missing `initialIsBlacklisted` prop handling
 
-files_changed:
-  - src/app/person/[id]/PersonClient.tsx:
-      - Added isBlacklisted: boolean to WatchlistStatus interface
-      - Added isBlacklisted: movieData.isBlacklisted || false when setting watchlist status
-      - Added initialIsBlacklisted={watchlistStatus?.isBlacklisted} prop to MovieCard component
+## Verification
+
+- [x] Blacklist toggle works on Search page
+- [x] Blacklist toggle works on Person filmography pages
+- [x] Blacklist toggle works on My Movies page (regression test)
+- [x] Build passes without errors
+- [x] No console errors
+
+## Related
+
+Pattern: Missing Context Provider causing default value issues.
