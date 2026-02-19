@@ -287,10 +287,16 @@ export async function GET(request: NextRequest) {
       (genresParam)
     );
     
-    // Use MUCH larger buffer when filters are applied
-    // Filters can reduce result set by 80-90%, so we need 10x buffer
-    const bufferMultiplier = hasFilters ? 10.0 : 1.5;
-    const recordsNeeded = Math.min(Math.ceil(page * limit * bufferMultiplier) + 1, 2000);
+    // For filtered queries, fetch ALL records up to a reasonable limit
+    // This ensures pagination works correctly after client-side filtering
+    let recordsNeeded: number;
+    if (hasFilters) {
+      // Fetch up to 2000 records when filters are applied
+      recordsNeeded = 2000;
+    } else {
+      // Without filters, use calculated buffer
+      recordsNeeded = Math.min(Math.ceil(page * limit * 1.5) + 1, 500);
+    }
     const skip = 0;
     const take = recordsNeeded;
 
