@@ -415,29 +415,13 @@ export async function GET(request: NextRequest) {
     const paginatedMovies = sortedMovies.slice(pageStartIndex, pageEndIndex);
     
     // Determine if any JavaScript filters are applied
+    // Only count as filter if value differs from default
     const hasFilters = (
       (typesParam && typesParam !== 'all' && typesParam.trim() !== '') ||
       (yearFrom || yearTo) ||
-      (minRating !== null || maxRating !== null) ||
+      (minRating > 0 || maxRating < 10) ||
       (genresParam)
     );
-
-    // DEBUG: Log pagination values
-    console.log('[DEBUG PAGINATION]', {
-      page,
-      limit,
-      skip,
-      take,
-      watchListRecordsLength: watchListRecords.length,
-      sortedMoviesLength: sortedMovies.length,
-      pageStartIndex,
-      pageEndIndex,
-      paginatedMoviesLength: paginatedMovies.length,
-      hasFilters,
-      hasMoreCalculated: hasFilters 
-        ? sortedMovies.length > pageEndIndex 
-        : watchListRecords.length > limit
-    });
 
     // hasMore: If filters are applied in JavaScript, check filtered result.
     // If no filters, check raw DB result (DB returned full batch = more exist).
