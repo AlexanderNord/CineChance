@@ -42,6 +42,7 @@ interface WatchlistStatus {
   mediaType: string;
   status: 'want' | 'watched' | 'dropped' | 'rewatched' | null;
   userRating: number | null;
+  isBlacklisted: boolean;
 }
 
 interface PersonClientProps {
@@ -117,6 +118,7 @@ export default function PersonClient({ personId }: PersonClientProps) {
                 mediaType: item.media_type,
                 status: movieData.status,
                 userRating: movieData.userRating,
+                isBlacklisted: movieData.isBlacklisted || false,
               });
             }
           });
@@ -370,6 +372,7 @@ export default function PersonClient({ personId }: PersonClientProps) {
                             restoreView={false}
                             initialStatus={watchlistStatus?.status}
                             initialUserRating={watchlistStatus?.userRating}
+                            initialIsBlacklisted={watchlistStatus?.isBlacklisted}
                             showRatingBadge
                             priority={index < 6}
                           />
