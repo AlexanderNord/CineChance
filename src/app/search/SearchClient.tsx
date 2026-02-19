@@ -1,7 +1,7 @@
 // src/app/search/SearchClient.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import MovieList from './MovieList';
 import SearchFilters, { FilterState } from './SearchFilters';
 import { useSearch, useBatchData } from '@/hooks';
@@ -10,41 +10,25 @@ import { useSession } from 'next-auth/react';
 import LoaderSkeleton from '@/app/components/LoaderSkeleton';
 import { logger } from '@/lib/logger';
 import { AppErrorBoundary } from '@/app/components/ErrorBoundary';
-import { BlacklistProvider } from '@/app/components/BlacklistContext';
+import { BlacklistProvider, useBlacklist } from '@/app/components/BlacklistContext';
 
 interface SearchClientProps {
   initialQuery: string;
 }
 
-export default function SearchClient({ initialQuery }: SearchClientProps) {
+// Компонент который использует BlacklistContext
+function SearchContent({ initialQuery }: { initialQuery: string }) {
   const { data: session } = useSession();
   const userId = session?.user?.id;
-
-  // Blacklist state - загружаем клиентски для актуальности данных
-  const [blacklistedIds, setBlacklistedIds] = useState<number[]>([]);
-
-  // Fetch blacklist data on mount
-  useEffect(() => {
-    const fetchBlacklist = async () => {
-      if (!userId) {
-        setBlacklistedIds([]);
-        return;
-      }
-
-      try {
-        const response = await fetch('/api/user/blacklist');
-        if (response.ok) {
-          const blacklist = await response.json();
-          setBlacklistedIds(blacklist.map((b: { tmdbId: number }) => b.tmdbId));
-        }
-      } catch (err) {
-        logger.error('Failed to fetch blacklist', { error: err instanceof Error ? err.message : String(err) });
-        setBlacklistedIds([]);
-      }
-    };
-
-    fetchBlacklist();
-  }, [userId]);
+  
+  // Используем BlacklistContext для blacklist
+  const { blacklistedIds: blacklistSet, isLoading: isBlacklistLoading } = useBlacklist();
+  
+  // Конвертируем Set в массив для useSearch
+  const blacklistedIds = useMemo(() => 
+    Array.from(blacklistSet), 
+    [blacklistSet]
+  );
 
   // Filter state
   const [currentFilters, setCurrentFilters] = useState<FilterState | null>(null);
@@ -140,6 +124,13 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
     );
   }
 
+  // Ждем загрузки blacklist перед показом результатов
+  if (isBlacklistLoading) {
+    return (
+      <LoaderSkeleton variant="grid" text="Загрузка..." skeletonCount={12} />
+    );
+  }
+
   return (
     <AppErrorBoundary
       fallback={
@@ -171,17 +162,15 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
         </div>
       ) : searchQuery.results.length > 0 ? (
         <>
-          <BlacklistProvider>
-            <MovieList
-              movies={searchQuery.results as Media[]}
-              batchData={batchDataRef.current}
-              hasNextPage={searchQuery.hasNextPage}
-              isFetchingNextPage={searchQuery.isFetchingNextPage}
-              onFetchNextPage={handleFetchNextPage}
-              initialScrollY={scrollYRef.current}
-              onScrollYChange={(y) => { scrollYRef.current = y; }}
-            />
-          </BlacklistProvider>
+          <MovieList
+            movies={searchQuery.results as Media[]}
+            batchData={batchDataRef.current}
+            hasNextPage={searchQuery.hasNextPage}
+            isFetchingNextPage={searchQuery.isFetchingNextPage}
+            onFetchNextPage={handleFetchNextPage}
+            initialScrollY={scrollYRef.current}
+            onScrollYChange={(y) => { scrollYRef.current = y; }}
+          />
 
           {/* Кнопка "Наверх" */}
           {showScrollTop && (
@@ -214,5 +203,14 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
         </div>
       )}
     </AppErrorBoundary>
+  );
+}
+
+// Главный экспорт с BlacklistProvider
+export default function SearchClient({ initialQuery }: SearchClientProps) {
+  return (
+    <BlacklistProvider>
+      <SearchContent initialQuery={initialQuery} />
+    </BlacklistProvider>
   );
 }
