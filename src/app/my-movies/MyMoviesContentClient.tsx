@@ -6,6 +6,7 @@ const RatingModal = dynamic(() => import('../components/RatingModal'), { ssr: fa
 import FilmGridWithFilters, { FilmGridFilters } from '@/app/components/FilmGridWithFilters';
 import { Media } from '@/lib/tmdb';
 import { logger } from '@/lib/logger';
+import { BlacklistProvider } from '../components/BlacklistContext';
 
 interface MyMoviesContentClientProps {
   userId: string;
@@ -342,29 +343,31 @@ export default function MyMoviesContentClient({
           })}
         </div>
 
-        <FilmGridWithFilters
-          fetchMovies={fetchMovies}
-          availableGenres={availableGenres}
-          userTags={userTags}
-          showRatingBadge={true}
-          getInitialRating={(movie) => (movie as any).userRating}
-          getInitialStatus={(movie) => {
-            const statusName = (movie as any).statusName;
-            if (statusName === 'Пересмотрено') return 'rewatched';
-            if (statusName === 'Просмотрено') return 'watched';
-            if (statusName === 'Хочу посмотреть') return 'want';
-            if (statusName === 'Брошено') return 'dropped';
-            return initialStatus;
-          }}
-          getInitialIsBlacklisted={(movie) => (movie as any).isBlacklisted === true}
-          restoreView={isRestoreView}
-          initialStatus={initialStatus}
-          emptyMessage={
-            isRestoreView
-              ? 'Добавляйте фильмы в черный список на главной странице'
-              : 'В этом списке пока ничего нет'
-          }
-        />
+        <BlacklistProvider>
+          <FilmGridWithFilters
+            fetchMovies={fetchMovies}
+            availableGenres={availableGenres}
+            userTags={userTags}
+            showRatingBadge={true}
+            getInitialRating={(movie) => (movie as any).userRating}
+            getInitialStatus={(movie) => {
+              const statusName = (movie as any).statusName;
+              if (statusName === 'Пересмотрено') return 'rewatched';
+              if (statusName === 'Просмотрено') return 'watched';
+              if (statusName === 'Хочу посмотреть') return 'want';
+              if (statusName === 'Брошено') return 'dropped';
+              return initialStatus;
+            }}
+            getInitialIsBlacklisted={(movie) => (movie as any).isBlacklisted === true}
+            restoreView={isRestoreView}
+            initialStatus={initialStatus}
+            emptyMessage={
+              isRestoreView
+                ? 'Добавляйте фильмы в черный список на главной странице'
+                : 'В этом списке пока ничего нет'
+            }
+          />
+        </BlacklistProvider>
       </div>
     </div>
   );
