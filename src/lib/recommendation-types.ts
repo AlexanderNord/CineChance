@@ -4,7 +4,7 @@
  */
 
 // Общие типы для компонентов фильтров
-export type ContentType = 'movie' | 'tv' | 'anime';
+export type ContentType = 'movie' | 'tv' | 'anime' | 'cartoon';
 export type ListType = 'want' | 'watched' | 'dropped';
 
 // ============================================
@@ -19,6 +19,7 @@ export interface FiltersSnapshot {
     movie: boolean;
     tv: boolean;
     anime: boolean;
+    cartoon: boolean;
   };
   lists: {
     want: boolean;
@@ -116,6 +117,7 @@ export interface UserPreferencesSnapshot {
     movie: boolean;
     tv: boolean;
     anime: boolean;
+    cartoon: boolean;
   };
   preferredLists: {
     want: boolean;
