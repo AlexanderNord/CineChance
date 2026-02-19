@@ -263,7 +263,7 @@ export default function FilterForm({
                   : ''
               }}
             >
-              <span className="relative z-10">Мульт</span>
+              <span className="relative z-10">Мульты</span>
               {selectedTypes.includes('cartoon') && (
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-transparent"></div>
               )}
