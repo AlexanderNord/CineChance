@@ -414,8 +414,8 @@ export async function GET(request: NextRequest) {
     const pageEndIndex = pageStartIndex + limit;
     const paginatedMovies = sortedMovies.slice(pageStartIndex, pageEndIndex);
     
-    // hasMore: true if DB returned more than limit (meaning there's more data)
-    const hasMore = watchListRecords.length > limit;
+    // hasMore: true if we have more movies in the filtered/sorted result
+    const hasMore = sortedMovies.length > pageEndIndex;
 
     return NextResponse.json({
       movies: paginatedMovies,
