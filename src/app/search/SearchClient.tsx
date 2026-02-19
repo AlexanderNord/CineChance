@@ -10,6 +10,7 @@ import { useSession } from 'next-auth/react';
 import LoaderSkeleton from '@/app/components/LoaderSkeleton';
 import { logger } from '@/lib/logger';
 import { AppErrorBoundary } from '@/app/components/ErrorBoundary';
+import { BlacklistProvider } from '@/app/components/BlacklistContext';
 
 interface SearchClientProps {
   initialQuery: string;
@@ -170,15 +171,17 @@ export default function SearchClient({ initialQuery }: SearchClientProps) {
         </div>
       ) : searchQuery.results.length > 0 ? (
         <>
-          <MovieList
-            movies={searchQuery.results as Media[]}
-            batchData={batchDataRef.current}
-            hasNextPage={searchQuery.hasNextPage}
-            isFetchingNextPage={searchQuery.isFetchingNextPage}
-            onFetchNextPage={handleFetchNextPage}
-            initialScrollY={scrollYRef.current}
-            onScrollYChange={(y) => { scrollYRef.current = y; }}
-          />
+          <BlacklistProvider>
+            <MovieList
+              movies={searchQuery.results as Media[]}
+              batchData={batchDataRef.current}
+              hasNextPage={searchQuery.hasNextPage}
+              isFetchingNextPage={searchQuery.isFetchingNextPage}
+              onFetchNextPage={handleFetchNextPage}
+              initialScrollY={scrollYRef.current}
+              onScrollYChange={(y) => { scrollYRef.current = y; }}
+            />
+          </BlacklistProvider>
 
           {/* Кнопка "Наверх" */}
           {showScrollTop && (
