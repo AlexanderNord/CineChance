@@ -103,6 +103,10 @@ model RecommendationSettings {
   includeDropped   Boolean  @default(false)
   includeWant      Boolean  @default(true)
   includeWatched   Boolean  @default(true)
+  includeMovie     Boolean  @default(true)
+  includeTv        Boolean  @default(true)
+  includeAnime     Boolean  @default(true)
+  includeCartoon   Boolean  @default(true)
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
