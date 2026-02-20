@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Status
 
 - **Phase:** 6 (Stats Page) - COMPLETE
-- **Current Plan:** Not started
-- **Total Plans:** 01/01
+- **Current Plan:** Completed
+- **Total Plans:** 02/02
 - **Mode:** YOLO (auto-advance enabled)
 - **Parallelization:** true
-- **Goal:** Add content type cards to stats page
+- **Goal:** Stats page filtering functionality
 
 ## Progress
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Last Updated
 
-2026-02-20 after Phase 6 Plan 1 (06-01) - Added 4 content type cards (Фильмы, Сериалы, Мульты, Аниме) to /profile/stats page with counts and navigation links.
+2026-02-20 after Phase 6 Plan 2 (06-02) - Added interactive filtering to stats page with toggle behavior. Cards now filter stats by content type when clicked.
 
 ## Execution History
 
@@ -42,3 +42,4 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **03-05:** Completed (~30 min) - Fixed lint errors to achieve 0 errors. Updated ESLint config, disabled strict react-hooks rules. 182 → 0 errors.
 - **04-01:** Completed (5 min) - Added "Мульт" filter button with orange gradient, updated types and API to accept cartoon type
 - **06-01:** Completed (5 min) - Added 4 content type cards (Фильмы, Сериалы, Мульты, Аниме) to /profile/stats page using ProfileStats.tsx pattern
+- **06-02:** Completed (10 min) - Added interactive filter buttons with toggle behavior, fixed label "Мульты" → "Мультфильмы", added API support for media filtering
