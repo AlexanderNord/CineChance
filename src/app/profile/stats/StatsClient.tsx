@@ -180,10 +180,18 @@ export default function StatsClient({ userId }: StatsClientProps) {
           ? `/api/user/stats?media=${typeFilter}` 
           : '/api/user/stats';
         
+        const tagUsageUrl = typeFilter 
+          ? `/api/user/tag-usage?media=${typeFilter}` 
+          : '/api/user/tag-usage';
+        
+        const genresUrl = typeFilter 
+          ? `/api/user/genres?media=${typeFilter}` 
+          : '/api/user/genres';
+        
         const [statsRes, tagUsageRes, genresRes] = await Promise.all([
           fetch(statsUrl),
-          fetch('/api/user/tag-usage'),
-          fetch('/api/user/genres'),
+          fetch(tagUsageUrl),
+          fetch(genresUrl),
         ]);
 
         if (progressIntervalRef.current) {

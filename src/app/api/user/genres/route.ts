@@ -47,6 +47,24 @@ const GENRE_MAP: Record<number, string> = {
   115: 'Thriller Anime',
 };
 
+function isAnime(movie: unknown): boolean {
+  if (!movie || typeof movie !== 'object') return false;
+  const m = movie as Record<string, unknown>;
+  const genres = m.genres as Array<{ id: number }> | undefined;
+  const hasAnimeGenre = genres?.some((g) => g.id === 16) ?? false;
+  const isJapanese = m.original_language === 'ja';
+  return hasAnimeGenre && isJapanese;
+}
+
+function isCartoon(movie: unknown): boolean {
+  if (!movie || typeof movie !== 'object') return false;
+  const m = movie as Record<string, unknown>;
+  const genres = m.genres as Array<{ id: number }> | undefined;
+  const hasAnimationGenre = genres?.some((g) => g.id === 16) ?? false;
+  const isNotJapanese = m.original_language !== 'ja';
+  return hasAnimationGenre && isNotJapanese;
+}
+
 // Helper function to fetch media details from TMDB
 async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
   const apiKey = process.env.TMDB_API_KEY;
@@ -72,8 +90,10 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id;
     const searchParams = request.nextUrl.searchParams;
     const statusesParam = searchParams.get('statuses');
+    const mediaFilter = searchParams.get('media');
+    const validMedia = ['movie', 'tv', 'cartoon', 'anime'].includes(mediaFilter || '') ? mediaFilter : null;
     
-    const cacheKey = `user:${userId}:genres:all:${statusesParam || 'default'}`;
+    const cacheKey = `user:${userId}:genres:${validMedia || 'all'}:${statusesParam || 'default'}`;
 
     const fetchGenres = async () => {
       const whereClause: Record<string, unknown> = { userId };
@@ -91,6 +111,11 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Add DB-level filter for movie/tv
+      if (validMedia === 'movie' || validMedia === 'tv') {
+        whereClause.mediaType = validMedia;
+      }
+
       const watchListRecords = await prisma.watchList.findMany({
         where: whereClause,
         select: { tmdbId: true, mediaType: true },
@@ -104,6 +129,7 @@ export async function GET(request: NextRequest) {
       const genreNames = new Map<number, string>();
       
       const BATCH_SIZE = 3;
+      const needsMediaFiltering = validMedia === 'cartoon' || validMedia === 'anime';
 
       for (let i = 0; i < watchListRecords.length; i += BATCH_SIZE) {
         const batch = watchListRecords.slice(i, i + BATCH_SIZE);
@@ -112,7 +138,23 @@ export async function GET(request: NextRequest) {
           batch.map(record => fetchMediaDetails(record.tmdbId, record.mediaType as 'movie' | 'tv'))
         );
         
-        for (const tmdbData of batchResults) {
+        for (let j = 0; j < batchResults.length; j++) {
+          const tmdbData = batchResults[j];
+          
+          // If filtering by cartoon/anime, check media type classification
+          if (needsMediaFiltering) {
+            const isAnimeContent = isAnime(tmdbData);
+            const isCartoonContent = isCartoon(tmdbData);
+            
+            const matchesFilter = 
+              (validMedia === 'anime' && isAnimeContent) ||
+              (validMedia === 'cartoon' && isCartoonContent);
+            
+            if (!matchesFilter) {
+              continue; // Skip this record
+            }
+          }
+          
           if (tmdbData?.genres) {
             for (const genre of tmdbData.genres) {
               genreCounts.set(genre.id, (genreCounts.get(genre.id) || 0) + 1);
