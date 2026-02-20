@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Star, Tag as TagIcon, Music, ArrowLeft } from 'lucide-react';
+import { Star, Tag as TagIcon, Music, ArrowLeft, Film, Tv, Monitor } from 'lucide-react';
 
 interface UserStats {
   total: {
@@ -237,6 +237,59 @@ export default function StatsClient({ userId }: StatsClientProps) {
         <ArrowLeft className="w-4 h-4" />
         <span>Вернуться в профиль</span>
       </Link>
+
+      {/* Type breakdown cards */}
+      {!isLoading && stats?.typeBreakdown && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          {/* Фильмы */}
+          <Link
+            href="/my-movies?tab=watched&media=movie"
+            className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-purple-500/50 hover:bg-gray-800/80 transition block"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Film className="w-4 h-4 text-purple-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Фильмы</p>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-white">{stats.typeBreakdown.movie}</p>
+          </Link>
+
+          {/* Сериалы */}
+          <Link
+            href="/my-movies?tab=watched&media=tv"
+            className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-cyan-500/50 hover:bg-gray-800/80 transition block"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Tv className="w-4 h-4 text-cyan-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Сериалы</p>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-white">{stats.typeBreakdown.tv}</p>
+          </Link>
+
+          {/* Мульты */}
+          <Link
+            href="/my-movies?tab=watched&media=cartoon"
+            className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-pink-500/50 hover:bg-gray-800/80 transition block"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Monitor className="w-4 h-4 text-pink-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Мульты</p>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-white">{stats.typeBreakdown.cartoon}</p>
+          </Link>
+
+          {/* Аниме */}
+          <Link
+            href="/my-movies?tab=watched&media=anime"
+            className="bg-gray-900 rounded-lg md:rounded-xl p-4 md:p-5 border border-gray-800 hover:border-indigo-500/50 hover:bg-gray-800/80 transition block"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Monitor className="w-4 h-4 text-indigo-400" />
+              <p className="text-gray-400 text-xs md:text-sm">Аниме</p>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-white">{stats.typeBreakdown.anime}</p>
+          </Link>
+        </div>
+      )}
 
       {isLoading && progress > 0 && (
         <div className="flex flex-col items-center justify-center py-8">
