@@ -10,6 +10,7 @@
 - 🔄 **v1.1 Lint Cleanup** — Phase 3 (in progress)
 - ✅ **v1.2 Animation Filter** — Phase 4 (completed 2026-02-19)
 - ✅ **v1.3 Recommendation Filters Enhancement** — Phase 5 (completed 2026-02-19)
+- 🔄 **Phase 6** — Доработка страницы статистики /profile/stats
 
 ---
 
@@ -59,6 +60,13 @@ Plans:
 
 Plans:
 - [x] 05-01-PLAN.md — Rename Мульт→Мульты, add content type filters to Settings (completed 2026-02-19)
+
+</details>
+
+<details>
+<summary>🔄 Phase 6: Доработка страницы статистики /profile/stats — IN PROGRESS</summary>
+
+- [x] 06-01-PLAN.md — 4 плашки с типами контента (Фильмы, Сериалы, Аниме, Мульты)
 
 </details>
 
