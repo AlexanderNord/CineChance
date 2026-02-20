@@ -1,5 +1,7 @@
 # AGENTS.md - Developer Guide for CineChance
 
+> **IMPORTANT:** This file is read by AI agents. Always check this file first when working on the project.
+
 This file provides guidelines and instructions for AI agents working on the CineChance project.
 
 ## Project Overview
@@ -369,6 +371,8 @@ Key models in `prisma/schema.prisma`:
 **Always check these before debugging new issues.**
 
 ### Context7 Usage Guidelines
+
+> **IMPORTANT:** Context7 MCP is configured and available in this project. You MUST use `context7_query-docs` tool for all external library questions. Do NOT rely on internal knowledge for library APIs.
 
 **Context7 is REQUIRED for:**
 - ✅ New library APIs (first-time usage)
