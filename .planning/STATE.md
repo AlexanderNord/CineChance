@@ -10,7 +10,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Status
 
 - **Phase:** 7 (Admin user statistics)
-- **Current Plan:** 02
+- **Current Plan:** 03
 - **Total Plans:** 03/03
 - **Goal:** Admin user statistics with pagination, filtering, user detail pages
 
@@ -28,10 +28,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Last Updated
 
-2026-02-20 after Phase 7 Plan 1 (07-01) - Added server-side pagination to admin users page with URL-based state, page size selector, and efficient Prisma queries.
+2026-02-20 after Phase 7 Plan 2 (07-02) - Added column sorting and filtering to admin users table with server-side URL-based state management.
 
 ## Execution History
 
+- **07-02:** Completed (16 min) - Server-side column sorting (name, email, createdAt, watchList, recommendationLogs, status) and filtering (name, email, verification status) on admin users table with URL params and Prisma queries
 - **07-01:** Completed (4 min) - Server-side pagination for admin users page with URL params, page size selector (10/25/50/100), prev/next navigation, and efficient Prisma skip/take queries
 - **02-01:** Completed (4 min) - AsyncErrorBoundary extended with error codes, manual dismiss; TMDB in-memory 24h cache implemented
 - **02-02:** Completed (10 min) - Custom 404/500 error pages created; MovieGrid, Recommendations, and Search wrapped with error boundaries for component isolation
