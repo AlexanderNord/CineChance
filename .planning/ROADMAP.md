@@ -86,6 +86,17 @@ When all phases are complete and confident — can plan:
 - Performance optimization
 - New functionality
 
+### Phase 7: Admin user statistics
+
+**Goal:** Admin functionality for user statistics management
+**Depends on:** Phase 6
+**Plans:** 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Пагинация списка пользователей
+- [ ] 07-02-PLAN.md — Фильтрация и сортировка по колонкам
+- [ ] 07-03-PLAN.md — Страница статистики пользователя (как profile/stats)
+
 ---
 
 _For current project status, see .planning/PROJECT.md_
