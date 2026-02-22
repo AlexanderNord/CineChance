@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Current Status
 
-- **Phase:** 10 (Taste Map Infrastructure)
-- **Current Plan:** Not started
-- **Total Plans:** 02/02
-- **Goal:** Create TasteMap data structure + Redis + Similarity calculation ✓
+- **Phase:** 11 (Core Recommendation Patterns)
+- **Current Plan:** 01 Complete
+- **Total Plans:** 01/02
+- **Goal:** Implement Taste Match and Want Overlap patterns ✓
 
 ## Progress
 
@@ -21,6 +21,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 1-8 | v1.0 Stabilization | ● Complete | 10 |
 | 9 | ML Database Schema | ● Complete | 0 |
 | 10 | Taste Map Infrastructure | ● Complete | 0 |
+| 11 | Core Recommendation Patterns | ◐ In Progress | 0 |
 
 ---
 
@@ -40,10 +41,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Last Updated
 
-2026-02-22 - Phase 10-03 complete: Background taste map recomputation integrated via Next.js after() API
+2026-02-22 - Phase 11-01 complete: Taste Match and Want Overlap recommendation patterns implemented
 
 ## Execution History
 
+- **11-01:** Completed (31 min) - Implemented modular recommendation algorithm architecture with IRecommendationAlgorithm interface. Created Taste Match (similarity >0.7, weights 0.5/0.3/0.2) and Want Overlap (similarity >0.6, weights 0.4/0.4/0.2) patterns. Built /api/recommendations/patterns endpoint with cold start fallback, cooldown filtering, and logging. Added 19 unit tests.
 - **10-03:** Completed (8 min) - Integrated Next.js after() for non-blocking taste map recomputation on watchlist changes (status, rating, rewatch, delete). Added background updates to 4 success paths in /api/watchlist/route.ts.
 - **10-02:** Completed (5 min) - Created similarity calculation infrastructure: SimilarityResult interface, cosineSimilarity for genre vectors, ratingCorrelation (Pearson), personOverlap (Jaccard), computeOverallMatch with weights (0.5, 0.3, 0.2), isSimilar threshold (>0.7), Redis storage for similar users with 24h TTL
 - **10-01:** Completed (11 min) - Created TasteMap infrastructure: TypeScript interfaces (TasteMap, GenreProfile, PersonProfiles, BehaviorProfile, ComputedMetrics), Redis storage helpers with 24h TTL, core computation functions querying Prisma WatchList and TMDB credits
@@ -73,6 +75,14 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ### Key Decisions (Phase 9)
 - ModelTraining is global (no userId) - tracks model versions, not per-user data
 - ModelCorrection has optional userId for global or user-specific corrections
+
+### Key Decisions (Phase 11)
+- IRecommendationAlgorithm interface with name, minUserHistory, execute() for modular algorithms
+- Taste Match threshold: 0.7 (high quality), Want Overlap: 0.6 (broader coverage)
+- Score weights: Taste Match (0.5 similarity, 0.3 rating, 0.2 cooccurrence), Want Overlap (0.4 similarity, 0.4 frequency, 0.2 genre)
+- Cold start threshold: 10 for Taste Match, 5 for Want Overlap
+- Algorithms return results, API endpoint handles RecommendationLog entries
+- Score normalization to 0-100 range via normalizeScores() helper
 
 ### Key Decisions (Phase 10)
 - Used withCache pattern from existing @/lib/redis
