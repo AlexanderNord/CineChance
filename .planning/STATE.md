@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Status
 
 - **Phase:** 9 (ML Database Schema)
-- **Current Plan:** Not started
+- **Current Plan:** 01 Complete (migration pending)
 - **Total Plans:** 01/01
-- **Goal:** Add ML tables to Prisma schema
+- **Goal:** Add ML tables to Prisma schema ✓
 
 ## Progress
 
 | Phase | Name | Status | Requirements |
 |-------|------|--------|--------------|
 | 1-8 | v1.0 Stabilization | ● Complete | 10 |
-| 9 | ML Database Schema | ○ Pending | 0 |
+| 9 | ML Database Schema | ● Complete | 0 |
 
 ---
 
@@ -39,10 +39,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Last Updated
 
-2026-02-22 - Planning v2.0 Recommendations phases
+2026-02-22 - Phase 9 complete: ML schema tables added
 
 ## Execution History
 
+- **09-01:** Completed (19 min) - Added 4 ML feedback loop tables to Prisma schema: RecommendationDecision, PredictionOutcome, ModelCorrection, ModelTraining. Migration pending manual execution due to DB connection issues.
 - **08-01:** Completed (7 min) - Admin panel UI redesign: sidebar icons only with tooltips, user table with manual filtering, removed status column, renamed Реком., added site-wide stats (movies in lists, recommendations, matches)
 - **07-03:** Completed (16 min) - Admin user statistics page with content type filtering (movie/tv/cartoon/anime), rating distribution, tags, and genres. Created admin API routes for fetching any user's data. Added navigation from user list.
 - **07-02:** Completed (16 min) - Server-side column sorting (name, email, createdAt, watchList, recommendationLogs, status) and filtering (name, email, verification status) on admin users table with URL params and Prisma queries
@@ -64,6 +65,10 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ### Roadmap Evolution
 - Phase 7 added: Admin user statistics
 - Phase 8 added: Admin panel UI improvements
+
+### Key Decisions (Phase 9)
+- ModelTraining is global (no userId) - tracks model versions, not per-user data
+- ModelCorrection has optional userId for global or user-specific corrections
 
 ### Key Decisions (Phase 8)
 - Removed status column/filter for cleaner UI
