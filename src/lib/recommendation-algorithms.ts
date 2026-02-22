@@ -7,6 +7,8 @@
 
 import { tasteMatch } from './recommendation-algorithms/taste-match';
 import { wantOverlap } from './recommendation-algorithms/want-overlap';
+import { dropPatterns } from './recommendation-algorithms/drop-patterns';
+import { typeTwins } from './recommendation-algorithms/type-twins';
 
 // Re-export types and interface
 export type {
@@ -27,17 +29,25 @@ export {
 // Export individual algorithms
 export { tasteMatch } from './recommendation-algorithms/taste-match';
 export { wantOverlap } from './recommendation-algorithms/want-overlap';
+export { dropPatterns } from './recommendation-algorithms/drop-patterns';
+export { typeTwins } from './recommendation-algorithms/type-twins';
 
 /**
  * All available recommendation algorithms
  * 
  * Algorithms are ordered by priority - first algorithms are preferred
  * for users with sufficient history.
+ * 
+ * Pattern 1 (tasteMatch): Similar users' watched movies
+ * Pattern 2 (wantOverlap): Similar users' want lists
+ * Pattern 3 (dropPatterns): Avoid content similar users dropped
+ * Pattern 4 (typeTwins): Content type preference matching
  */
 export const recommendationAlgorithms = [
   tasteMatch,
   wantOverlap,
-  // Additional algorithms (drop-patterns, type-twins) will be added in Phase 11-02
+  dropPatterns,
+  typeTwins,
 ];
 
 /**
