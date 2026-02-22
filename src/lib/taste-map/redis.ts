@@ -6,6 +6,7 @@
  */
 
 import { withCache, invalidateCache, getRedis } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 import type { TasteMap, GenreProfile, PersonProfiles, TypeProfile } from './types';
 
 // TTL: 24 hours in seconds
@@ -33,7 +34,11 @@ export async function storeTasteMap(userId: string, tasteMap: TasteMap): Promise
       { ex: TTL_24H }
     );
   } catch (error) {
-    console.error('Failed to store taste map', { userId, error });
+    logger.error('Failed to store taste map', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 }
 
@@ -63,7 +68,11 @@ export async function getTasteMap(
       return JSON.parse(cached) as TasteMap;
     }
   } catch (error) {
-    console.error('Failed to get taste map', { userId, error });
+    logger.error('Failed to get taste map', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 
   return null;
@@ -83,7 +92,11 @@ export async function storeGenreProfile(userId: string, profile: GenreProfile): 
       { ex: TTL_24H }
     );
   } catch (error) {
-    console.error('Failed to store genre profile', { userId, error });
+    logger.error('Failed to store genre profile', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 }
 
@@ -111,7 +124,11 @@ export async function getGenreProfile(
       return JSON.parse(cached) as GenreProfile;
     }
   } catch (error) {
-    console.error('Failed to get genre profile', { userId, error });
+    logger.error('Failed to get genre profile', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 
   return null;
@@ -131,7 +148,11 @@ export async function storePersonProfile(userId: string, profile: PersonProfiles
       { ex: TTL_24H }
     );
   } catch (error) {
-    console.error('Failed to store person profile', { userId, error });
+    logger.error('Failed to store person profile', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 }
 
@@ -159,7 +180,11 @@ export async function getPersonProfile(
       return JSON.parse(cached) as PersonProfiles;
     }
   } catch (error) {
-    console.error('Failed to get person profile', { userId, error });
+    logger.error('Failed to get person profile', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 
   return null;
@@ -179,7 +204,11 @@ export async function storeTypeProfile(userId: string, profile: TypeProfile): Pr
       { ex: TTL_24H }
     );
   } catch (error) {
-    console.error('Failed to store type profile', { userId, error });
+    logger.error('Failed to store type profile', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 }
 
@@ -207,7 +236,11 @@ export async function getTypeProfile(
       return JSON.parse(cached) as TypeProfile;
     }
   } catch (error) {
-    console.error('Failed to get type profile', { userId, error });
+    logger.error('Failed to get type profile', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      context: 'TasteMapRedis'
+    });
   }
 
   return null;
