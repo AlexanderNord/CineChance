@@ -10,7 +10,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Status
 
 - **Phase:** 10 (Taste Map Infrastructure)
-- **Current Plan:** 02/02
+- **Current Plan:** Not started
 - **Total Plans:** 02/02
 - **Goal:** Create TasteMap data structure + Redis + Similarity calculation ✓
 
@@ -40,10 +40,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Last Updated
 
-2026-02-22 - Phase 10-02 complete: Similarity calculation implemented (cosine similarity, Pearson correlation, Jaccard overlap, Redis caching)
+2026-02-22 - Phase 10-03 complete: Background taste map recomputation integrated via Next.js after() API
 
 ## Execution History
 
+- **10-03:** Completed (8 min) - Integrated Next.js after() for non-blocking taste map recomputation on watchlist changes (status, rating, rewatch, delete). Added background updates to 4 success paths in /api/watchlist/route.ts.
 - **10-02:** Completed (5 min) - Created similarity calculation infrastructure: SimilarityResult interface, cosineSimilarity for genre vectors, ratingCorrelation (Pearson), personOverlap (Jaccard), computeOverallMatch with weights (0.5, 0.3, 0.2), isSimilar threshold (>0.7), Redis storage for similar users with 24h TTL
 - **10-01:** Completed (11 min) - Created TasteMap infrastructure: TypeScript interfaces (TasteMap, GenreProfile, PersonProfiles, BehaviorProfile, ComputedMetrics), Redis storage helpers with 24h TTL, core computation functions querying Prisma WatchList and TMDB credits
 - **09-01:** Completed (19 min) - Added 4 ML feedback loop tables to Prisma schema: RecommendationDecision, PredictionOutcome, ModelCorrection, ModelTraining. Migration pending manual execution due to DB connection issues.
@@ -80,6 +81,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - Limited TMDB fetch to 50 items for performance
 - Similarity weights: taste 50%, rating 30%, person 20%
 - Similarity threshold: tasteSimilarity > 0.7
+- Background taste map recomputation via after() - non-blocking API responses
 
 ### Key Decisions (Phase 8)
 - Removed status column/filter for cleaner UI
