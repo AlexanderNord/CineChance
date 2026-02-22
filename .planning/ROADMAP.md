@@ -130,8 +130,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — TasteMap структура данных и Redis хранение
-- [ ] 10-02-PLAN.md — Similarity calculation (поиск похожих пользователей)
+- [x] 10-01-PLAN.md — TasteMap структура данных и Redis хранение
+- [x] 10-02-PLAN.md — Similarity calculation (поиск похожих пользователей)
 
 ---
 
