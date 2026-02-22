@@ -111,14 +111,15 @@ Plans:
 
 **Goal:** Рекомендации фильмов пользователям на основе Карты вкусов (Taste Map)
 
-### Phase 9: ML Database Schema
+### Phase 9: ML Database Schema — COMPLETE
 
 **Goal:** Добавить таблицы для ML feedback loop в Prisma schema
 **Depends on:** Phase 8
+**Status:** ✅ Complete (2026-02-22)
 **Plans:** 1 plan
 
 Plans:
-- [ ] 09-01-PLAN.md — Add ML tables: RecommendationDecision, PredictionOutcome, ModelCorrection, ModelTraining
+- [x] 09-01-PLAN.md — Add ML tables: RecommendationDecision, PredictionOutcome, ModelCorrection, ModelTraining
 
 ---
 
