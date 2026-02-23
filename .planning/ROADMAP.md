@@ -194,7 +194,29 @@ Plans:
 
 Plans:
 - [x] 15-01-PLAN.md — Decision logging, outcome tracking, auto-corrections
-- [ ] 15-02-PLAN.md — Gap closure: fix trackOutcome import and ML stats format
+- [x] 15-02-PLAN.md — Gap closure: fix trackOutcome import and ML stats format
+
+---
+
+### Phase 16: ML Stats API Security — GAP CLOSURE
+
+**Goal:** Add authentication to unprotected ML stats API
+**Depends on:** Phase 15
+**Gap Closure:** Closes critical security issue from audit
+
+Plans:
+- [x] 16-01-PLAN.md — Add session check to /api/recommendations/ml-stats
+
+---
+
+### Phase 17: Outcome Tracking Completeness — GAP CLOSURE
+
+**Goal:** Enable outcome tracking from main page recommendations
+**Depends on:** Phase 16
+**Gap Closure:** Closes integration and flow gaps from audit
+
+Plans:
+- [ ] 17-01-PLAN.md — Capture recommendationLogId in RecommendationsGrid, pass to my-movies API
 
 ---
 
