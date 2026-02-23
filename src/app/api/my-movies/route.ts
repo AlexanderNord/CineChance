@@ -555,6 +555,19 @@ export async function POST(request: NextRequest) {
             watchedDate: new Date(),
           },
         });
+
+        // Track outcome: user added recommendation to their list
+        if (recommendationLogId) {
+          await trackOutcome({
+            recommendationLogId,
+            action: 'added',
+          });
+          logger.info('Outcome tracked: movie added to watchlist', {
+            recommendationLogId,
+            userId,
+            context: 'my-movies-api',
+          });
+        }
       } else {
         // Обновляем существующую запись
         const previousWatchCount = watchListEntry.watchCount;
@@ -597,6 +610,21 @@ export async function POST(request: NextRequest) {
             previousRating: watchListEntry.userRating,
             actionType: 'update',
           },
+
+        // Track outcome: user rated recommendation
+        if (recommendationLogId) {
+          await trackOutcome({
+            recommendationLogId,
+            action: 'rated',
+            userRating: rating,
+          });
+          logger.info('Outcome tracked: movie rated', {
+            recommendationLogId,
+            userId,
+            rating,
+            context: 'my-movies-api',
+          });
+        }
         });
 
         // Обновляем оценку в WatchList
