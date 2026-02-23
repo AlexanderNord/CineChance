@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/auth';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
 import { calculateAcceptanceRate, getAlgorithmPerformance, getOutcomeStats } from '@/lib/recommendation-outcome-tracking';
@@ -16,6 +18,12 @@ export async function GET(request: NextRequest) {
       { success: false, error: 'Too Many Requests' },
       { status: 429 }
     );
+  }
+
+  // Check authentication
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
   try {
