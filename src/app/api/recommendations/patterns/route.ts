@@ -22,11 +22,20 @@ import type {
 import { fetchTrendingMovies, fetchPopularMovies } from '@/lib/tmdb';
 import { subDays } from 'date-fns';
 import { randomUUID } from 'crypto';
+import { getRedis } from '@/lib/redis';
 
 // Constants
 const COLD_START_THRESHOLD = 10; // Users with <10 watched get fallback
 const MAX_RECOMMENDATIONS = 12;
 const RECOMMENDATION_COOLDOWN_DAYS = 7;
+const CACHE_TTL_SECONDS = 900; // 15 minutes
+
+/**
+ * Generate cache key for recommendations
+ */
+function generateCacheKey(userId: string): string {
+  return `recs:${userId}:patterns:v1`;
+}
 
 /**
  * Helper to generate session ID and initial session data
@@ -224,6 +233,51 @@ export async function GET(req: Request) {
     );
   }
 
+  // Check Redis cache first
+  const redis = getRedis();
+  const cacheKey = generateCacheKey(userId);
+  const cacheHit = false;
+
+  if (redis) {
+    try {
+      const cached = await redis.get<string>(cacheKey);
+      if (cached) {
+        const cachedData = JSON.parse(cached);
+        logger.info('Patterns API: cache hit', {
+          requestId,
+          userId,
+          context: 'PatternsAPI',
+        });
+
+        return NextResponse.json({
+          ...cachedData,
+          meta: {
+            ...cachedData.meta,
+            cacheHit: true,
+            cacheKey,
+          },
+        }, {
+          headers: {
+            'X-Cache': 'HIT',
+            'X-Cache-Key': cacheKey,
+          },
+        });
+      }
+      logger.info('Patterns API: cache miss', {
+        requestId,
+        userId,
+        context: 'PatternsAPI',
+      });
+    } catch (error) {
+      logger.error('Patterns API: cache lookup failed', {
+        requestId,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+        context: 'PatternsAPI',
+      });
+    }
+  }
+
   try {
     // Check if user is cold start
     const watchedStatusIds = await getWatchedStatusIds();
@@ -245,6 +299,7 @@ export async function GET(req: Request) {
     });
 
     let recommendations: RecommendationItem[];
+    const algorithmTimeouts: string[] = [];
 
     if (isColdStart) {
       // Cold start: use TMDB fallback
@@ -266,10 +321,25 @@ export async function GET(req: Request) {
 
       const sessionData = createSessionData();
       const allRecommendations: RecommendationItem[] = [];
+      const ALGORITHM_TIMEOUT_MS = 3000; // 3 seconds per algorithm
 
       for (const algorithm of recommendationAlgorithms) {
         try {
+          // Create abort controller for timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            controller.abort();
+            algorithmTimeouts.push(algorithm.name);
+            logger.warn('Patterns API: algorithm timed out', {
+              requestId,
+              algorithm: algorithm.name,
+              timeoutMs: ALGORITHM_TIMEOUT_MS,
+              context: 'PatternsAPI',
+            });
+          }, ALGORITHM_TIMEOUT_MS);
+
           const result = await algorithm.execute(userId, context, sessionData);
+          clearTimeout(timeoutId);
           
           // Add recommendations to pool
           allRecommendations.push(...result.recommendations);
@@ -287,12 +357,23 @@ export async function GET(req: Request) {
             context: 'PatternsAPI',
           });
         } catch (error) {
-          logger.error('Patterns API: algorithm failed', {
-            requestId,
-            algorithm: algorithm.name,
-            error: error instanceof Error ? error.message : String(error),
-            context: 'PatternsAPI',
-          });
+          // Check if it was a timeout
+          if (error instanceof Error && error.name === 'AbortError') {
+            algorithmTimeouts.push(algorithm.name);
+            logger.warn('Patterns API: algorithm aborted due to timeout', {
+              requestId,
+              algorithm: algorithm.name,
+              timeoutMs: ALGORITHM_TIMEOUT_MS,
+              context: 'PatternsAPI',
+            });
+          } else {
+            logger.error('Patterns API: algorithm failed', {
+              requestId,
+              algorithm: algorithm.name,
+              error: error instanceof Error ? error.message : String(error),
+              context: 'PatternsAPI',
+            });
+          }
           // Continue with other algorithms
         }
       }
@@ -332,15 +413,52 @@ export async function GET(req: Request) {
       context: 'PatternsAPI',
     });
 
-    return NextResponse.json({
+    // Prepare response data
+    const responseData = {
       success: true,
       recommendations,
       meta: {
         isColdStart,
+        coldStart: {
+          threshold: COLD_START_THRESHOLD,
+          fallbackSource: isColdStart ? 'tmdb_trending_fallback' : null,
+        },
+        watchedCount,
         algorithmsUsed: isColdStart 
           ? ['tmdb_trending_fallback'] 
           : recommendationAlgorithms.map(a => a.name),
+        algorithmTimeouts,
+        timeoutThresholdMs: 3000,
         durationMs: duration,
+        cacheHit: false,
+      },
+    };
+
+    // Store in Redis cache
+    if (redis) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(responseData), { ex: CACHE_TTL_SECONDS });
+        logger.info('Patterns API: cached recommendations', {
+          requestId,
+          userId,
+          cacheKey,
+          ttlSeconds: CACHE_TTL_SECONDS,
+          context: 'PatternsAPI',
+        });
+      } catch (error) {
+        logger.error('Patterns API: cache set failed', {
+          requestId,
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+          context: 'PatternsAPI',
+        });
+      }
+    }
+
+    return NextResponse.json(responseData, {
+      headers: {
+        'X-Cache': 'MISS',
+        'X-Cache-Key': cacheKey,
       },
     });
   } catch (error) {
