@@ -1,9 +1,31 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import AdminSidebar from "../AdminSidebar";
 import RecommendationStats from '@/app/components/RecommendationStats';
+import MLDashboard from '@/app/components/MLDashboard';
 import { Database, Clock } from 'lucide-react';
+import LoaderSkeleton from "@/app/components/LoaderSkeleton";
+
+function MLDashboardSkeleton() {
+  return (
+    <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-5 h-5 bg-gray-700 rounded animate-pulse" />
+        <div className="h-6 w-32 bg-gray-700 rounded animate-pulse" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+            <div className="h-4 w-20 bg-gray-700 rounded animate-pulse mb-2" />
+            <div className="h-8 w-16 bg-gray-700 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default async function MonitoringPage() {
   const session = await getServerSession(authOptions);
@@ -37,6 +59,11 @@ export default async function MonitoringPage() {
         <div className="space-y-6">
           {/* Компонент статистики */}
           <RecommendationStats />
+
+          {/* ML Мониторинг */}
+          <Suspense fallback={<MLDashboardSkeleton />}>
+            <MLDashboard />
+          </Suspense>
 
           {/* Информация о системе */}
           <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
