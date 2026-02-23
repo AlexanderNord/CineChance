@@ -10,8 +10,8 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Status
 
 - **Phase:** 13 (Recommendation API)
-- **Current Plan:** 02/02
-- **Goal:** Heavy user optimization, graceful degradation, confidence scoring
+- **Current Plan:** 03/03
+- **Goal:** Heavy user sampling implementation complete
 
 ## Progress
 
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 10 | Taste Map Infrastructure | ● Complete | 0 |
 | 11 | Core Patterns | ● Complete | 0 |
 | 12 | Advanced Patterns | ● Complete | 0 |
-| 13 | Recommendation API | ● Complete | 2 |
+| 13 | Recommendation API | ● Complete | 3 |
 
 ---
 
@@ -69,6 +69,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **06-01:** Completed (5 min) - Added 4 content type cards (Фильмы, Сериалы, Мульты, Аниме) to /profile/stats page using ProfileStats.tsx pattern
 - **06-02:** Completed (10 min) - Added interactive filter buttons with toggle behavior, fixed label "Мульты" → "Мультфильмы", added API support for media filtering
 - **06-03:** Completed (26 min) - Fixed API filtering for cartoon/anime using in-memory TMDB classification. Added classifyMediaType(), filterRecordsByMediaType() for proper content type filtering.
+- **13-03:** Completed (~3 min) - Implemented heavy user sampling: added sampleSize and isHeavyUser fields to RecommendationSession, route passes sampleSize=200 to algorithms for heavy users (500+ watched)
 
 ## Accumulated Context
 
@@ -100,5 +101,6 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - Heavy user threshold: 500 items with 200 sample size
 - Confidence scoring formula: base 50 + algorithmCount*5 (max 90), adjustments for similar users (+10), variance (-20), cold start (-30), heavy user sampling (-10)
 - algorithmsStatus tracks per-algorithm success/failure with error messages
+- Heavy user sampling: sampleSize passed to algorithms for query optimization
 
-##
+## 
