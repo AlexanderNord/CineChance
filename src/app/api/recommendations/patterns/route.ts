@@ -391,6 +391,13 @@ export async function GET(req: Request) {
       };
 
       const sessionData = createSessionData();
+
+      // For heavy users, pass sampling info to algorithms
+      if (isHeavyUser) {
+        sessionData.sampleSize = HEAVY_USER_SAMPLE_SIZE;
+        sessionData.isHeavyUser = true;
+      }
+
       allRecommendations = [];
       const ALGORITHM_TIMEOUT_MS = 3000; // 3 seconds per algorithm
 
