@@ -5,15 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Personal movie tracking with intelligent recommendations
-**Current focus:** Phase 12: Advanced Recommendation Patterns
+**Current focus:** Phase 13: Recommendation API
 
 ## Current Status
 
-- **Phase:** 12 (Advanced Recommendation Patterns)
-- **Current Plan:** 01
-- **Total Plans:** 02/02
-- **Total Plans:** 02/02
-- **Goal:** All 8 advanced recommendation patterns implemented
+- **Phase:** 13 (Recommendation API)
+- **Current Plan:** 01/02
+- **Goal:** API endpoint with caching and cold start handling
 
 ## Progress
 
@@ -24,6 +22,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 10 | Taste Map Infrastructure | ● Complete | 0 |
 | 11 | Core Patterns | ● Complete | 0 |
 | 12 | Advanced Patterns | ● Complete | 0 |
+| 13 | Recommendation API | ○ In Progress | 2 |
 
 ---
 
@@ -92,5 +91,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - Type twin sampling: 100 active users for performance
 - Algorithms return results, API endpoint handles RecommendationLog entries
 - Score normalization to 0-100 range via normalizeScores() helper
+
+### Key Decisions (Phase 13)
+- Redis caching: 15-minute TTL, cache key `recs:{userId}:patterns:v1`
+- Timeout: 3 seconds per algorithm using AbortController
+- Cold start threshold: 10 watched items
+- X-Cache headers: HIT/MISS for cache status
 
 ##
