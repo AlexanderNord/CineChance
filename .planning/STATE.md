@@ -9,9 +9,9 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Current Status
 
-- **Phase:** 13 (Recommendation API)
-- **Current Plan:** Not started
-- **Goal:** Heavy user sampling implementation complete
+- **Phase:** 14 (UI Integration)
+- **Current Plan:** 14-01 Complete
+- **Goal:** Recommendations UI integration complete
 
 ## Progress
 
@@ -23,6 +23,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 11 | Core Patterns | ● Complete | 0 |
 | 12 | Advanced Patterns | ● Complete | 0 |
 | 13 | Recommendation API | ● Complete | 3 |
+| 14 | UI Integration | ○ In Progress | 0 |
 
 ---
 
@@ -70,6 +71,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **06-02:** Completed (10 min) - Added interactive filter buttons with toggle behavior, fixed label "Мульты" → "Мультфильмы", added API support for media filtering
 - **06-03:** Completed (26 min) - Fixed API filtering for cartoon/anime using in-memory TMDB classification. Added classifyMediaType(), filterRecordsByMediaType() for proper content type filtering.
 - **13-03:** Completed (~3 min) - Implemented heavy user sampling: added sampleSize and isHeavyUser fields to RecommendationSession, route passes sampleSize=200 to algorithms for heavy users (500+ watched)
+- **14-01:** Completed (5 min) - RecommendationsGrid component integrated into main page with horizontal scroll, cold start messaging, and confidence scoring
 
 ## Accumulated Context
 
