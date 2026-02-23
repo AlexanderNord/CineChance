@@ -611,6 +611,7 @@ export async function POST(request: NextRequest) {
             previousRating: watchListEntry.userRating,
             actionType: 'update',
           },
+        });
 
         // Track outcome: user rated recommendation
         if (recommendationLogId) {
@@ -626,7 +627,6 @@ export async function POST(request: NextRequest) {
             context: 'my-movies-api',
           });
         }
-        });
 
         // Обновляем оценку в WatchList
         await prisma.watchList.update({
