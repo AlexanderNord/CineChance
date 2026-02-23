@@ -151,7 +151,7 @@ Plans:
 
 **Goal:** Реализовать продвинутые паттерны рекомендаций (5-8)
 **Depends on:** Phase 11
-**Plans:** 2/2 plans created
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 12-01-PLAN.md — Patterns 5-6: Genre Twins, Genre Recommendations
@@ -166,7 +166,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 13-01-PLAN.md — Recommendation API endpoint + Cold Start handling
+- [ ] 13-01-PLAN.md — Redis caching, timeout protection, cold start metadata
 - [ ] 13-02-PLAN.md — Heavy Users handling, Graceful Degradation, Confidence Scoring
 
 ---
