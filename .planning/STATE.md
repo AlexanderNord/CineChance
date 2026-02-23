@@ -10,8 +10,8 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Status
 
 - **Phase:** 13 (Recommendation API)
-- **Current Plan:** 01/02
-- **Goal:** API endpoint with caching and cold start handling
+- **Current Plan:** 02/02
+- **Goal:** Heavy user optimization, graceful degradation, confidence scoring
 
 ## Progress
 
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 10 | Taste Map Infrastructure | ● Complete | 0 |
 | 11 | Core Patterns | ● Complete | 0 |
 | 12 | Advanced Patterns | ● Complete | 0 |
-| 13 | Recommendation API | ○ In Progress | 2 |
+| 13 | Recommendation API | ● Complete | 2 |
 
 ---
 
@@ -97,5 +97,8 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - Timeout: 3 seconds per algorithm using AbortController
 - Cold start threshold: 10 watched items
 - X-Cache headers: HIT/MISS for cache status
+- Heavy user threshold: 500 items with 200 sample size
+- Confidence scoring formula: base 50 + algorithmCount*5 (max 90), adjustments for similar users (+10), variance (-20), cold start (-30), heavy user sampling (-10)
+- algorithmsStatus tracks per-algorithm success/failure with error messages
 
 ##
