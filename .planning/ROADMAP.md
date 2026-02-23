@@ -154,8 +154,8 @@ Plans:
 **Plans:** 2/2 plans created
 
 Plans:
-- [ ] 12-01-PLAN.md — Patterns 5-6: Genre Twins, Genre Recommendations
-- [ ] 12-02-PLAN.md — Patterns 7-8: Person Twins, Person Recommendations
+- [x] 12-01-PLAN.md — Patterns 5-6: Genre Twins, Genre Recommendations
+- [x] 12-02-PLAN.md — Patterns 7-8: Person Twins, Person Recommendations
 
 ---
 

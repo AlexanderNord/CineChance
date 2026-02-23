@@ -5,14 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Personal movie tracking with intelligent recommendations
-**Current focus:** Phase 11: Core Patterns
+**Current focus:** Phase 12: Advanced Recommendation Patterns
 
 ## Current Status
 
-- **Phase:** 11 (Core Recommendation Patterns)
-- **Current Plan:** 02 Complete
+- **Phase:** 12 (Advanced Recommendation Patterns)
+- **Current Plan:** 01
 - **Total Plans:** 02/02
-- **Goal:** All 4 core recommendation patterns implemented ✓
+- **Total Plans:** 02/02
+- **Goal:** All 8 advanced recommendation patterns implemented
 
 ## Progress
 
@@ -21,7 +22,8 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 1-8 | v1.0 Stabilization | ● Complete | 10 |
 | 9 | ML Database Schema | ● Complete | 0 |
 | 10 | Taste Map Infrastructure | ● Complete | 0 |
-| 11 | Core Recommendation Patterns | ● Complete | 0 |
+| 11 | Core Patterns | ● Complete | 0 |
+| 12 | Advanced Patterns | ● Complete | 0 |
 
 ---
 
@@ -39,18 +41,20 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 14 | UI Integration | Main page + Admin dashboard |
 | 15 | ML Feedback Loop | Decision logging + outcome tracking |
 
-## Last Updated
 
-2026-02-22 - Phase 11 complete: All 4 core recommendation patterns (Taste Match, Want Overlap, Drop Patterns, Type Twins) implemented
 
-## Execution History
 
-- **11-02:** Completed (13 min) - Implemented Drop Patterns (0.65 similarity, 70% max penalty, 90-day window) and Type Twins (type distribution via groupBy, Jaccard-like similarity, dominant type matching). Added 22 unit tests. All 4 algorithms now integrated.
-- **11-01:** Completed (31 min) - Implemented modular recommendation algorithm architecture with IRecommendationAlgorithm interface. Created Taste Match (similarity >0.7, weights 0.5/0.3/0.2) and Want Overlap (similarity >0.6, weights 0.4/0.4/0.2) patterns. Built /api/recommendations/patterns endpoint with cold start fallback, cooldown filtering, and logging. Added 19 unit tests.
-- **10-03:** Completed (8 min) - Integrated Next.js after() for non-blocking taste map recomputation on watchlist changes (status, rating, rewatch, delete). Added background updates to 4 success paths in /api/watchlist/route.ts.
-- **10-02:** Completed (5 min) - Created similarity calculation infrastructure: SimilarityResult interface, cosineSimilarity for genre vectors, ratingCorrelation (Pearson), personOverlap (Jaccard), computeOverallMatch with weights (0.5, 0.3, 0.2), isSimilar threshold (>0.7), Redis storage for similar users with 24h TTL
-- **10-01:** Completed (11 min) - Created TasteMap infrastructure: TypeScript interfaces (TasteMap, GenreProfile, PersonProfiles, BehaviorProfile, ComputedMetrics), Redis storage helpers with 24h TTL, core computation functions querying Prisma WatchList and TMDB credits
-- **09-01:** Completed (19 min) - Added 4 ML feedback loop tables to Prisma schema: RecommendationDecision, PredictionOutcome, ModelCorrection, ModelTraining. Migration pending manual execution due to DB connection issues.
+
+
+
+
+
+
+
+
+
+
+
 - **08-01:** Completed (7 min) - Admin panel UI redesign: sidebar icons only with tooltips, user table with manual filtering, removed status column, renamed Реком., added site-wide stats (movies in lists, recommendations, matches)
 - **07-03:** Completed (16 min) - Admin user statistics page with content type filtering (movie/tv/cartoon/anime), rating distribution, tags, and genres. Created admin API routes for fetching any user's data. Added navigation from user list.
 - **07-02:** Completed (16 min) - Server-side column sorting (name, email, createdAt, watchList, recommendationLogs, status) and filtering (name, email, verification status) on admin users table with URL params and Prisma queries
@@ -89,16 +93,4 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - Algorithms return results, API endpoint handles RecommendationLog entries
 - Score normalization to 0-100 range via normalizeScores() helper
 
-### Key Decisions (Phase 10)
-- Used withCache pattern from existing @/lib/redis
-- 24h TTL matches RESEARCH.md specifications
-- Empty profile returned for new users
-- Limited TMDB fetch to 50 items for performance
-- Similarity weights: taste 50%, rating 30%, person 20%
-- Similarity threshold: tasteSimilarity > 0.7
-- Background taste map recomputation via after() - non-blocking API responses
-
-### Key Decisions (Phase 8)
-- Removed status column/filter for cleaner UI
-- Added manual "Go" button for filtering to prevent excessive API calls
-- Used raw SQL for matches count to efficiently find shared movies between users
+##
