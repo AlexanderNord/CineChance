@@ -201,6 +201,9 @@ const ALL_ALGORITHMS = [
   'genre_recommendations_v1',
 ];
 
+const ALGORITHM_HEALTH_CHECK_HOURS = 24;
+const ALGORITHM_WARNING_DAYS = 7;
+
 export async function getSystemAlgorithmPerformance(): Promise<{
   overall: { rate: number; accepted: number; shown: number; negative: number };
   byAlgorithm: Array<{
@@ -211,11 +214,16 @@ export async function getSystemAlgorithmPerformance(): Promise<{
     negative: number;
     dropped: number;
     hidden: number;
+    lastUsed: string | null;
+    healthStatus: 'ok' | 'warning' | 'critical';
   }>;
 }> {
   try {
     // Use predefined list of all algorithms
     const algorithms = ALL_ALGORITHMS;
+    const now = new Date();
+    const healthCheckTime = new Date(now.getTime() - ALGORITHM_HEALTH_CHECK_HOURS * 60 * 60 * 1000);
+    const warningTime = new Date(now.getTime() - ALGORITHM_WARNING_DAYS * 24 * 60 * 60 * 1000);
 
     // Calculate metrics for each algorithm across all users
     const byAlgorithm = await Promise.all(
@@ -226,6 +234,13 @@ export async function getSystemAlgorithmPerformance(): Promise<{
             algorithm,
             action: 'shown',
           },
+        });
+
+        // Get last usage time
+        const lastLog = await prisma.recommendationLog.findFirst({
+          where: { algorithm },
+          orderBy: { shownAt: 'desc' },
+          select: { shownAt: true },
         });
 
         // Count accepted (added + rated) for this algorithm
@@ -260,6 +275,19 @@ export async function getSystemAlgorithmPerformance(): Promise<{
         const negativeCount = droppedCount + hiddenCount;
         const rate = shownCount > 0 ? (acceptedCount / shownCount) * 100 : 0;
 
+        // Determine health status
+        let healthStatus: 'ok' | 'warning' | 'critical' = 'critical';
+        if (lastLog) {
+          const lastUsed = new Date(lastLog.shownAt);
+          if (lastUsed >= healthCheckTime) {
+            healthStatus = 'ok';
+          } else if (lastUsed >= warningTime) {
+            healthStatus = 'warning';
+          } else {
+            healthStatus = 'critical';
+          }
+        }
+
         return {
           algorithm,
           rate: Math.round(rate * 10) / 10,
@@ -268,6 +296,8 @@ export async function getSystemAlgorithmPerformance(): Promise<{
           negative: negativeCount,
           dropped: droppedCount,
           hidden: hiddenCount,
+          lastUsed: lastLog ? lastLog.shownAt.toISOString() : null,
+          healthStatus,
         };
       })
     );

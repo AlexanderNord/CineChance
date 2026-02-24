@@ -20,6 +20,8 @@ interface AlgorithmPerformanceData {
     negative: number;
     dropped: number;
     hidden: number;
+    lastUsed: string | null;
+    healthStatus: 'ok' | 'warning' | 'critical';
   }>;
 }
 
@@ -33,12 +35,26 @@ function formatPercent(num: number): string {
   return (num * 100).toFixed(1) + '%';
 }
 
+function formatLastUsed(dateStr: string | null): string {
+  if (!dateStr) return 'Никогда';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffHours < 1) return 'Только что';
+  if (diffHours < 24) return `${diffHours}ч назад`;
+  if (diffDays < 7) return `${diffDays}д назад`;
+  return `${diffDays}д назад`;
+}
+
 function AlgorithmCard({ 
   name, 
   data 
 }: { 
   name: string; 
-  data: { shown: number; accepted: number; negative: number; rate: number; dropped: number; hidden: number };
+  data: { shown: number; accepted: number; negative: number; rate: number; dropped: number; hidden: number; lastUsed: string | null; healthStatus: 'ok' | 'warning' | 'critical' };
 }) {
   const getStatusColor = (rate: number) => {
     if (rate >= 0.7) return 'text-green-400';
@@ -46,21 +62,43 @@ function AlgorithmCard({
     return 'text-red-400';
   };
 
+  const getHealthIcon = (status: 'ok' | 'warning' | 'critical') => {
+    switch (status) {
+      case 'ok': return <CheckCircle className="w-3 h-3 text-green-400" />;
+      case 'warning': return <AlertCircle className="w-3 h-3 text-yellow-400" />;
+      case 'critical': return <XCircle className="w-3 h-3 text-red-400" />;
+    }
+  };
+
+  const getHealthLabel = (status: 'ok' | 'warning' | 'critical') => {
+    switch (status) {
+      case 'ok': return 'Ок';
+      case 'warning': return 'Тревога';
+      case 'critical': return 'Критично';
+    }
+  };
+
   return (
     <div className="flex items-center justify-between py-3 px-4 bg-gray-800/30 rounded-lg">
-      <div className="flex-1">
-        <p className="text-white font-medium text-sm">{name}</p>
-        <p className="text-gray-400 text-xs mt-0.5">
-          {formatNumber(data.shown)} показов · {formatNumber(data.accepted)} успешных
-          {data.negative > 0 && (
-            <span className="text-red-400"> · {formatNumber(data.negative)} негативных</span>
-          )}
-        </p>
-        {data.dropped > 0 && data.hidden > 0 && (
-          <p className="text-gray-500 text-xs">
-            (Брошено: {formatNumber(data.dropped)} · Скрыто: {formatNumber(data.hidden)})
+      <div className="flex items-center gap-3">
+        {getHealthIcon(data.healthStatus)}
+        <div>
+          <p className="text-white font-medium text-sm">{name}</p>
+          <p className="text-gray-400 text-xs mt-0.5">
+            {formatNumber(data.shown)} показов · {formatNumber(data.accepted)} успешных
+            {data.negative > 0 && (
+              <span className="text-red-400"> · {formatNumber(data.negative)} негативных</span>
+            )}
           </p>
-        )}
+          {data.dropped > 0 && data.hidden > 0 && (
+            <p className="text-gray-500 text-xs">
+              (Брошено: {formatNumber(data.dropped)} · Скрыто: {formatNumber(data.hidden)})
+            </p>
+          )}
+          <p className="text-gray-500 text-xs">
+            {formatLastUsed(data.lastUsed)}
+          </p>
+        </div>
       </div>
       <div className="text-right">
         <p className={`text-lg font-bold ${getStatusColor(data.rate / 100)}`}>
@@ -94,6 +132,8 @@ export default function AlgorithmPerformanceBlock() {
           negative: perf.negative || 0,
           dropped: perf.dropped || 0,
           hidden: perf.hidden || 0,
+          lastUsed: perf.lastUsed || null,
+          healthStatus: perf.healthStatus || 'critical',
         }));
         
         const totalShown = byAlgorithm.reduce((sum, a) => sum + a.shown, 0);
