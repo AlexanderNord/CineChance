@@ -6,6 +6,7 @@ import AdminSidebar from "../AdminSidebar";
 import RecommendationStats from '@/app/components/RecommendationStats';
 import MLDashboard from '@/app/components/MLDashboard';
 import ActiveRecommendationsBlock from '@/app/components/ActiveRecommendationsBlock';
+import AlgorithmPerformanceBlock from '@/app/components/AlgorithmPerformanceBlock';
 import { Clock } from 'lucide-react';
 import LoaderSkeleton from "@/app/components/LoaderSkeleton";
 
@@ -58,13 +59,13 @@ export default async function MonitoringPage() {
         </div>
 
         <div className="space-y-6">
-          {/* Компонент статистики */}
-          <RecommendationStats />
-
           {/* ML Мониторинг - Общий заголовок */}
           <div className="mb-2">
             <h2 className="text-2xl font-bold text-white">ML Мониторинг</h2>
           </div>
+
+          {/* Блок производительности алгоритмов */}
+          <AlgorithmPerformanceBlock />
 
           {/* Блок активных рекомендаций */}
           <Suspense fallback={<MLDashboardSkeleton />}>
@@ -76,7 +77,13 @@ export default async function MonitoringPage() {
             <MLDashboard />
           </Suspense>
 
-          {/* Расписание очистки */}
+          {/* Мониторинг системы */}
+          <div className="mb-2 mt-8">
+            <h2 className="text-2xl font-bold text-white">Мониторинг системы</h2>
+          </div>
+
+          {/* Компонент статистики */}
+          <RecommendationStats />
 
           {/* Расписание очистки */}
           <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">

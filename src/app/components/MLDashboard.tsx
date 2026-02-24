@@ -382,22 +382,6 @@ export default function MLDashboard() {
         />
       </div>
 
-      {/* Алгоритмы */}
-      <div className="mb-4">
-        <p className="text-gray-400 text-sm mb-3">Производительность алгоритмов:</p>
-        <div className="space-y-2">
-          {Object.entries(stats.algorithmPerformance)
-            .sort((a, b) => b[1].total - a[1].total)
-            .map(([algorithm, data]) => (
-            <AlgorithmCard
-              key={algorithm}
-              name={algorithm}
-              data={data}
-            />
-          ))}
-        </div>
-      </div>
-
       {/* Модель коррекции */}
       {stats.corrections.active > 0 && (
         <div className="mt-4 p-4 bg-yellow-400/5 border border-yellow-400/20 rounded-lg">
