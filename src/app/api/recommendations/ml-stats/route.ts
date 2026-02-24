@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const uniqueUsersWithRecs = uniqueUsersCount.length;
+    const uniqueUsersWithRecs = uniqueUsersGrouped.length;
 
     // Get first user ID for algorithm performance (fallback if no user)
     const firstUserId = allUsers.length > 0 ? allUsers[0].id : 'system';
@@ -198,12 +198,11 @@ export async function GET(request: NextRequest) {
       success: true,
       overview: {
         totalRecommendations,
-        totalShown,
+        totalShown: uniqueUsersWithRecs,
         totalAddedToWant,
         totalWatched,
         totalDropped,
         totalHidden,
-        uniqueUsersWithRecs,
         acceptanceRate,
         wantRate,
         watchRate,
