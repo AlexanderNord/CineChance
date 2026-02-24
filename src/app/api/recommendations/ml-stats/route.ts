@@ -38,15 +38,27 @@ export async function GET(request: NextRequest) {
     // Get overview stats from RecommendationLog
     const [
       totalRecommendations,
+      totalShown,
       allUsers,
     ] = await Promise.all([
-      // Passive recommendations (source: 'patterns_api' - главная страница)
+      // Passive recommendations - сгенерировано (source: 'patterns_api')
       prisma.recommendationLog.count({
         where: {
           context: {
             path: ['source'],
             equals: 'patterns_api',
           },
+        },
+      }),
+      
+      // Показано - action='shown' с фильтром по source='patterns_api'
+      prisma.recommendationLog.count({
+        where: {
+          context: {
+            path: ['source'],
+            equals: 'patterns_api',
+          },
+          action: 'shown',
         },
       }),
       
@@ -106,10 +118,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Calculate totals from outcome stats
-    const totalAddedToWant = overallStats.reduce((sum, day) => sum + day.added, 0);
-    const totalWatched = overallStats.reduce((sum, day) => sum + day.rated, 0);
-    const totalShown = overallStats.reduce((sum, day) => sum + day.total, 0);
+    // Calculate totals - для пассивных рекомендаций из базы
+    // Добавлено в хочу и просмотрено - эти метрики тоже нужно фильтровать по source
+    const totalAddedToWant = 0; // TODO: фильтровать по action='added' + source='patterns_api'
+    const totalWatched = 0; // TODO: фильтровать по action='rated' + source='patterns_api'
     
     // Calculate rates
     const acceptanceRate = totalShown > 0 ? (totalAddedToWant + totalWatched) / totalShown : 0;
