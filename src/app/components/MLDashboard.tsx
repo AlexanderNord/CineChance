@@ -318,15 +318,15 @@ export default function MLDashboard() {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {stats.corrections.active > 0 ? (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400/10 text-yellow-400 rounded-full text-xs border border-yellow-400/30">
-              <AlertCircle className="w-3.5 h-3.5" />
-              {stats.corrections.active} коррекций
-            </span>
-          ) : (
+          {stats.success && stats.overview.totalRecommendations > 0 ? (
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-400/10 text-green-400 rounded-full text-xs border border-green-400/30">
               <CheckCircle className="w-3.5 h-3.5" />
-              Активен
+              Ок
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-red-400/10 text-red-400 rounded-full text-xs border border-red-400/30">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Есть проблемы
             </span>
           )}
         </div>

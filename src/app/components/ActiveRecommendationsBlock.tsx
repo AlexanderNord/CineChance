@@ -113,6 +113,8 @@ export default function ActiveRecommendationsBlock({ onRefresh }: ActiveRecommen
 
   if (!stats) return null;
 
+  const isOk = stats.success && stats.overview.totalGenerated > 0;
+
   return (
     <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
       {/* Заголовок блока */}
@@ -130,10 +132,17 @@ export default function ActiveRecommendationsBlock({ onRefresh }: ActiveRecommen
             <RefreshCw className="w-4 h-4 text-gray-400 hover:text-white" />
           </button>
         </div>
-        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-400/10 text-green-400 rounded-full text-xs border border-green-400/30">
-          <CheckCircle className="w-3.5 h-3.5" />
-          Активен
-        </span>
+        {isOk ? (
+          <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-400/10 text-green-400 rounded-full text-xs border border-green-400/30">
+            <CheckCircle className="w-3.5 h-3.5" />
+            Ок
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 px-3 py-1.5 bg-red-400/10 text-red-400 rounded-full text-xs border border-red-400/30">
+            <AlertCircle className="w-3.5 h-3.5" />
+            Есть проблемы
+          </span>
+        )}
       </div>
 
       {/* Метрики */}

@@ -173,12 +173,12 @@ export default function AlgorithmPerformanceBlock() {
         {hasData ? (
           <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-400/10 text-green-400 rounded-full text-xs border border-green-400/30">
             <CheckCircle className="w-3.5 h-3.5" />
-            Активен
+            Ок
           </span>
         ) : (
-          <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-400/10 text-gray-400 rounded-full text-xs border border-gray-400/30">
+          <span className="flex items-center gap-1.5 px-3 py-1.5 bg-red-400/10 text-red-400 rounded-full text-xs border border-red-400/30">
             <XCircle className="w-3.5 h-3.5" />
-            Нет данных
+            Есть проблемы
           </span>
         )}
       </div>
