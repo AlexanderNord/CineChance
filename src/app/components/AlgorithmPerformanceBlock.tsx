@@ -81,7 +81,12 @@ function AlgorithmCard({
   return (
     <div className="flex items-center justify-between py-3 px-4 bg-gray-800/30 rounded-lg">
       <div className="flex items-center gap-3">
-        {getHealthIcon(data.healthStatus)}
+        <div className="text-right w-16">
+          <p className={`text-lg font-bold ${getStatusColor(data.rate / 100)}`}>
+            {formatPercent(data.rate / 100)}
+          </p>
+          <p className="text-gray-500 text-xs">успех</p>
+        </div>
         <div>
           <p className="text-white font-medium text-sm">{name}</p>
           <p className="text-gray-400 text-xs mt-0.5">
@@ -100,11 +105,14 @@ function AlgorithmCard({
           </p>
         </div>
       </div>
-      <div className="text-right">
-        <p className={`text-lg font-bold ${getStatusColor(data.rate / 100)}`}>
-          {formatPercent(data.rate / 100)}
-        </p>
-        <p className="text-gray-500 text-xs">успех</p>
+      <div className="flex items-center gap-1.5">
+        {getHealthIcon(data.healthStatus)}
+        <span className={`text-xs ${
+          data.healthStatus === 'ok' ? 'text-green-400' : 
+          data.healthStatus === 'warning' ? 'text-yellow-400' : 'text-red-400'
+        }`}>
+          {getHealthLabel(data.healthStatus)}
+        </span>
       </div>
     </div>
   );
