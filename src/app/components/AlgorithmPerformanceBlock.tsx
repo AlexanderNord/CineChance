@@ -89,7 +89,8 @@ function ApiRow({
     return 'text-red-400';
   };
 
-  const healthStatus: 'ok' | 'warning' | 'critical' = stats.calls > 0 ? 'ok' : 'critical';
+  const healthStatus = (stats.calls > 0 ? 'ok' : 'critical') as 'ok' | 'warning' | 'critical';
+  const healthLabel = healthStatus === 'ok' ? 'Ок' : healthStatus === 'warning' ? 'Тревога' : 'Критично';
 
   return (
     <div className="flex items-center justify-between py-2 px-3 bg-gray-800/30 rounded-lg">
@@ -100,7 +101,6 @@ function ApiRow({
           </p>
           <p className="text-gray-500 text-xs">Точность</p>
         </div>
-        {getHealthIcon(healthStatus)}
         <div>
           <p className="text-white text-sm">{name}</p>
           <p className="text-gray-400 text-xs">
@@ -160,7 +160,6 @@ function AlgorithmRow({
           </p>
           <p className="text-gray-500 text-xs">Точность</p>
         </div>
-        {getHealthIcon(data.healthStatus)}
         <div>
           <p className="text-white text-sm">{data.name}</p>
           <p className="text-gray-400 text-xs">
