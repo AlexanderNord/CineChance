@@ -12,7 +12,7 @@ import { calculateAcceptanceRate, getAlgorithmPerformance, getOutcomeStats } fro
  */
 
 export async function GET(request: NextRequest) {
-  const { success } = await rateLimit(request, '/api/recommendations');
+  const { success } = await rateLimit(request, '/api/recommendations/ml-stats');
   if (!success) {
     return NextResponse.json(
       { success: false, error: 'Too Many Requests' },
