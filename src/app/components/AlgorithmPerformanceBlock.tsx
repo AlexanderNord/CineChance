@@ -93,7 +93,13 @@ function ApiRow({
 
   return (
     <div className="flex items-center justify-between py-2 px-3 bg-gray-800/30 rounded-lg">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <p className={`font-semibold ${getAccuracyColor(stats.accuracy)}`}>
+            {formatPercent(stats.accuracy)}
+          </p>
+          <p className="text-gray-500 text-xs">Точность</p>
+        </div>
         {getHealthIcon(healthStatus)}
         <div>
           <p className="text-white text-sm">{name}</p>
@@ -105,11 +111,14 @@ function ApiRow({
           </p>
         </div>
       </div>
-      <div className="text-right">
-        <p className={`font-semibold ${getAccuracyColor(stats.accuracy)}`}>
-          {formatPercent(stats.accuracy)}
-        </p>
-        <p className="text-gray-500 text-xs">Точности</p>
+      <div className="flex items-center gap-3">
+        {getHealthIcon(healthStatus)}
+        <span className={`text-xs ${
+          healthStatus === 'ok' ? 'text-green-400' : 
+          healthStatus === 'warning' ? 'text-yellow-400' : 'text-red-400'
+        }`}>
+          {getHealthLabel(healthStatus)}
+        </span>
       </div>
     </div>
   );
@@ -144,20 +153,29 @@ function AlgorithmRow({
 
   return (
     <div className="flex items-center justify-between py-2 px-3 bg-gray-800/30 rounded-lg">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <p className={`font-semibold ${getAccuracyColor(data.accuracy)}`}>
+            {formatPercent(data.accuracy)}
+          </p>
+          <p className="text-gray-500 text-xs">Точность</p>
+        </div>
         {getHealthIcon(data.healthStatus)}
         <div>
           <p className="text-white text-sm">{data.name}</p>
-          <p className="text-gray-500 text-xs">
+          <p className="text-gray-400 text-xs">
             {formatNumber(data.returns)} возвратов · {formatLastUsed(data.lastUsed)}
           </p>
         </div>
       </div>
-      <div className="text-right">
-        <p className={`font-semibold ${getAccuracyColor(data.accuracy)}`}>
-          {formatPercent(data.accuracy)}
-        </p>
-        <p className="text-gray-500 text-xs">Точности</p>
+      <div className="flex items-center gap-3">
+        {getHealthIcon(data.healthStatus)}
+        <span className={`text-xs ${
+          data.healthStatus === 'ok' ? 'text-green-400' : 
+          data.healthStatus === 'warning' ? 'text-yellow-400' : 'text-red-400'
+        }`}>
+          {getHealthLabel(data.healthStatus)}
+        </span>
       </div>
     </div>
   );
