@@ -10,7 +10,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Status
 
 - **Phase:** 18 (Карта вкуса)
-- **Current Plan:** 02 completed
+- **Current Plan:** Not started
 - **Goal:** [To be planned]
 
 ## Progress

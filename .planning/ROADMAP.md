@@ -218,6 +218,17 @@ Plans:
 Plans:
 - [ ] 17-01-PLAN.md — Capture recommendationLogId in RecommendationsGrid, pass to watchlist API
 
+### Phase 18: Карта вкуса (Taste Map)
+
+**Goal:** Создать карту вкуса пользователя с визуализацией предпочтений
+**Depends on:** Phase 17
+**Status:** ✅ Planned
+**Plans:** 2/2 plans complete
+
+Plans:
+- [ ] 18-01-PLAN.md — API endpoint + Profile card
+- [ ] 18-02-PLAN.md — Taste Map page with visualizations
+
 ---
 
 _For current project status, see .planning/PROJECT.md_
