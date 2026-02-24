@@ -6,23 +6,32 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Activity
+  Activity,
+  Cpu,
+  Globe
 } from 'lucide-react';
 
-interface AlgorithmPerformanceData {
+interface ApiStats {
+  calls: number;
+  returns: number;
+  accuracy: number;
+}
+
+interface AlgorithmStats {
+  name: string;
+  returns: number;
+  accuracy: number;
+  lastUsed: string | null;
+  healthStatus: 'ok' | 'warning' | 'critical';
+}
+
+interface CombinedStatsData {
   success: boolean;
-  overall: { rate: number; accepted: number; shown: number; negative: number };
-  byAlgorithm: Array<{
-    algorithm: string;
-    rate: number;
-    accepted: number;
-    shown: number;
-    negative: number;
-    dropped: number;
-    hidden: number;
-    lastUsed: string | null;
-    healthStatus: 'ok' | 'warning' | 'critical';
-  }>;
+  apiStats: {
+    active: ApiStats;
+    passive: ApiStats;
+  };
+  algorithmStats: AlgorithmStats[];
 }
 
 function formatNumber(num: number): string {
@@ -49,19 +58,52 @@ function formatLastUsed(dateStr: string | null): string {
   return `${diffDays}д назад`;
 }
 
-function AlgorithmCard({ 
-  name, 
-  data 
+function ApiStatsCard({ 
+  title, 
+  icon: Icon,
+  stats 
 }: { 
-  name: string; 
-  data: { shown: number; accepted: number; negative: number; rate: number; dropped: number; hidden: number; lastUsed: string | null; healthStatus: 'ok' | 'warning' | 'critical' };
+  title: string; 
+  icon: typeof Cpu;
+  stats: ApiStats;
 }) {
-  const getStatusColor = (rate: number) => {
-    if (rate >= 0.7) return 'text-green-400';
-    if (rate >= 0.4) return 'text-yellow-400';
+  const getAccuracyColor = (acc: number) => {
+    if (acc >= 0.3) return 'text-green-400';
+    if (acc >= 0.1) return 'text-yellow-400';
     return 'text-red-400';
   };
 
+  return (
+    <div className="bg-gray-800/30 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon className="w-4 h-4 text-purple-400" />
+        <p className="text-white font-medium text-sm">{title}</p>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-gray-400 text-xs">Вызовов</p>
+          <p className="text-white font-semibold">{formatNumber(stats.calls)}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 text-xs">Возвращено</p>
+          <p className="text-white font-semibold">{formatNumber(stats.returns)}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 text-xs">Точность</p>
+          <p className={`font-semibold ${getAccuracyColor(stats.accuracy)}`}>
+            {formatPercent(stats.accuracy)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AlgorithmRow({ 
+  data 
+}: { 
+  data: AlgorithmStats;
+}) {
   const getHealthIcon = (status: 'ok' | 'warning' | 'critical') => {
     switch (status) {
       case 'ok': return <CheckCircle className="w-3 h-3 text-green-400" />;
@@ -78,46 +120,35 @@ function AlgorithmCard({
     }
   };
 
+  const getAccuracyColor = (acc: number) => {
+    if (acc >= 0.3) return 'text-green-400';
+    if (acc >= 0.1) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
   return (
-    <div className="flex items-center justify-between py-3 px-4 bg-gray-800/30 rounded-lg">
-      <div className="flex items-center gap-3">
-        <div className="text-right w-16">
-          <p className={`text-lg font-bold ${getStatusColor(data.rate / 100)}`}>
-            {formatPercent(data.rate / 100)}
-          </p>
-          <p className="text-gray-500 text-xs">% Точности</p>
-        </div>
+    <div className="flex items-center justify-between py-2 px-3 bg-gray-800/30 rounded-lg">
+      <div className="flex items-center gap-2">
+        {getHealthIcon(data.healthStatus)}
         <div>
-          <p className="text-white font-medium text-sm">{name}</p>
-          <p className="text-gray-400 text-xs mt-0.5">
-            {formatNumber(data.shown)} показов · {formatNumber(data.accepted)} успешных
-            <span className="text-red-400"> · {formatNumber(data.negative)} негативных</span>
-          </p>
-          {data.dropped > 0 && data.hidden > 0 && (
-            <p className="text-gray-500 text-xs">
-              (Брошено: {formatNumber(data.dropped)} · Скрыто: {formatNumber(data.hidden)})
-            </p>
-          )}
+          <p className="text-white text-sm">{data.name}</p>
           <p className="text-gray-500 text-xs">
-            {formatLastUsed(data.lastUsed)}
+            {formatNumber(data.returns)} возвратов · {formatLastUsed(data.lastUsed)}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        {getHealthIcon(data.healthStatus)}
-        <span className={`text-xs ${
-          data.healthStatus === 'ok' ? 'text-green-400' : 
-          data.healthStatus === 'warning' ? 'text-yellow-400' : 'text-red-400'
-        }`}>
-          {getHealthLabel(data.healthStatus)}
-        </span>
+      <div className="text-right">
+        <p className={`font-semibold ${getAccuracyColor(data.accuracy)}`}>
+          {formatPercent(data.accuracy)}
+        </p>
+        <p className="text-gray-500 text-xs">Точности</p>
       </div>
     </div>
   );
 }
 
 export default function AlgorithmPerformanceBlock() {
-  const [stats, setStats] = useState<AlgorithmPerformanceData | null>(null);
+  const [stats, setStats] = useState<CombinedStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,32 +160,11 @@ export default function AlgorithmPerformanceBlock() {
       if (!response.ok) throw new Error('Ошибка загрузки');
       const data = await response.json();
       
-      if (data.algorithmPerformance) {
-        const byAlgorithm = Object.entries(data.algorithmPerformance).map(([algorithm, perf]: [string, any]) => ({
-          algorithm,
-          rate: perf.successRate * 100,
-          accepted: perf.success,
-          shown: perf.total,
-          negative: perf.negative || 0,
-          dropped: perf.dropped || 0,
-          hidden: perf.hidden || 0,
-          lastUsed: perf.lastUsed || null,
-          healthStatus: perf.healthStatus || 'critical',
-        }));
-        
-        const totalShown = byAlgorithm.reduce((sum, a) => sum + a.shown, 0);
-        const totalAccepted = byAlgorithm.reduce((sum, a) => sum + a.accepted, 0);
-        const totalNegative = byAlgorithm.reduce((sum, a) => sum + a.negative, 0);
-        
+      if (data.apiStats && data.algorithmStats) {
         setStats({
-          success: true,
-          overall: {
-            rate: totalShown > 0 ? (totalAccepted / totalShown) * 100 : 0,
-            accepted: totalAccepted,
-            shown: totalShown,
-            negative: totalNegative,
-          },
-          byAlgorithm,
+          success: data.success,
+          apiStats: data.apiStats,
+          algorithmStats: data.algorithmStats,
         });
       }
     } catch (err) {
@@ -200,8 +210,9 @@ export default function AlgorithmPerformanceBlock() {
 
   if (!stats) return null;
 
-  const hasAlgorithms = stats.byAlgorithm.length > 0;
-  const allHealthy = hasAlgorithms && stats.byAlgorithm.every(a => a.healthStatus === 'ok');
+  const hasActiveData = stats.apiStats.active.calls > 0;
+  const hasPassiveData = stats.apiStats.passive.calls > 0;
+  const allHealthy = stats.algorithmStats.every(a => a.healthStatus === 'ok');
 
   return (
     <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
@@ -230,17 +241,33 @@ export default function AlgorithmPerformanceBlock() {
         )}
       </div>
 
-      {/* Алгоритмы */}
-      <div className="space-y-2">
-        {stats.byAlgorithm
-          .sort((a, b) => b.shown - a.shown)
-          .map((algo) => (
-            <AlgorithmCard
-              key={algo.algorithm}
-              name={algo.algorithm}
-              data={algo}
-            />
-          ))}
+      {/* API Level Stats */}
+      <div className="mb-6">
+        <p className="text-gray-400 text-sm mb-3">Уровень API:</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <ApiStatsCard 
+            title="Активные рекомендации" 
+            icon={Cpu}
+            stats={stats.apiStats.active}
+          />
+          <ApiStatsCard 
+            title="Пассивные рекомендации" 
+            icon={Globe}
+            stats={stats.apiStats.passive}
+          />
+        </div>
+      </div>
+
+      {/* Algorithm Level Stats */}
+      <div>
+        <p className="text-gray-400 text-sm mb-3">Уровень алгоритмов:</p>
+        <div className="space-y-2">
+          {stats.algorithmStats
+            .sort((a, b) => b.returns - a.returns)
+            .map((algo) => (
+              <AlgorithmRow key={algo.name} data={algo} />
+            ))}
+        </div>
       </div>
 
       {/* Время обновления */}

@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/auth';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
-import { calculateAcceptanceRate, getAlgorithmPerformance, getOutcomeStats, getSystemAlgorithmPerformance } from '@/lib/recommendation-outcome-tracking';
+import { calculateAcceptanceRate, getAlgorithmPerformance, getOutcomeStats, getSystemAlgorithmPerformance, getCombinedPerformanceStats } from '@/lib/recommendation-outcome-tracking';
 
 /**
  * API endpoint for ML recommendation system statistics
@@ -191,6 +191,9 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // Get combined API and Algorithm stats
+    const combinedStats = await getCombinedPerformanceStats();
+
     return NextResponse.json({
       success: true,
       overview: {
@@ -205,6 +208,11 @@ export async function GET(request: NextRequest) {
         watchRate,
       },
       algorithmPerformance,
+      apiStats: {
+        active: combinedStats.api.active,
+        passive: combinedStats.api.passive,
+      },
+      algorithmStats: combinedStats.algorithms,
       userSegments: {
         totalUsers: allUsers.length,
         coldStart,

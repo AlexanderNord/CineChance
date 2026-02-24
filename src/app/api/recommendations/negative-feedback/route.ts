@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
     // Это важный сигнал для ML - пользователь явно скрыл эту рекомендацию
     await trackOutcome({
       recommendationLogId,
+      userId,
       action: 'hidden',
     });
     logger.info('Outcome tracked: recommendation hidden via negative feedback', {

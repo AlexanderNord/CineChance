@@ -496,6 +496,7 @@ export async function POST(req: Request) {
       try {
         await trackOutcome({
           recommendationLogId,
+          userId: session.user.id,
           action: 'added',
         });
         logger.debug('Recommendation outcome tracked', {

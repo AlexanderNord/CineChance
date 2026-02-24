@@ -561,6 +561,7 @@ export async function POST(request: NextRequest) {
         if (recommendationLogId) {
           await trackOutcome({
             recommendationLogId,
+            userId,
             action: 'added',
           });
           logger.info('Outcome tracked: movie added to watchlist', {
@@ -590,6 +591,7 @@ export async function POST(request: NextRequest) {
           if (recommendationLogId && newStatus === 'Брошено') {
             await trackOutcome({
               recommendationLogId,
+              userId,
               action: 'dropped',
             });
             logger.info('Outcome tracked: movie dropped', {
@@ -630,6 +632,7 @@ export async function POST(request: NextRequest) {
         if (recommendationLogId) {
           await trackOutcome({
             recommendationLogId,
+            userId,
             action: 'rated',
             userRating: rating,
           });

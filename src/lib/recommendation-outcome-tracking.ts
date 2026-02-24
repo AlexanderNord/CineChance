@@ -332,6 +332,135 @@ export async function getSystemAlgorithmPerformance(): Promise<{
 }
 
 /**
+ * Get combined API and Algorithm performance metrics.
+ * API Level: Shows performance of the two main APIs (random, patterns)
+ * Algorithm Level: Shows contribution of each algorithm
+ */
+export async function getCombinedPerformanceStats(): Promise<{
+  api: {
+    active: { calls: number; returns: number; accuracy: number };
+    passive: { calls: number; returns: number; accuracy: number };
+  };
+  algorithms: Array<{
+    name: string;
+    returns: number;
+    accuracy: number;
+    lastUsed: string | null;
+    healthStatus: 'ok' | 'warning' | 'critical';
+  }>;
+}> {
+  try {
+    const now = new Date();
+    const healthCheckTime = new Date(now.getTime() - ALGORITHM_HEALTH_CHECK_HOURS * 60 * 60 * 1000);
+    const warningTime = new Date(now.getTime() - ALGORITHM_WARNING_DAYS * 24 * 60 * 60 * 1000);
+
+    // API Level Stats
+    // Active: algorithm = 'random_v1'
+    const [activeStats, passiveStats] = await Promise.all([
+      // Active: /api/recommendations/random
+      Promise.all([
+        prisma.recommendationLog.count({ where: { algorithm: 'random_v1' } }),
+        prisma.recommendationEvent.count({
+          where: {
+            eventType: { in: ['added', 'rated'] },
+            parentLog: { algorithm: 'random_v1' },
+          },
+        }),
+      ]),
+      // Passive: context->source = 'patterns_api'
+      Promise.all([
+        prisma.recommendationLog.count({
+          where: {
+            context: { path: ['source'], equals: 'patterns_api' },
+          },
+        }),
+        prisma.recommendationEvent.count({
+          where: {
+            eventType: { in: ['added', 'rated'] },
+            parentLog: {
+              context: { path: ['source'], equals: 'patterns_api' },
+            },
+          },
+        }),
+      ]),
+    ]);
+
+    const activeCalls = activeStats[0];
+    const activeAccepted = activeStats[1];
+    const passiveCalls = passiveStats[0];
+    const passiveAccepted = passiveStats[1];
+
+    // Algorithm Level Stats
+    const algorithms = await Promise.all(
+      ALL_ALGORITHMS.map(async (algorithm) => {
+        const returns = await prisma.recommendationLog.count({
+          where: { algorithm, action: 'shown' },
+        });
+
+        const accepted = await prisma.recommendationEvent.count({
+          where: {
+            eventType: { in: ['added', 'rated'] },
+            parentLog: { algorithm },
+          },
+        });
+
+        const lastLog = await prisma.recommendationLog.findFirst({
+          where: { algorithm },
+          orderBy: { shownAt: 'desc' },
+          select: { shownAt: true },
+        });
+
+        let healthStatus: 'ok' | 'warning' | 'critical' = 'critical';
+        if (lastLog) {
+          const lastUsed = new Date(lastLog.shownAt);
+          if (lastUsed >= healthCheckTime) {
+            healthStatus = 'ok';
+          } else if (lastUsed >= warningTime) {
+            healthStatus = 'warning';
+          }
+        }
+
+        return {
+          name: algorithm,
+          returns,
+          accuracy: returns > 0 ? accepted / returns : 0,
+          lastUsed: lastLog ? lastLog.shownAt.toISOString() : null,
+          healthStatus,
+        };
+      })
+    );
+
+    return {
+      api: {
+        active: {
+          calls: activeCalls,
+          returns: activeCalls,
+          accuracy: activeCalls > 0 ? activeAccepted / activeCalls : 0,
+        },
+        passive: {
+          calls: passiveCalls,
+          returns: passiveCalls,
+          accuracy: passiveCalls > 0 ? passiveAccepted / passiveCalls : 0,
+        },
+      },
+      algorithms,
+    };
+  } catch (error) {
+    logger.error('Failed to get combined performance stats', {
+      error: error instanceof Error ? error.message : String(error),
+      context: 'recommendation-outcome-tracking',
+    });
+    return {
+      api: {
+        active: { calls: 0, returns: 0, accuracy: 0 },
+        passive: { calls: 0, returns: 0, accuracy: 0 },
+      },
+      algorithms: [],
+    };
+  }
+}
+
+/**
  * Get outcome statistics over time.
  * Returns counts for added/rated/ignored actions per day.
  */
