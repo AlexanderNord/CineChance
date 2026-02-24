@@ -275,6 +275,9 @@ export default function UsersTable({
         <table className="w-full">
           <thead>
             <tr className="text-left text-gray-400 text-sm border-b border-gray-700">
+              <th className="pb-3 pr-4 text-gray-500">
+                ID
+              </th>
               <th className={thClass('name')} onClick={() => handleSort('name')}>
                 Пользователь
                 <SortIndicator field="name" currentField={sortField} direction={sortDirection} />
@@ -300,7 +303,7 @@ export default function UsersTable({
           <tbody className="text-white">
             {users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-gray-500">
+                <td colSpan={6} className="py-12 text-center text-gray-500">
                   <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>Пользователи не найдены</p>
                 </td>
@@ -312,6 +315,18 @@ export default function UsersTable({
                   className="border-b border-gray-700/50 hover:bg-gray-700/20 cursor-pointer"
                   onClick={() => router.push(`/admin/users/${user.id}/stats`)}
                 >
+                  <td className="py-4 pr-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(user.id);
+                      }}
+                      className="text-gray-500 font-mono text-xs hover:text-blue-400 transition-colors"
+                      title="Клик для копирования ID"
+                    >
+                      {user.id.slice(0, 3)}...{user.id.slice(-3)}
+                    </button>
+                  </td>
                   <td className="py-4 pr-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
