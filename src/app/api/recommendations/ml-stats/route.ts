@@ -163,41 +163,12 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Calculate discrepancy: Predicted vs Actual
-    // Predicted: Sum of confidence scores for all shown recommendations
-    // Actual: Recommendations that resulted in action (added + watched + dropped + hidden)
-    const [scoreSumResult, totalWithAction] = await Promise.all([
-      // Sum of all scores for shown recommendations
-      prisma.recommendationLog.aggregate({
-        _sum: {
-          score: true,
-        },
-        where: {
-          context: {
-            path: ['source'],
-            equals: 'patterns_api',
-          },
-          action: 'shown',
-        },
-      }),
-      // Count recommendations with any outcome action
-      prisma.recommendationEvent.count({
-        where: {
-          parentLog: {
-            context: {
-              path: ['source'],
-              equals: 'patterns_api',
-            },
-          },
-          eventType: {
-            in: ['added', 'rated', 'dropped', 'hidden'],
-          },
-        },
-      }),
-    ]);
-
-    const predicted = scoreSumResult._sum.score || 0;
-    const actual = totalWithAction;
-    const accuracy = predicted > 0 ? actual / (totalRecommendations > 0 ? totalRecommendations : 1) : 0;
+    // Predicted: Number of generated passive recommendations
+    // Actual: Positive outcomes (added + rated)
+    // Accuracy: Actual / Predicted
+    const predictedCount = totalRecommendations;
+    const actualCount = totalAddedToWant + totalWatched;
+    const discrepancyAccuracy = predictedCount > 0 ? actualCount / predictedCount : 0;
 
     // Calculate user segments
     let coldStart = 0;
@@ -254,9 +225,9 @@ export async function GET(request: NextRequest) {
         heavyUserThreshold: HEAVY_USER_THRESHOLD,
       },
       discrepancy: {
-        predicted: Math.round(predicted),
-        actual: actual,
-        accuracy: Math.min(accuracy, 1),
+        predicted: predictedCount,
+        actual: actualCount,
+        accuracy: discrepancyAccuracy,
       },
       corrections: {
         active: 0,
