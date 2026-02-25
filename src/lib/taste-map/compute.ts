@@ -6,6 +6,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { fetchMediaDetails } from '@/lib/tmdb';
+import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
 import type {
   TasteMap,
   GenreProfile,
@@ -24,7 +25,7 @@ import {
 } from './redis';
 
 // Completed status IDs from MovieStatus table
-const COMPLETED_STATUSES = ['watched', 'completed', 'rewatched'];
+const COMPLETED_STATUS_IDS = [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCHED];
 
 /**
  * Compute genre profile from watched movies
@@ -195,11 +196,11 @@ export function computeAverageRating(watchedMovies: WatchListItemFull[]): number
 export async function computeBehaviorProfile(
   userId: string
 ): Promise<BehaviorProfile> {
-  // Get all user items regardless of status
+  // Get all user items with status and watch count
   const allItems = await prisma.watchList.findMany({
     where: { userId },
     select: {
-      status: { select: { name: true } },
+      statusId: true,
       watchCount: true,
     },
   });
@@ -208,35 +209,45 @@ export async function computeBehaviorProfile(
     return { rewatchRate: 0, dropRate: 0, completionRate: 0 };
   }
 
-  // Count items by status
-  const statusCounts = new Map<string, number>();
+  // Count items by status using statusId
+  let wantCount = 0;
+  let watchedCount = 0;
+  let rewatchedCount = 0;
+  let droppedCount = 0;
+  let rewatchTotal = 0; // Count of items with watchCount > 1
+
   for (const item of allItems) {
-    const status = item.status.name;
-    statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+    if (item.statusId === MOVIE_STATUS_IDS.WANT_TO_WATCH) {
+      wantCount++;
+    } else if (item.statusId === MOVIE_STATUS_IDS.WATCHED) {
+      watchedCount++;
+      if (item.watchCount > 1) rewatchTotal++;
+    } else if (item.statusId === MOVIE_STATUS_IDS.REWATCHED) {
+      rewatchedCount++;
+      // Rewatched items always count as rewatched
+      rewatchTotal++;
+    } else if (item.statusId === MOVIE_STATUS_IDS.DROPPED) {
+      droppedCount++;
+    }
   }
 
-  const watched = statusCounts.get('watched') || 0;
-  const rewatched = statusCounts.get('rewatched') || 0;
-  const want = statusCounts.get('want') || 0;
-  const dropped = statusCounts.get('dropped') || 0;
-  const inProgress = statusCounts.get('in_progress') || 0;
-
-  // Rewatch rate: rewatched / (watched + rewatched)
-  const totalWatched = watched + rewatched;
-  const rewatchRate = totalWatched > 0 
-    ? Math.round((rewatched / totalWatched) * 100) 
+  // Calculate metrics
+  // Rewatch rate: items with watchCount > 1 / (watched + rewatched)
+  const totalWatched = watchedCount + rewatchedCount;
+  const rewatchRate = totalWatched > 0
+    ? Math.round((rewatchTotal / totalWatched) * 100)
     : 0;
 
-  // Drop rate: dropped / (want + dropped + in_progress)
-  const totalIncomplete = want + dropped + inProgress;
-  const dropRate = totalIncomplete > 0 
-    ? Math.round((dropped / totalIncomplete) * 100) 
+  // Drop rate: dropped / (want + dropped) - from items user added but didn't watch
+  const totalWantOrDropped = wantCount + droppedCount;
+  const dropRate = totalWantOrDropped > 0
+    ? Math.round((droppedCount / totalWantOrDropped) * 100)
     : 0;
 
-  // Completion rate: watched / (watched + in_progress)
-  const totalStarted = watched + inProgress;
-  const completionRate = totalStarted > 0 
-    ? Math.round((watched / totalStarted) * 100) 
+  // Completion rate: watched / (want + watched + rewatched) - successful completion rate
+  const totalWithStatus = wantCount + watchedCount + rewatchedCount;
+  const completionRate = totalWithStatus > 0
+    ? Math.round(((watchedCount + rewatchedCount) / totalWithStatus) * 100)
     : 100;
 
   return { rewatchRate, dropRate, completionRate };
@@ -323,13 +334,11 @@ async function buildWatchListItem(
  * Main function to compute complete TasteMap for a user
  */
 export async function computeTasteMap(userId: string): Promise<TasteMap> {
-  // Get items from database (watched + want to watch for better coverage)
+  // Get items from database (watched + rewatched for better coverage)
   const watchedItems = await prisma.watchList.findMany({
     where: {
       userId,
-      status: {
-        name: { in: [...COMPLETED_STATUSES, 'want_to_watch'] },
-      },
+      statusId: { in: COMPLETED_STATUS_IDS },
     },
     select: {
       tmdbId: true,

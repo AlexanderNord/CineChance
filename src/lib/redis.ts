@@ -49,7 +49,7 @@ export async function withCache<T>(
     }
     logger.info('Cache miss', { key, context: 'RedisCache' });
   } catch (error) {
-    logger.error('Redis get failed', { 
+    logger.debug('Redis get failed (will compute fresh)', { 
       error: error instanceof Error ? error.message : String(error),
       key,
       context: 'RedisCache'

@@ -341,7 +341,7 @@ async function getOrComputeSimilarUsers(
     try {
       const result = await computeSimilarity(userId, candidateId);
       
-      if (result.tasteSimilarity >= SIMILARITY_THRESHOLD) {
+      if (result.overallMatch >= SIMILARITY_THRESHOLD) {
         similarUsers.push({
           userId: candidateId,
           overallMatch: result.overallMatch,

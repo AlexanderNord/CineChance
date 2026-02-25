@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -13,10 +14,30 @@ import {
   Legend,
 } from 'recharts';
 import type { TasteMap } from '@/lib/taste-map/types';
+import { logger } from '@/lib/logger';
+import TwinTasters from './TwinTasters';
 
 interface TasteMapClientProps {
   tasteMap: TasteMap | null;
   userId: string;
+}
+
+interface ActorData {
+  id: number;
+  name: string;
+  actor_score: number;
+  average_rating: number | null;
+  watched_movies: number;
+  total_movies: number;
+}
+
+interface DirectorData {
+  id: number;
+  name: string;
+  creator_score: number;
+  average_rating: number | null;
+  watched_movies: number;
+  total_movies: number;
 }
 
 const COLORS = {
@@ -29,6 +50,62 @@ const COLORS = {
 };
 
 export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps) {
+  const [topActors, setTopActors] = useState<Array<[string, number]>>([]);
+  const [topDirectors, setTopDirectors] = useState<Array<[string, number]>>([]);
+  const [loadingActors, setLoadingActors] = useState(false);
+  const [loadingDirectors, setLoadingDirectors] = useState(false);
+
+  // Load actors from API
+  useEffect(() => {
+    const loadActors = async () => {
+      setLoadingActors(true);
+      try {
+        const response = await fetch(`/api/user/achiev_actors?limit=50&singleLoad=true&offset=0`);
+        if (response.ok) {
+          const data = await response.json();
+          const actorsList: Array<[string, number]> = (data.actors || [])
+            .slice(0, 10)
+            .map((actor: ActorData) => [
+              actor.name,
+              actor.average_rating ?? 0,
+            ]);
+          setTopActors(actorsList);
+        }
+      } catch (error) {
+        logger.debug('Failed to load actors', { error, context: 'TasteMapClient' });
+      } finally {
+        setLoadingActors(false);
+      }
+    };
+    
+    loadActors();
+  }, [userId]);
+
+  // Load directors from API
+  useEffect(() => {
+    const loadDirectors = async () => {
+      setLoadingDirectors(true);
+      try {
+        const response = await fetch(`/api/user/achiev_creators?limit=50&singleLoad=true&offset=0`);
+        if (response.ok) {
+          const data = await response.json();
+          const directorsList: Array<[string, number]> = (data.creators || [])
+            .slice(0, 10)
+            .map((creator: DirectorData) => [
+              creator.name,
+              creator.average_rating ?? 0,
+            ]);
+          setTopDirectors(directorsList);
+        }
+      } catch (error) {
+        logger.debug('Failed to load directors', { error, context: 'TasteMapClient' });
+      } finally {
+        setLoadingDirectors(false);
+      }
+    };
+    
+    loadDirectors();
+  }, [userId]);
   // Empty state
   if (!tasteMap || Object.keys(tasteMap.genreProfile).length === 0) {
     return (
@@ -65,16 +142,6 @@ export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps
     { name: 'Средние (5-7)', value: tasteMap.ratingDistribution.medium, color: COLORS.medium },
     { name: 'Низкие (1-4)', value: tasteMap.ratingDistribution.low, color: COLORS.low },
   ].filter(d => d.value > 0);
-
-  // Top actors (sorted by score, top 10)
-  const topActors = Object.entries(tasteMap.personProfiles.actors)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
-
-  // Top directors (sorted by score, top 10)
-  const topDirectors = Object.entries(tasteMap.personProfiles.directors)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
 
   // Type breakdown data
   const typeData = [
@@ -187,14 +254,17 @@ export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps
       <div className="bg-gray-900 rounded-lg p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Любимые актеры</h2>
         <div className="flex flex-wrap gap-2">
-          {topActors.length > 0 ? (
+          {loadingActors ? (
+            <p className="text-gray-400">Загрузка...</p>
+          ) : topActors.length > 0 ? (
             topActors.map(([name, score]) => (
-              <span
+              <a
                 key={name}
-                className="bg-amber-900/30 text-amber-400 px-3 py-1 rounded-full text-sm border border-amber-700/50"
+                href="/profile/actors"
+                className="bg-amber-900/30 text-amber-400 px-3 py-1 rounded-full text-sm border border-amber-700/50 hover:bg-amber-900/50 transition-colors"
               >
-                {name} ({score}%)
-              </span>
+                {name} ({score > 0 ? score.toFixed(1) : '—'})
+              </a>
             ))
           ) : (
             <p className="text-gray-400">Нет данных об актерах</p>
@@ -206,14 +276,17 @@ export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps
       <div className="bg-gray-900 rounded-lg p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Любимые режиссеры</h2>
         <div className="flex flex-wrap gap-2">
-          {topDirectors.length > 0 ? (
+          {loadingDirectors ? (
+            <p className="text-gray-400">Загрузка...</p>
+          ) : topDirectors.length > 0 ? (
             topDirectors.map(([name, score]) => (
-              <span
+              <a
                 key={name}
-                className="bg-blue-900/30 text-blue-400 px-3 py-1 rounded-full text-sm border border-blue-700/50"
+                href="/profile/creators"
+                className="bg-blue-900/30 text-blue-400 px-3 py-1 rounded-full text-sm border border-blue-700/50 hover:bg-blue-900/50 transition-colors"
               >
-                {name} ({score}%)
-              </span>
+                {name} ({score > 0 ? score.toFixed(1) : '—'})
+              </a>
             ))
           ) : (
             <p className="text-gray-400">Нет данных о режиссерах</p>
@@ -267,27 +340,42 @@ export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps
       {/* Behavior Profile */}
       <div className="bg-gray-900 rounded-lg p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Поведенческий профиль</h2>
+        <div className="text-sm text-gray-400 mb-4">
+          Анализ ваших привычек просмотра: как часто вы пересматриваете понравившиеся фильмы, какой процент добавленного контента вы бросаете, и насколько успешно вы завершаете начатый контент.
+        </div>
         <div className="grid grid-cols-3 gap-4">
-          <div className="text-center">
+          <div className="bg-gray-800 rounded-lg p-4 text-center hover:bg-gray-700 transition-colors">
             <div className="text-2xl font-bold text-purple-400">
               {tasteMap.behaviorProfile.rewatchRate}%
             </div>
-            <div className="text-sm text-gray-400">Пересмотр</div>
+            <div className="text-xs font-semibold text-gray-300 mb-2">Пересмотры</div>
+            <div className="text-xs text-gray-500">
+              Доля фильмов, пересмотренных более одного раза
+            </div>
           </div>
-          <div className="text-center">
+          <div className="bg-gray-800 rounded-lg p-4 text-center hover:bg-gray-700 transition-colors">
             <div className="text-2xl font-bold text-red-400">
               {tasteMap.behaviorProfile.dropRate}%
             </div>
-            <div className="text-sm text-gray-400">Брошенные</div>
+            <div className="text-xs font-semibold text-gray-300 mb-2">Брошено</div>
+            <div className="text-xs text-gray-500">
+              Процент брошенного контента из того, что вы захотели смотреть
+            </div>
           </div>
-          <div className="text-center">
+          <div className="bg-gray-800 rounded-lg p-4 text-center hover:bg-gray-700 transition-colors">
             <div className="text-2xl font-bold text-green-400">
               {tasteMap.behaviorProfile.completionRate}%
             </div>
-            <div className="text-sm text-gray-400">Завершение</div>
+            <div className="text-xs font-semibold text-gray-300 mb-2">Завершение</div>
+            <div className="text-xs text-gray-500">
+              Процент просмотренного контента из всех добавленных
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Twin Tasters / Similar Users */}
+      <TwinTasters userId={userId} />
     </div>
   );
 }
