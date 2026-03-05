@@ -42,10 +42,10 @@ const nextConfig: NextConfig = {
     },
   },
 
-  // Исключаем TypeScript файлы в scripts из сборки
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+   // Исключаем TypeScript файлы в scripts из сборки
+   typescript: {
+     ignoreBuildErrors: false,
+   },
 };
 
 export default withBundleAnalyzer(nextConfig);

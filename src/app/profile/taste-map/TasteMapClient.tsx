@@ -13,7 +13,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import type { TasteMap } from '@/lib/taste-map/types';
+import type { TasteMap, ActorData, DirectorData } from '@/lib/taste-map/types';
 import { logger } from '@/lib/logger';
 import TwinTasters from './TwinTasters';
 
@@ -207,15 +207,14 @@ export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps
                 width={80}
                 tick={{ fill: '#d1d5db', fontSize: 12 }}
               />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#fff',
-                }}
-                formatter={(value: number) => [`${value}`, 'Предпочтение']}
-              />
+               <Tooltip
+                 contentStyle={{
+                   backgroundColor: '#1f2937',
+                   border: 'none',
+                   borderRadius: '8px',
+                   color: '#fff',
+                 }}
+               />
               <Bar dataKey="value" fill="#a855f7" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -250,7 +249,6 @@ export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps
                   borderRadius: '8px',
                   color: '#fff',
                 }}
-                formatter={(value: number) => [`${value}%`, 'Процент']}
               />
               <Legend />
             </PieChart>

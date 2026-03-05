@@ -514,20 +514,25 @@ async function computeRatingPatterns(
     select: { tmdbId: true, userRating: true, statusId: true, watchCount: true },
   });
 
-  if (watchListA.length < 2) {
-    return {
-      perfectMatches: 0,
-      closeMatches: 0,
-      moderateMatches: 0,
-      sameCategory: 0,
-      differentIntensity: 0,
-      avgRatingUser1: 0,
-      avgRatingUser2: 0,
-      intensityMatch: 0,
-      pearsonCorrelation: 0,
-      totalSharedMovies: 0,
-    };
-  }
+   if (watchListA.length < 2) {
+     return {
+       perfectMatches: 0,
+       closeMatches: 0,
+       moderateMatches: 0,
+       largeDifference: 0,
+       sameCategory: 0,
+       differentIntensity: 0,
+       avgRatingUser1: 0,
+       avgRatingUser2: 0,
+       intensityMatch: 0,
+       pearsonCorrelation: 0,
+       totalSharedMovies: 0,
+       avgRatingDifference: 0,
+       positiveRatingsPercentage: 0,
+       bothRewatchedCount: 0,
+       overallMovieMatch: 0,
+     };
+   }
 
   const movieIdsA = new Set(watchListA.map(w => w.tmdbId));
   const ratingsMapA = new Map(watchListA.map(w => [w.tmdbId, w.userRating || 0]));

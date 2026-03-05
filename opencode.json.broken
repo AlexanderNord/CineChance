@@ -1,21 +1,27 @@
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "ctx7sk-9d3a20c8-9c38-4840-873e-1d42dddd13f3"
+      },
+      "enabled": true
+    },
+
+
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "sequential-thinking": {
-      "type": "local",
-      "command": [
-        "npx",
+      "type": "stdio",
+      "command": "npx",
+      "args": [
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
       ]
     },
     "context7": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@upstash/context7-mcp"
-      ]
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
     }
   },
   "agent": {
@@ -24,7 +30,7 @@
       "prompt": "{file:.opencode/agents/gsd-tdd-orchestrator.md}"
     },
     "gsd-phase-researcher": {
-      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "model": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
       "prompt": "{file:.opencode/agents/gsd-phase-researcher.md}",
       "tools": {
         "write": true,
@@ -36,7 +42,7 @@
       }
     },
     "gsd-tdd-acceptance-spec": {
-      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "model": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
       "prompt": "{file:.opencode/agents/gsd-tdd-acceptance-spec.md}",
       "tools": {
         "write": true,
@@ -60,7 +66,7 @@
       }
     },
     "gsd-tdd-spec": {
-      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "model": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
       "prompt": "{file:.opencode/agents/gsd-tdd-spec.md}",
       "tools": {
         "write": true,
@@ -72,7 +78,7 @@
       }
     },
     "gsd-tdd-red": {
-      "model": "opencode/minimax-m2.5-free",
+      "model": "minimax/minimax-m2.5",
       "prompt": "{file:.opencode/agents/gsd-tdd-red.md}",
       "tools": {
         "write": true,
@@ -84,7 +90,7 @@
       }
     },
     "gsd-tdd-green": {
-      "model": "opencode/minimax-m2.5-free",
+      "model": "minimax/minimax-m2.5",
       "prompt": "{file:.opencode/agents/gsd-tdd-green.md}",
       "tools": {
         "write": true,
@@ -108,7 +114,7 @@
       }
     },
     "gsd-tdd-docs": {
-      "model": "opencode/big-pickle",
+      "model": "openrouter/openrouter/big-pickle",
       "prompt": "{file:.opencode/agents/gsd-tdd-docs.md}",
       "tools": {
         "write": true,
@@ -120,7 +126,7 @@
       }
     },
     "gsd-tdd-debug": {
-      "model": "zai/glm-4.7-flash",
+      "model": "z-ai/glm-4.7-flash",
       "prompt": "{file:.opencode/agents/gsd-tdd-debug.md}",
       "tools": {
         "write": false,
@@ -132,7 +138,7 @@
       }
     },
     "gsd-intent-verifier": {
-      "model": "zai/glm-4.7-flash",
+      "model": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
       "prompt": "{file:.opencode/agents/gsd-intent-verifier.md}",
       "tools": {
         "write": true,
@@ -144,7 +150,7 @@
       }
     },
     "gsd-tdd-verifier": {
-      "model": "zai/glm-4.7-flash",
+      "model": "z-ai/glm-4.7-flash",
       "prompt": "{file:.opencode/agents/gsd-tdd-verifier.md}",
       "tools": {
         "write": true,
@@ -158,11 +164,11 @@
   },
   "mode": {
     "build": {
-      "model": "opencode/minimax-m2.5-free",
+      "model": "minimax/minimax-m2.5",
       "temperature": 0.3
     },
     "plan": {
-      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "model": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
       "temperature": 0.1,
       "tools": {
         "write": false,
@@ -171,7 +177,7 @@
       }
     },
     "tdd-spec": {
-      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "model": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
       "temperature": 0.1,
       "prompt": "{file:.opencode/agents/gsd-tdd-spec.md}",
       "tools": {
@@ -184,7 +190,7 @@
       }
     },
     "tdd-red": {
-      "model": "opencode/minimax-m2.5-free",
+      "model": "minimax/minimax-m2.5",
       "temperature": 0.2,
       "prompt": "{file:.opencode/agents/gsd-tdd-red.md}",
       "tools": {
@@ -195,7 +201,7 @@
       }
     },
     "tdd-green": {
-      "model": "opencode/minimax-m2.5-free",
+      "model": "minimax/minimax-m2.5",
       "temperature": 0.3,
       "prompt": "{file:.opencode/agents/gsd-tdd-green.md}",
       "tools": {
@@ -218,7 +224,7 @@
       }
     },
     "tdd-docs": {
-      "model": "opencode/big-pickle",
+      "model": "openrouter/openrouter/big-pickle",
       "temperature": 0.2,
       "prompt": "{file:.opencode/agents/gsd-tdd-docs.md}",
       "tools": {
@@ -231,7 +237,7 @@
       }
     },
     "tdd-debug": {
-      "model": "zai/glm-4.7-flash",
+      "model": "z-ai/glm-4.7-flash",
       "temperature": 0.1,
       "prompt": "{file:.opencode/agents/gsd-tdd-debug.md}",
       "tools": {

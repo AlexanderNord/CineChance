@@ -17,13 +17,15 @@ export async function GET(
     return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
   }
   
-  try {
-    const { id } = await params;
-    const collectionId = parseInt(id);
+  // Destructure id from params at function scope for catch block usage
+  const { id } = await params;
+  const collectionId = parseInt(id);
 
-    if (!collectionId) {
-      return NextResponse.json({ error: 'Invalid collection ID' }, { status: 400 });
-    }
+  if (!collectionId) {
+    return NextResponse.json({ error: 'Invalid collection ID' }, { status: 400 });
+  }
+
+  try {
 
     const apiKey = process.env.TMDB_API_KEY;
     if (!apiKey) {

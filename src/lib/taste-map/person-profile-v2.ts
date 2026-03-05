@@ -140,25 +140,27 @@ export async function computeUserPersonProfile(
       },
     });
 
-    // Save to database
-    const profile = await prisma.personProfile.upsert({
-      where: {
-        userId_personType: { userId, personType },
-      },
-      update: {
-        topPersons: personData,
-        totalMoviesAnalyzed: analyzedCount,
-        computedAt: new Date(),
-        computationMethod: 'full',
-      },
-      create: {
-        userId,
-        personType,
-        topPersons: personData,
-        totalMoviesAnalyzed: analyzedCount,
-        computationMethod: 'full',
-      },
-    });
+     // Save to database
+     const profile = await prisma.personProfile.upsert({
+       where: {
+         userId_personType: { userId, personType },
+       },
+        update: {
+          // @ts-expect-error: PersonData[] is JSON-serializable and acceptable for Json field
+          topPersons: personData,
+          totalMoviesAnalyzed: analyzedCount,
+          computedAt: new Date(),
+          computationMethod: 'full',
+        },
+        create: {
+          userId,
+          personType,
+          // @ts-expect-error: PersonData[] is JSON-serializable and acceptable for Json field
+          topPersons: personData,
+          totalMoviesAnalyzed: analyzedCount,
+          computationMethod: 'full',
+        },
+     });
 
     logger.info('Completed person profile computation', {
       userId,
@@ -197,9 +199,9 @@ export async function getUserPersonProfile(
     // Check freshness
     if (profile) {
       const ageHours = (Date.now() - profile.computedAt.getTime()) / (1000 * 60 * 60);
-      if (ageHours < maxAgeHours) {
-        return profile.topPersons as PersonData[];
-      }
+       if (ageHours < maxAgeHours) {
+         return profile.topPersons as unknown as PersonData[];
+       }
     }
 
     // Recalculate if not found or stale
@@ -288,11 +290,11 @@ export async function getPersonProfileStats(): Promise<{
         actor: profiles.filter((p) => p.personType === 'actor').length,
         director: profiles.filter((p) => p.personType === 'director').length,
       },
-      avgPersonsPerProfile:
-        profiles.length > 0
-          ? profiles.reduce((sum, p) => sum + (p.topPersons as PersonData[]).length, 0) /
-            profiles.length
-          : 0,
+       avgPersonsPerProfile:
+         profiles.length > 0
+           ? profiles.reduce((sum, p) => sum + (p.topPersons as unknown as PersonData[]).length, 0) /
+             profiles.length
+           : 0,
       lastComputedAt: profiles.length > 0 ? profiles[0].computedAt : null,
     };
 

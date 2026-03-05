@@ -86,3 +86,17 @@ export interface WatchListItemFull extends WatchListItemWithGenres {
     crew: { id: number; name: string; job?: string }[];
   };
 }
+
+// Person data for taste map (actors/directors)
+export interface PersonData {
+  tmdbPersonId: number;
+  name: string;
+  count: number;               // How many movies they appear in
+  average_rating: number;      // Weighted average rating (from API)
+}
+
+// Actor data (alias of PersonData for clarity)
+export interface ActorData extends PersonData {}
+
+// Director data (alias of PersonData for clarity)
+export interface DirectorData extends PersonData {}
