@@ -1,0 +1,62 @@
+{
+  "version": "3.0",
+  "profiles": {
+    "simple": {
+      "description": "Быстрые итерации, только бесплатные модели",
+      "orchestrator": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
+      "planner": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
+      "executor": "openrouter/stepfun/step-3.5-flash:free"
+    },
+    "production": {
+      "description": "Основной профиль: качество, архитектура, TDD",
+      "orchestrator": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
+      "planner": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
+      "executor": "minimax/minimax-m2.5"
+    }
+  },
+  "current_profile": "production",
+  "fallback": {
+    "note": "Общий fallback для всех этапов",
+    "stepfun": "openrouter/stepfun/step-3.5-flash:free",
+    "nemotron": "openrouter/nvidia/nemotron-3-nano-30b-a3b:free",
+    "glm": "z-ai/glm-4.7-flash",
+    "big_pickle": "openrouter/openrouter/big-pickle"
+  },
+  "stratification": {
+    "note": "Модельная стратификация GSD+TDD",
+    "reasoning": {
+      "model": "openrouter/qwen/qwen3-235b-a22b-thinking-2507",
+      "agents": ["gsd-phase-researcher", "gsd-tdd-acceptance-spec", "gsd-tdd-spec", "gsd-intent-verifier", "gsd-tdd-orchestrator"]
+    },
+    "tdd_core": {
+      "model": "minimax/minimax-m2.5",
+      "agents": ["gsd-tdd-red", "gsd-tdd-green"]
+    },
+    "code": {
+      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "agents": ["gsd-tdd-acceptance-code", "gsd-tdd-refactor", "gsd-tdd-docs"]
+    },
+    "technical": {
+      "model": "z-ai/glm-4.7-flash",
+      "agents": ["gsd-tdd-debug", "gsd-tdd-verifier"]
+    }
+  },
+  "tdd": {
+    "researcher": "gsd-phase-researcher",
+    "acceptance_spec": "gsd-tdd-acceptance-spec",
+    "acceptance_code": "gsd-tdd-acceptance-code",
+    "spec": "gsd-tdd-spec",
+    "red": "gsd-tdd-red",
+    "green": "gsd-tdd-green",
+    "refactor": "gsd-tdd-refactor",
+    "docs": "gsd-tdd-docs",
+    "debug": "gsd-tdd-debug",
+    "intent_verifier": "gsd-intent-verifier",
+    "tdd_verifier": "gsd-tdd-verifier",
+    "orchestrator": "gsd-tdd-orchestrator",
+    "test_runner": "npx vitest run --reporter=verbose",
+    "coverage": "npx vitest run --coverage",
+    "type_check": "npx tsc --noEmit",
+    "test_path": "src/lib/__tests__"
+  }
+}
