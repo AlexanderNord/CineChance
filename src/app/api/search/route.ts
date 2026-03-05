@@ -5,6 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { isUnder18 } from '@/lib/age-utils';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
+import { 
+  TMDbSearchResult, 
+  TMDbListItem,
+  isSuccessfulSearchResult,
+  isTMDBErrorResponse
+} from '@/lib/types/tmdb';
 
 export async function GET(request: Request) {
   // Apply rate limiting
@@ -53,9 +59,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Search service unavailable' }, { status: 500 });
     }
     
-    let allResults: any[] = [];
-    let totalResults = 0;
-    let totalPages = 1;
+     let allResults: TMDbListItem[] = [];
+     let totalResults = 0;
+     let totalPages = 1;
 
     // Проверяем возраст пользователя для фильтрации взрослого контента
     const session = await getServerSession(authOptions);
@@ -88,7 +94,7 @@ export async function GET(request: Request) {
             if (!res.ok) {
               throw new Error(`TMDB API error: ${res.status} ${res.statusText}`);
             }
-            const data = await res.json();
+            const data = await res.json() as TMDbSearchResult;
             if (data.status_code) {
               throw new Error(`TMDB API error: ${data.status_message}`);
             }
@@ -98,31 +104,42 @@ export async function GET(request: Request) {
         fetchPromises.push(promise);
       }
 
-      // Выполняем все запросы параллельно
-      const results = await Promise.allSettled(fetchPromises);
+       // Выполняем все запросы параллельно
+       const results = await Promise.allSettled(fetchPromises);
 
-      // Собираем результаты, игнорируя ошибки
-      let hasErrors = false;
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          if (result.value.error) {
-            logger.error('TMDB API fetch error', { 
-              error: result.value.error.message || result.value.error,
-              page: result.value.page,
-              query 
-            });
-            hasErrors = true;
-          } else if (result.value.results && result.value.results.length > 0) {
-            allResults = allResults.concat(result.value.results);
-          }
-        } else {
-          logger.error('Promise rejected', { 
-            error: result.reason,
-            query 
-          });
-          hasErrors = true;
-        }
-      }
+       // Собираем результаты, игнорируя ошибки
+       let hasErrors = false;
+       for (const result of results) {
+         if (result.status === 'fulfilled') {
+           const value = result.value;
+           if ('error' in value) {
+             // Network-level error captured in catch
+             logger.error('TMDB API fetch error', { 
+               error: value.error,
+               page: value.page,
+               query 
+             });
+             hasErrors = true;
+           } else if (isSuccessfulSearchResult(value)) {
+             if (value.results.length > 0) {
+               allResults = allResults.concat(value.results);
+             }
+           } else if (isTMDBErrorResponse(value)) {
+             logger.error('TMDB API error response', { 
+               status_code: value.status_code,
+               status_message: value.status_message,
+               query 
+             });
+             hasErrors = true;
+           }
+         } else {
+           logger.error('Promise rejected', { 
+             error: result.reason,
+             query 
+           });
+           hasErrors = true;
+         }
+       }
 
       // Если все запросы завершились с ошибками, возвращаем пустой результат
       if (hasErrors && allResults.length === 0) {
@@ -137,30 +154,30 @@ export async function GET(request: Request) {
 
       // Дополнительная серверная фильтрация на случай, если TMDB не применил настройки
       if (shouldFilterAdult) {
-        allResults = allResults.filter((item: any) => !item.adult);
+        allResults = allResults.filter((item: TMDbListItem) => !item.adult);
       }
 
       // Filter results based on type
       const typeParam = type || 'all';
       const selectedTypes = typeParam.split(',');
       
-      if (selectedTypes.length > 0 && !selectedTypes.includes('all')) {
-        // Filter by multiple types
-        allResults = allResults.filter((item: any) => {
-          const itemType = item.media_type;
-          const isAnime = (item.genre_ids?.includes(16) ?? false) && item.original_language === 'ja';
-          const isCartoon = (item.genre_ids?.includes(16) ?? false) && item.original_language !== 'ja';
-          
-          // Check if this item matches any selected type
-          for (const t of selectedTypes) {
-            if (t === 'anime' && isAnime) return true;
-            if (t === 'cartoon' && isCartoon) return true;
-            if (t === 'movie' && itemType === 'movie' && !isAnime && !isCartoon) return true;
-            if (t === 'tv' && itemType === 'tv' && !isAnime && !isCartoon) return true;
-          }
-          return false;
-        });
-      }
+       if (selectedTypes.length > 0 && !selectedTypes.includes('all')) {
+         // Filter by multiple types
+         allResults = allResults.filter((item: TMDbListItem): boolean => {
+           const itemType = item.media_type;
+           const isAnime = (item.genre_ids?.includes(16) ?? false) && item.original_language === 'ja';
+           const isCartoon = (item.genre_ids?.includes(16) ?? false) && item.original_language !== 'ja';
+           
+           // Check if this item matches any selected type
+           for (const t of selectedTypes) {
+             if (t === 'anime' && isAnime) return true;
+             if (t === 'cartoon' && isCartoon) return true;
+             if (t === 'movie' && itemType === 'movie' && !isAnime && !isCartoon) return true;
+             if (t === 'tv' && itemType === 'tv' && !isAnime && !isCartoon) return true;
+           }
+           return false;
+         });
+       }
 
       // Filter by list status
       if (listStatus !== 'all') {
@@ -203,10 +220,10 @@ export async function GET(request: Request) {
             return apiType; // 'person' etc.
           };
 
-          allResults = allResults.filter((item: any) => {
-            const watchlistItem = watchlistMap.get(item.id);
-            const isBlacklisted = blacklistSet.has(item.id);
-            const dbMediaType = getDbMediaType(item.media_type);
+           allResults = allResults.filter((item: TMDbListItem) => {
+             const watchlistItem = watchlistMap.get(item.id);
+             const isBlacklisted = blacklistSet.has(item.id);
+             const dbMediaType = getDbMediaType(item.media_type);
 
             // Check if item is in watchlist with matching media type
             const isInWatchlist = watchlistItem && watchlistItem.mediaType === dbMediaType;
@@ -249,79 +266,79 @@ export async function GET(request: Request) {
       if (yearFilter) {
         const yearMatch = yearFilter.match(/(\d{4})(?:-(\d{4}))?/);
         if (yearMatch) {
-          const y1 = parseInt(yearMatch[1]);
-          const y2 = yearMatch[2] ? parseInt(yearMatch[2]) : y1;
-          allResults = allResults.filter((item: any) => {
-            const releaseDate = item.release_date || item.first_air_date || '';
-            const year = parseInt(releaseDate.split('-')[0]) || 0;
-            return year >= y1 && year <= y2;
-          });
+         const y1 = parseInt(yearMatch[1]);
+         const y2 = yearMatch[2] ? parseInt(yearMatch[2]) : y1;
+         allResults = allResults.filter((item: TMDbListItem) => {
+           const releaseDate = item.release_date || item.first_air_date || '';
+           const year = parseInt(releaseDate.split('-')[0]) || 0;
+           return year >= y1 && year <= y2;
+         });
         }
       }
 
-      if (yearFrom) {
-        const yFrom = parseInt(yearFrom);
-        allResults = allResults.filter((item: any) => {
-          const releaseDate = item.release_date || item.first_air_date || '';
-          const year = parseInt(releaseDate.split('-')[0]) || 0;
-          return year >= yFrom;
-        });
-      }
+       if (yearFrom) {
+         const yFrom = parseInt(yearFrom);
+         allResults = allResults.filter((item: TMDbListItem) => {
+           const releaseDate = item.release_date || item.first_air_date || '';
+           const year = parseInt(releaseDate.split('-')[0]) || 0;
+           return year >= yFrom;
+         });
+       }
 
-      if (yearTo) {
-        const yTo = parseInt(yearTo);
-        allResults = allResults.filter((item: any) => {
-          const releaseDate = item.release_date || item.first_air_date || '';
-          const year = parseInt(releaseDate.split('-')[0]) || 0;
-          return year <= yTo;
-        });
-      }
+       if (yearTo) {
+         const yTo = parseInt(yearTo);
+         allResults = allResults.filter((item: TMDbListItem) => {
+           const releaseDate = item.release_date || item.first_air_date || '';
+           const year = parseInt(releaseDate.split('-')[0]) || 0;
+           return year <= yTo;
+         });
+       }
 
       // Filter by genres
       if (genresParam) {
-        const genreIds = genresParam.split(',').map(Number).filter(n => !isNaN(n));
-        if (genreIds.length > 0) {
-          allResults = allResults.filter((item: any) => {
-            const itemGenres = item.genre_ids || [];
-            return genreIds.some((gid: number) => itemGenres.includes(gid));
-          });
-        }
+         const genreIds = genresParam.split(',').map(Number).filter(n => !isNaN(n));
+         if (genreIds.length > 0) {
+           allResults = allResults.filter((item: TMDbListItem) => {
+             const itemGenres = item.genre_ids || [];
+             return genreIds.some((gid: number) => itemGenres.includes(gid));
+           });
+         }
       }
 
-      // Filter by rating
-      if (ratingFrom > 0 || ratingTo < 10) {
-        allResults = allResults.filter((item: any) => {
-          const rating = item.vote_average || 0;
-          return rating >= ratingFrom && rating <= ratingTo;
-        });
-      }
+       // Filter by rating
+       if (ratingFrom > 0 || ratingTo < 10) {
+         allResults = allResults.filter((item: TMDbListItem) => {
+           const rating = item.vote_average || 0;
+           return rating >= ratingFrom && rating <= ratingTo;
+         });
+       }
 
-      // Sort results
-      if (sortBy !== 'popularity') {
-        allResults.sort((a: any, b: any) => {
-          const aVal = a.vote_average || 0;
-          const bVal = b.vote_average || 0;
-          const aDate = parseInt((a.release_date || a.first_air_date || '0').split('-')[0]) || 0;
-          const bDate = parseInt((b.release_date || b.first_air_date || '0').split('-')[0]) || 0;
+       // Sort results
+       if (sortBy !== 'popularity') {
+         allResults.sort((a: TMDbListItem, b: TMDbListItem) => {
+           const aVal = a.vote_average || 0;
+           const bVal = b.vote_average || 0;
+           const aDate = parseInt((a.release_date || a.first_air_date || '0').split('-')[0]) || 0;
+           const bDate = parseInt((b.release_date || b.first_air_date || '0').split('-')[0]) || 0;
 
-          let comparison = 0;
-          if (sortBy === 'rating') comparison = aVal - bVal;
-          else if (sortBy === 'date') comparison = aDate - bDate;
+           let comparison = 0;
+           if (sortBy === 'rating') comparison = aVal - bVal;
+           else if (sortBy === 'date') comparison = aDate - bDate;
 
-          return sortOrder === 'desc' ? -comparison : comparison;
-        });
-      }
+           return sortOrder === 'desc' ? -comparison : comparison;
+         });
+       }
 
-      // Deduplicate results by media_type and id
-      const seen = new Set();
-      allResults = allResults.filter((item: any) => {
-        const key = `${item.media_type}_${item.id}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+       // Deduplicate results by media_type and id
+       const seen = new Set<string>();
+       allResults = allResults.filter((item: TMDbListItem) => {
+         const key = `${item.media_type}_${item.id}`;
+         if (seen.has(key)) {
+           return false;
+         }
+         seen.add(key);
+         return true;
+       });
 
       totalResults = allResults.length;
       totalPages = Math.ceil(totalResults / limit);
@@ -337,9 +354,9 @@ export async function GET(request: Request) {
       });
 
     } else {
-      // No query, use discover endpoint with filters
-      const pagesToFetch = Math.ceil((page * limit) / 20) + 1;
-      let discoverResults: any[] = [];
+       // No query, use discover endpoint with filters
+       const pagesToFetch = Math.ceil((page * limit) / 20) + 1;
+       let discoverResults: TMDbListItem[] = [];
 
       // Determine API endpoints and filters based on type
       const typeParam = type || 'all';
@@ -435,23 +452,23 @@ export async function GET(request: Request) {
           if (!res.ok) {
             throw new Error(`TMDB discover API error: ${res.status} ${res.statusText}`);
           }
-          const data = await res.json();
-          
-          if (data.status_code) {
-            throw new Error(`TMDB discover API error: ${data.status_message}`);
-          }
-
-          if (data.results && data.results.length > 0) {
-            // Filter out anime and cartoon from movie results
-            const filteredResults = data.results.filter((item: any) => {
-              const isAnime = (item.genre_ids?.includes(16) ?? false) && item.original_language === 'ja';
-              const isCartoon = (item.genre_ids?.includes(16) ?? false) && item.original_language !== 'ja';
-              return (!isAnime || includeAnime) && (!isCartoon || includeCartoon);
-            });
-            discoverResults = discoverResults.concat(filteredResults);
-          } else {
-            break;
-          }
+           const raw = await res.json() as TMDbSearchResult;
+           if (isTMDBErrorResponse(raw)) {
+             throw new Error(`TMDB discover API error: ${raw.status_message}`);
+           }
+           const data = raw; // SuccessfulSearchResult
+           
+           if (data.results && data.results.length > 0) {
+             // Filter out anime and cartoon from movie results
+             const filteredResults = data.results.filter((item: TMDbListItem) => {
+               const isAnime = (item.genre_ids?.includes(16) ?? false) && item.original_language === 'ja';
+               const isCartoon = (item.genre_ids?.includes(16) ?? false) && item.original_language !== 'ja';
+               return (!isAnime || includeAnime) && (!isCartoon || includeCartoon);
+             });
+             discoverResults = discoverResults.concat(filteredResults);
+           } else {
+             break;
+           }
         }
       }
 
@@ -512,65 +529,66 @@ export async function GET(request: Request) {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 8000);
           
-          const res = await fetch(discoverUrl.toString(), { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (!res.ok) {
-            throw new Error(`TMDB TV discover API error: ${res.status} ${res.statusText}`);
-          }
-          const data = await res.json();
-          
-          if (data.status_code) {
-            throw new Error(`TMDB TV discover API error: ${data.status_message}`);
-          }
+           const res = await fetch(discoverUrl.toString(), { signal: controller.signal });
+           clearTimeout(timeoutId);
+           if (!res.ok) {
+             throw new Error(`TMDB TV discover API error: ${res.status} ${res.statusText}`);
+           }
+            const raw = await res.json() as TMDbSearchResult;
+            if (isTMDBErrorResponse(raw)) {
+              throw new Error(`TMDB TV discover API error: ${raw.status_message}`);
+            }
+            const data = raw; // SuccessfulSearchResult
+            
 
-          if (data.results && data.results.length > 0) {
-            discoverResults = discoverResults.concat(data.results);
-          } else {
-            break;
-          }
+            if (data.results && data.results.length > 0) {
+              discoverResults = discoverResults.concat(data.results);
+            } else {
+              break;
+            }
         }
       }
 
-      // Дополнительная серверная фильтрация на случай, если TMDB не применил настройки
-      if (shouldFilterAdult) {
-        discoverResults = discoverResults.filter((item: any) => !item.adult);
-      }
+       // Дополнительная серверная фильтрация на случай, если TMDB не применил настройки
+       if (shouldFilterAdult) {
+         discoverResults = discoverResults.filter((item: TMDbListItem) => !item.adult);
+       }
 
-      // Filter by media type (movies, tv, anime, cartoon) if specific types are selected
-      if (selectedTypes.length > 0 && !selectedTypes.includes('all')) {
-        discoverResults = discoverResults.filter((item: any) => {
-          const itemType = item.media_type;
-          const isAnime = (item.genre_ids?.includes(16) ?? false) && item.original_language === 'ja';
-          const isCartoon = (item.genre_ids?.includes(16) ?? false) && item.original_language !== 'ja';
-          
-          for (const t of selectedTypes) {
-            if (t === 'anime' && isAnime) return true;
-            if (t === 'cartoon' && isCartoon) return true;
-            if (t === 'movie' && itemType === 'movie' && !isAnime && !isCartoon) return true;
-            if (t === 'tv' && itemType === 'tv' && !isAnime && !isCartoon) return true;
-          }
-          return false;
-        });
-      }
+       // Filter by media type (movies, tv, anime, cartoon) if specific types are selected
+       if (selectedTypes.length > 0 && !selectedTypes.includes('all')) {
+         discoverResults = discoverResults.filter((item: TMDbListItem): boolean => {
+           const itemType = item.media_type;
+           const isAnime = (item.genre_ids?.includes(16) ?? false) && item.original_language === 'ja';
+           const isCartoon = (item.genre_ids?.includes(16) ?? false) && item.original_language !== 'ja';
+           
+           for (const t of selectedTypes) {
+             if (t === 'anime' && isAnime) return true;
+             if (t === 'cartoon' && isCartoon) return true;
+             if (t === 'movie' && itemType === 'movie' && !isAnime && !isCartoon) return true;
+             if (t === 'tv' && itemType === 'tv' && !isAnime && !isCartoon) return true;
+           }
+           return false;
+         });
+       }
 
-      // Deduplicate results by media_type and id
-      const seen = new Set();
-      discoverResults = discoverResults.filter((item: any) => {
-        const key = `${item.media_type}_${item.id}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+       // Deduplicate results by media_type and id
+       const seen = new Set<string>();
+       discoverResults = discoverResults.filter((item: TMDbListItem) => {
+         const key = `${item.media_type}_${item.id}`;
+         if (seen.has(key)) {
+           return false;
+         }
+         seen.add(key);
+         return true;
+       });
 
-      // Filter by rating upper bound (TMDB doesn't support it in discover API)
-      if (ratingTo < 10) {
-        discoverResults = discoverResults.filter((item: any) => {
-          const rating = item.vote_average || 0;
-          return rating <= ratingTo;
-        });
-      }
+       // Filter by rating upper bound (TMDB doesn't support it in discover API)
+       if (ratingTo < 10) {
+         discoverResults = discoverResults.filter((item: TMDbListItem) => {
+           const rating = item.vote_average || 0;
+           return rating <= ratingTo;
+         });
+       }
 
       totalResults = discoverResults.length;
       totalPages = Math.ceil(totalResults / limit);
