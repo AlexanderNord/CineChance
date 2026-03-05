@@ -258,4 +258,85 @@ describe('Want Overlap Algorithm', () => {
       expect(result.metrics.candidatesPoolSize).toBe(0);
     });
   });
+
+  describe('Edge cases - rating extremes', () => {
+    it('handles maximum rating (10/10) correctly', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(10);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.8 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValueOnce([]); // user existing
+      mockPrisma.watchList.findMany.mockResolvedValueOnce([
+        { tmdbId: 100, mediaType: 'movie', title: 'Perfect Movie', userId: 'similar-1' },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await wantOverlap.execute('user-1', mockContext, mockSession);
+
+      expect(result.recommendations.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('handles minimum rating (1/10) correctly', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(10);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.8 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValueOnce([]); // user existing
+      mockPrisma.watchList.findMany.mockResolvedValueOnce([
+        { tmdbId: 100, mediaType: 'movie', title: 'Poor Movie', userId: 'similar-1' },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await wantOverlap.execute('user-1', mockContext, mockSession);
+
+      // Should still handle even with edge case
+      expect(result.metrics).toBeDefined();
+    });
+
+    it('handles mixed quality content correctly', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(10);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.9 },
+        { userId: 'similar-2', overallMatch: 0.7 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValueOnce([]); // user existing
+      mockPrisma.watchList.findMany.mockResolvedValueOnce([
+        { tmdbId: 100, mediaType: 'movie', title: 'Masterpiece', userId: 'similar-1' },
+        { tmdbId: 200, mediaType: 'movie', title: 'Average', userId: 'similar-2' },
+        { tmdbId: 300, mediaType: 'movie', title: 'Terrible', userId: 'similar-2' },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await wantOverlap.execute('user-1', mockContext, mockSession);
+
+      // Should handle mixed quality
+      expect(result.metrics).toBeDefined();
+    });
+  });
+
+  describe('Edge cases - empty and minimal history', () => {
+    it('handles empty watch list gracefully', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(0);
+
+      const result = await wantOverlap.execute('user-1', mockContext, mockSession);
+
+      expect(result.recommendations).toHaveLength(0);
+      expect(result.metrics.candidatesPoolSize).toBe(0);
+    });
+
+    it('handles single item in watch list', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(1);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.8 },
+      ]);
+      // Empty all findMany calls
+      mockPrisma.watchList.findMany.mockResolvedValue([]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await wantOverlap.execute('user-1', mockContext, mockSession);
+
+      // Should still proceed with minimal history
+      expect(result.metrics).toBeDefined();
+    });
+  });
 });

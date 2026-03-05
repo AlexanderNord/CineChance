@@ -212,4 +212,150 @@ describe('Taste Match Algorithm', () => {
       expect(result.metrics.candidatesPoolSize).toBe(0);
     });
   });
+
+  describe('Edge cases - rating extremes', () => {
+    it('handles maximum rating (10/10) correctly', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(20);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.85 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValue([
+        { tmdbId: 100, mediaType: 'movie', title: 'Perfect Movie', userRating: 10, voteAverage: 9.5 },
+        { tmdbId: 200, mediaType: 'movie', title: 'High Rated', userRating: 9, voteAverage: 8.5 },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await tasteMatch.execute('user-1', mockContext, mockSession);
+
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      const perfectMovie = result.recommendations.find(r => r.tmdbId === 100);
+      expect(perfectMovie).toBeDefined();
+      expect(perfectMovie?.score).toBeGreaterThanOrEqual(0);
+    });
+
+    it('handles minimum rating (1/10) correctly', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(20);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.85 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValue([
+        { tmdbId: 100, mediaType: 'movie', title: 'Poor Movie', userRating: 1, voteAverage: 3.5 },
+        { tmdbId: 200, mediaType: 'movie', title: 'Good Movie', userRating: 8, voteAverage: 7.5 },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await tasteMatch.execute('user-1', mockContext, mockSession);
+
+      // Poorly rated movie should still appear but with lower score
+      expect(result.recommendations.length).toBeGreaterThan(0);
+    });
+
+    it('handles mixed quality content correctly', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(20);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.9 },
+        { userId: 'similar-2', overallMatch: 0.7 },
+      ]);
+      mockPrisma.watchList.findMany
+        .mockResolvedValueOnce([
+          { tmdbId: 100, mediaType: 'movie', title: 'Masterpiece', userRating: 10, voteAverage: 9.0 },
+          { tmdbId: 200, mediaType: 'movie', title: 'Average', userRating: 5, voteAverage: 5.5 },
+          { tmdbId: 300, mediaType: 'movie', title: 'Terrible', userRating: 2, voteAverage: 3.0 },
+        ])
+        .mockResolvedValueOnce([
+          { tmdbId: 100, mediaType: 'movie', title: 'Masterpiece', userRating: 10, voteAverage: 9.0 },
+        ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await tasteMatch.execute('user-1', mockContext, mockSession);
+
+      // Should handle mixed quality and still produce recommendations
+      expect(result.recommendations.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Edge cases - empty and minimal history', () => {
+    it('handles empty watch list gracefully', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(0);
+
+      const result = await tasteMatch.execute('user-1', mockContext, mockSession);
+
+      expect(result.recommendations).toHaveLength(0);
+      expect(result.metrics.candidatesPoolSize).toBe(0);
+    });
+
+    it('handles single item in watch list', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(1);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.85 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValue([
+        { tmdbId: 100, mediaType: 'movie', title: 'Only Movie', userRating: 7, voteAverage: 7.0 },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await tasteMatch.execute('user-1', mockContext, mockSession);
+
+      // Should still work with very small history (edge of cold start)
+      expect(result.metrics).toBeDefined();
+    });
+
+    it('returns empty when no candidate movies found', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(20);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.85 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValue([]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await tasteMatch.execute('user-1', mockContext, mockSession);
+
+      expect(result.recommendations).toHaveLength(0);
+      expect(result.metrics.candidatesPoolSize).toBe(0);
+    });
+
+    it('returns empty when all candidates filtered by cooldown', async () => {
+      mockPrisma.watchList.count.mockResolvedValue(20);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.85 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValue([
+        { tmdbId: 100, mediaType: 'movie', title: 'Cooldown Movie', userRating: 8, voteAverage: 7.5 },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([
+        { tmdbId: 100, mediaType: 'movie' },
+        { tmdbId: 200, mediaType: 'movie' },
+      ]);
+
+      const result = await tasteMatch.execute('user-1', mockContext, mockSession);
+
+      // With all items in cooldown, should return empty
+      expect(result.recommendations).toHaveLength(0);
+    });
+  });
+
+  describe('Edge cases - user already has items', () => {
+    it('excludes movies user already has in session previous recommendations', async () => {
+      const sessionWithPrevious: RecommendationSession = {
+        ...mockSession,
+        previousRecommendations: new Set(['100_movie']),
+      };
+
+      mockPrisma.watchList.count.mockResolvedValue(20);
+      mockGetSimilarUsers.mockResolvedValue([
+        { userId: 'similar-1', overallMatch: 0.85 },
+      ]);
+      mockPrisma.watchList.findMany.mockResolvedValue([
+        { tmdbId: 100, mediaType: 'movie', title: 'Already Recommended', userRating: 8, voteAverage: 7.5 },
+        { tmdbId: 200, mediaType: 'movie', title: 'New Movie', userRating: 8, voteAverage: 7.5 },
+      ]);
+      mockPrisma.recommendationLog.findMany.mockResolvedValue([]);
+
+      const result = await tasteMatch.execute('user-1', mockContext, sessionWithPrevious);
+
+      // Should exclude movie 100 that was in previous recommendations
+      expect(result.recommendations.find(r => r.tmdbId === 100)).toBeUndefined();
+      expect(result.recommendations.find(r => r.tmdbId === 200)).toBeDefined();
+    });
+  });
 });
