@@ -14,6 +14,8 @@ const mockMovies: Media[] = [
     release_date: '2024-01-01',
     first_air_date: '2024-01-01',
     overview: 'Это пример описания фильма для демонстрации работы приложения.',
+    genre_ids: [28], // Action genre
+    original_language: 'en',
     adult: false,
   },
   {
@@ -27,6 +29,8 @@ const mockMovies: Media[] = [
     release_date: '2024-02-01',
     first_air_date: '2024-02-01',
     overview: 'Еще один пример фильма для демонстрации функциональности.',
+    genre_ids: [16], // Animation genre
+    original_language: 'ja', // Japanese - should display as "Аниме"
     adult: false,
   },
   {
@@ -40,6 +44,38 @@ const mockMovies: Media[] = [
     release_date: '2024-03-01',
     first_air_date: '2024-03-01',
     overview: 'Третий пример фильма для тестирования интерфейса.',
+    genre_ids: [16], // Animation genre
+    original_language: 'en', // Non-Japanese - should display as "Мульт"
+    adult: false,
+  },
+  {
+    id: 4,
+    media_type: 'tv',
+    title: 'Пример сериала 1',
+    name: 'Пример сериала 1',
+    poster_path: '/placeholder-poster.svg',
+    vote_average: 9.0,
+    vote_count: 2000,
+    release_date: '2024-04-01',
+    first_air_date: '2024-04-01',
+    overview: 'Это пример сериала для демонстрации работы приложения.',
+    genre_ids: [18], // Drama genre
+    original_language: 'en',
+    adult: false,
+  },
+  {
+    id: 5,
+    media_type: 'tv',
+    title: 'Пример сериала 2',
+    name: 'Пример сериала 2',
+    poster_path: '/placeholder-poster.svg',
+    vote_average: 8.5,
+    vote_count: 1200,
+    release_date: '2024-05-01',
+    first_air_date: '2024-05-01',
+    overview: 'Второй пример сериала для тестирования интерфейса.',
+    genre_ids: [10765], // Sci-Fi genre
+    original_language: 'en',
     adult: false,
   },
 ];

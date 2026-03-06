@@ -46,19 +46,23 @@ export interface TMDbListItem {
   overview: string;
 }
 
-// Helper to cast unknown to TMDbListItem
-export function asTMDbItem(item: unknown): TMDbListItem {
-  return item as TMDbListItem;
-}
-
-// Helper for casting array items from TMDB API responses
-export function castArrayItems<T>(arr: unknown[], caster: (item: unknown) => T): T[] {
-  return arr.map(caster);
-}
-
-// Generic cast function
-export function cast<T>(value: unknown): T {
-  return value as T;
+// Helper to transform TMDB item to common Media format
+function transformToMedia(item: TMDBMovieResponse): Media {
+  return {
+    id: item.id,
+    media_type: item.media_type === 'tv' ? 'tv' : 'movie',
+    title: item.title || item.name || 'Без названия',
+    name: item.name || item.title || 'Без названия',
+    poster_path: item.poster_path,
+    vote_average: item.vote_average,
+    vote_count: item.vote_count,
+    release_date: item.release_date,
+    first_air_date: item.first_air_date,
+    overview: item.overview,
+    genre_ids: item.genre_ids,
+    original_language: item.original_language,
+    adult: item.adult || false,
+  };
 }
 
 // TMDB API Response types
@@ -114,49 +118,70 @@ export const fetchTrendingMovies = async (timeWindow: 'day' | 'week' = 'week'): 
   }
 
   try {
-    // Form URL with API key as query parameter
-    const url = new URL(`${BASE_URL}/trending/movie/${timeWindow}`);
-    url.searchParams.append('api_key', TMDB_API_KEY || '');
-    url.searchParams.append('language', 'ru-RU');
+    // Parallel requests for movies and TV shows
+    const [movieUrl, tvUrl] = [
+      new URL(`${BASE_URL}/trending/movie/${timeWindow}`),
+      new URL(`${BASE_URL}/trending/tv/${timeWindow}`),
+    ];
     
+    [movieUrl, tvUrl].forEach(url => {
+      url.searchParams.append('api_key', TMDB_API_KEY || '');
+      url.searchParams.append('language', 'ru-RU');
+    });
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(url.toString(), {
-      headers: {
-        'accept': 'application/json',
-      },
-      signal: controller.signal,
-    });
+    const [movieResponse, tvResponse] = await Promise.all([
+      fetch(movieUrl.toString(), {
+        headers: { 'accept': 'application/json' },
+        signal: controller.signal,
+      }),
+      fetch(tvUrl.toString(), {
+        headers: { 'accept': 'application/json' },
+        signal: controller.signal,
+      }),
+    ]);
     
     clearTimeout(timeoutId);
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('Ошибка TMDB API при получении trending movies', { status: response.status, error: errorText, context: 'TMDB' });
-      return [];
+    // Process responses
+    const allMedia: Media[] = [];
+    
+    // Process movies response
+    if (movieResponse.ok) {
+      const movieData = await movieResponse.json();
+      const movies = (movieData.results || []).map((item: TMDBMovieResponse) => transformToMedia(item));
+      allMedia.push(...movies);
+    } else {
+      const errorText = await movieResponse.text();
+      logger.error('Ошибка TMDB API при получении trending movies', { 
+        status: movieResponse.status, 
+        error: errorText, 
+        context: 'TMDB' 
+      });
     }
     
-    const data = await response.json();
-    // Transform movies to common Media format
-    const movies: Media[] = (data.results || []).map((item: TMDBMovieResponse) => ({
-      id: item.id,
-      media_type: 'movie',
-      title: item.title,
-      name: item.title,
-      poster_path: item.poster_path,
-      vote_average: item.vote_average,
-      vote_count: item.vote_count,
-      release_date: item.release_date,
-      first_air_date: item.release_date,
-      overview: item.overview,
-      adult: item.adult || false,
-    }));
+    // Process TV response
+    if (tvResponse.ok) {
+      const tvData = await tvResponse.json();
+      const tvShows = (tvData.results || []).map((item: TMDBMovieResponse) => transformToMedia(item));
+      allMedia.push(...tvShows);
+    } else {
+      const errorText = await tvResponse.text();
+      logger.error('Ошибка TMDB API при получении trending TV', { 
+        status: tvResponse.status, 
+        error: errorText, 
+        context: 'TMDB' 
+      });
+    }
     
-    // Cache successful response for 24 hours
-    setTMDB(cacheKey, movies);
+    // Cache successful response (even if one failed, we cache what we got)
+    if (allMedia.length > 0) {
+      setTMDB(cacheKey, allMedia);
+    }
     
-    return movies;
+    return allMedia;
   } catch (error) {
     logger.error('Сетевая ошибка при запросе к TMDB (trending)', { error, context: 'TMDB' });
     // Silent fallback: no error shown to user, try mock data
@@ -179,49 +204,75 @@ export const fetchPopularMovies = async (page: number = 1): Promise<Media[]> => 
   }
 
   try {
-    const url = new URL(`${BASE_URL}/movie/popular`);
-    url.searchParams.append('api_key', TMDB_API_KEY || '');
-    url.searchParams.append('language', 'ru-RU');
-    url.searchParams.append('page', page.toString());
+    // Parallel requests for popular movies and TV shows
+    const [movieUrl, tvUrl] = [
+      new URL(`${BASE_URL}/movie/popular`),
+      new URL(`${BASE_URL}/tv/popular`),
+    ];
     
+    [movieUrl, tvUrl].forEach(url => {
+      url.searchParams.append('api_key', TMDB_API_KEY || '');
+      url.searchParams.append('language', 'ru-RU');
+    });
+    
+    movieUrl.searchParams.append('page', page.toString());
+    tvUrl.searchParams.append('page', page.toString());
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(url.toString(), {
-      headers: { 'accept': 'application/json' },
-      signal: controller.signal,
-    });
+    const [movieResponse, tvResponse] = await Promise.all([
+      fetch(movieUrl.toString(), {
+        headers: { 'accept': 'application/json' },
+        signal: controller.signal,
+      }),
+      fetch(tvUrl.toString(), {
+        headers: { 'accept': 'application/json' },
+        signal: controller.signal,
+      }),
+    ]);
     
     clearTimeout(timeoutId);
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('Ошибка TMDB API при получении popular movies', { status: response.status, error: errorText, context: 'TMDB' });
-      return [];
+    // Process responses
+    const allMedia: Media[] = [];
+    
+    // Process popular movies response
+    if (movieResponse.ok) {
+      const movieData = await movieResponse.json();
+      const movies = (movieData.results || []).map((item: TMDBMovieResponse) => transformToMedia(item));
+      allMedia.push(...movies);
+    } else {
+      const errorText = await movieResponse.text();
+      logger.error('Ошибка TMDB API при получении popular movies', { 
+        status: movieResponse.status, 
+        error: errorText, 
+        context: 'TMDB' 
+      });
     }
     
-    const data = await response.json();
-    // Преобразуем фильмы в общий формат Media
-    const movies: Media[] = (data.results || []).map((item: TMDBMovieResponse) => ({
-      id: item.id,
-      media_type: 'movie',
-      title: item.title,
-      name: item.title,
-      poster_path: item.poster_path,
-      vote_average: item.vote_average,
-      vote_count: item.vote_count,
-      release_date: item.release_date,
-      first_air_date: item.release_date,
-      overview: item.overview,
-      adult: item.adult || false,
-    }));
+    // Process popular TV response
+    if (tvResponse.ok) {
+      const tvData = await tvResponse.json();
+      const tvShows = (tvData.results || []).map((item: TMDBMovieResponse) => transformToMedia(item));
+      allMedia.push(...tvShows);
+    } else {
+      const errorText = await tvResponse.text();
+      logger.error('Ошибка TMDB API при получении popular TV', { 
+        status: tvResponse.status, 
+        error: errorText, 
+        context: 'TMDB' 
+      });
+    }
     
-    // Cache successful response for 24 hours
-    setTMDB(cacheKey, movies);
+    // Cache successful response (even if one failed, we cache what we got)
+    if (allMedia.length > 0) {
+      setTMDB(cacheKey, allMedia);
+    }
     
-    return movies;
+    return allMedia;
   } catch (error) {
-    logger.error('Ошибка при запросе популярных фильмов', { error, context: 'TMDB' });
+    logger.error('Ошибка при запросе популярных медиа', { error, context: 'TMDB' });
     // Silent fallback: no error shown to user
     return await fetchPopularMoviesMock(page);
   }
