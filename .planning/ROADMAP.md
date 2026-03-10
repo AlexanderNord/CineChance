@@ -257,4 +257,19 @@ Plans:
 
 ---
 
+### Phase 21: Serial Numbers on Movie Cards
+
+**Goal:** Add small serial numbers (1, 2, 3...) to each movie card in "Мои фильмы" (My Movies) page, visible in all tabs.
+
+**Requirements:** [SERIAL-01]
+
+**Status:** ✅ Planned
+
+**Plans:** 1/1 plans
+
+Plans:
+- [x] 21-01-PLAN.md — Add index prop to MovieCard and pass it from FilmGridWithFilters
+
+---
+
 _For current project status, see .planning/PROJECT.md_
