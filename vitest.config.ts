@@ -10,7 +10,20 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['src/lib/__tests__/**/*.test.ts'],
-    testTimeout: 30000
+    include: [
+      'src/lib/__tests__/**/*.test.ts',
+      '.planning/phases/*/tdd/*.test.ts'
+    ],
+    testTimeout: 30000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 70,
+        statements: 80,
+      }
+    }
   }
 });

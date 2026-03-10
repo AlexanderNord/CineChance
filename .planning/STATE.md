@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Personal movie tracking with intelligent recommendations
-**Current focus:** Phase 16: ML Stats Security
+**Current focus:** Phase 20 Complete - Ready for next phase
 
 ## Current Status
 
-- **Phase:** 18 (Карта вкуса)
-- **Current Plan:** Not started
-- **Goal:** [To be planned]
+- **Phase:** 20 (Strict TypeScript)
+- **Current Plan:** 03 (complete)
+- **Goal:** Enable strict TypeScript mode and eliminate any types
 
 ## Progress
 
@@ -27,7 +27,9 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 15 | ML Feedback Loop | ● Complete | 1 |
 | 16 | ML Stats Security | ● Complete | 0 |
 | 17 | Outcome Tracking | ● Complete | 0 |
-| 18 | Карта вкуса | ○ Not planned | 0 |
+| 18 | Карта вкуса | ● Complete | 0 |
+| 19 | Testing Foundation | ● Complete | 0 |
+| 20 | Strict TypeScript | ● Complete | QUAL-01, QUAL-02, QUAL-03 |
 
 ---
 
@@ -45,28 +47,6 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 14 | UI Integration | Main page + Admin dashboard |
 | 15 | ML Feedback Loop | Decision logging + outcome tracking |
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-- **15-01:** Completed (25 min) - Outcome tracking module with trackOutcome(), calculateAcceptanceRate(), getAlgorithmPerformance(), outcome tracking integration in my-movies API, ML stats endpoint with outcome metrics
-- **16-01:** Completed (2 min) - Added authentication check to ml-stats endpoint, returns 401 for unauthenticated requests
-- **17-01:** Completed (5 min) - Outcome tracking for home page recommendations via logId passing through localStorage
-- **14-02:** Completed (5 min) - ML Dashboard component integrated into admin monitoring page with algorithm performance, user segments, and prediction discrepancy metrics
-- **14-01:** Completed (5 min) - RecommendationsGrid component integrated into main page with horizontal scroll, cold start messaging, and confidence scoring
-- **18-01:** Completed (6 min) - Taste Map API endpoint with 24h Redis caching and profile page card linking to /profile/taste-map
-- **18-02:** Completed (~30 min) - Taste Map page with Recharts visualizations (genre bar chart, rating pie chart, actors/directors chips, computed metrics)
-
 ## Accumulated Context
 
 ### Roadmap Evolution
@@ -74,6 +54,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - Phase 8 added: Admin panel UI improvements
 - Phase 15 added: ML outcome tracking and algorithm performance metrics
 - Phase 18 added: Карта вкуса (Taste Map)
+- Phase 19 added: Testing Foundation (increase test coverage to 80%+)
 
 ### Key Decisions (Phase 9)
 - ModelTraining is global (no userId) - tracks model versions, not per-user data
@@ -113,4 +94,20 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - Added session authentication check to ml-stats endpoint
 - Endpoint returns 401 Unauthorized for unauthenticated requests
 
-## 
+### Key Decisions (Phase 18)
+- Taste Map API uses 24h Redis caching
+- Profile page links to /profile/taste-map
+- Recharts used for visualizations (BarChart, PieChart)
+- Computed metrics: positiveIntensity, negativeIntensity, consistency, diversity
+- Behavior profile: rewatchRate, dropRate, completionRate
+- Person profiles (actors/directors) use Redis caching
+
+### Phase 20 Notes
+- All configuration files already met strict standards before execution.
+- Fixed collection route catch block: use `collectionId` instead of `id` for proper scoping.
+- RatingMatchPatterns objects already include all required metrics.
+- Person-profile JSON casting already safe using `as unknown as PersonData[]`.
+
+- **20-01:** Completed (~15 min) - Enabled strict TypeScript, verified production-grade linting, fixed collection route scoping. Prepared for systematic any elimination.
+- **20-02:** Completed (1 hour) - Eliminated all 180 `any` types across 50+ files. Achieved zero `any` count, clean TypeScript compilation, and passing ESLint. Created comprehensive TMDB type definitions and unified type patterns. Fixed complex ActorEntry reconstruction, duplicate AdditionalFilters types, and BatchData typing issues.
+- **20-03:** Completed (3 min) - Final verification: TypeScript compiles with zero errors (npx tsc --noEmit passes), ESLint passes with zero warnings, production build succeeds (68 pages), all 167 tests pass, manual smoke testing confirms pages and APIs work correctly.
