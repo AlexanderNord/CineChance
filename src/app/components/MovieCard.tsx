@@ -118,8 +118,8 @@ interface MovieCardProps {
   /**
    * 0-based index of the movie in the list. Displayed as order number +1 for verification.
    * @since 21-serial-numbers
-   * @example 0 // displays as "1" in top-left corner
-   * @example 9 // displays as "10" in top-left corner
+   * @example 0 // displays as "1" in top-right corner above the card
+   * @example 9 // displays as "10" in top-right corner above the card
    */
   index?: number;
 }
@@ -679,36 +679,36 @@ export default function MovieCard({
         cast={movieDetails?.cast}
       />
 
-      <div 
-        ref={cardRef}
-        className="w-full h-full min-w-0 relative"
-        >
-        <div className="relative">
-          <div 
-            className="text-white text-xs font-semibold px-2 py-1.5 rounded-t-lg w-full text-center"
-            style={{
-              backgroundColor: mediaTypeConfig.backgroundColor
-            }}
-          >
-            {mediaTypeConfig.label}
-          </div>
-          
-          <div 
-            ref={posterRef}
-            className={`relative w-full aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 rounded-none overflow-hidden shadow-lg transition-all duration-300 ${
-              restoreView || isBlacklisted 
-                ? 'opacity-60 grayscale hover:opacity-80 hover:grayscale-0' 
-                : isHovered && !showOverlay ? 'shadow-xl' : ''
-            } ${showOverlay ? 'cursor-default' : 'cursor-pointer'}`}
-            onClick={handlePosterClick}
-            onMouseEnter={handlePosterMouseEnter}
-            onMouseLeave={handlePosterMouseLeave}
-          >
-            {index !== undefined && (
-              <div className="absolute top-0 right-2 z-20 bg-amber-900/40 text-amber-100/90 text-xs px-1.5 py-0.5 rounded shadow-sm">
-                <span>{Math.floor(index) + 1}</span>
-              </div>
-            )}
+       <div 
+         ref={cardRef}
+         className="w-full h-full min-w-0 relative"
+         >
+         {index !== undefined && (
+           <div className="absolute -top-1 right-1 z-20 bg-amber-900/40 text-amber-100/90 text-xs px-1.5 py-0.5 rounded shadow-sm">
+             <span>{Math.floor(index) + 1}</span>
+           </div>
+         )}
+         <div className="relative">
+           <div 
+             className="text-white text-xs font-semibold px-2 py-1.5 rounded-t-lg w-full text-center"
+             style={{
+               backgroundColor: mediaTypeConfig.backgroundColor
+             }}
+           >
+             {mediaTypeConfig.label}
+           </div>
+           
+           <div 
+             ref={posterRef}
+             className={`relative w-full aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 rounded-none overflow-hidden shadow-lg transition-all duration-300 ${
+               restoreView || isBlacklisted 
+                 ? 'opacity-60 grayscale hover:opacity-80 hover:grayscale-0' 
+                 : isHovered && !showOverlay ? 'shadow-xl' : ''
+             } ${showOverlay ? 'cursor-default' : 'cursor-pointer'}`}
+             onClick={handlePosterClick}
+             onMouseEnter={handlePosterMouseEnter}
+             onMouseLeave={handlePosterMouseLeave}
+           >
 
             {getStatusIcon()}
 

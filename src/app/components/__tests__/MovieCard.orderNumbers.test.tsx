@@ -97,26 +97,26 @@ describe('MovieCard - Order Numbers', () => {
     expect(goldenElements.length).toBe(0);
   });
 
-  it('order number is positioned in top-left corner', () => {
+  it('order number is positioned above the card in top-right corner', () => {
     render(<MovieCard movie={createMockMovie()} index={0} />);
     
     const orderNumber = screen.getByText('1');
     const parentElement = orderNumber.parentElement;
     
-    // Should be absolutely positioned in the top-left corner
+    // Should be absolutely positioned above the card, top-right corner
     expect(parentElement).toHaveClass('absolute');
-    expect(parentElement).toHaveClass('top-0');
-    expect(parentElement).toHaveClass('left-0');
+    expect(parentElement).toHaveClass('-top-1');
+    expect(parentElement).toHaveClass('right-1');
   });
 
-  it('order number has high z-index to appear above poster', () => {
+  it('order number has high z-index to appear above card', () => {
     render(<MovieCard movie={createMockMovie()} index={0} />);
     
     const orderNumber = screen.getByText('1');
     const parentElement = orderNumber.parentElement;
     
-    // Should have high z-index (z-10 or higher)
-    expect(parentElement).toHaveClass('z-10');
+    // Should have high z-index (z-20) to appear above card and other elements
+    expect(parentElement).toHaveClass('z-20');
   });
 
   it('order number has rounded corners for badge appearance', () => {
