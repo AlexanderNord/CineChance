@@ -15,13 +15,20 @@ const BASE_URL = 'https://api.themoviedb.org/3';
 // Вспомогательная функция для получения деталей с TMDB
 async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv'): Promise<MovieDetails | null> {
   const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    logger.warn('TMDB_API_KEY not set');
+    return null;
+  }
   const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU`;
   try {
     const res = await fetch(url, { next: { revalidate: 86400 } });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      logger.debug('fetchMediaDetails failed', { status: res.status, tmdbId, mediaType });
+      return null;
+    }
     return await res.json() as MovieDetails;
-  } catch {
+  } catch (error) {
+    logger.debug('fetchMediaDetails error', { error: error instanceof Error ? error.message : String(error), tmdbId, mediaType });
     return null;
   }
 }
@@ -145,6 +152,8 @@ export async function GET(request: Request) {
     const cacheKey = `user:${targetUserId}:achiev_actors:${limit}:${offset}:${singleLoad}`;
 
     const fetchActors = async () => {
+      logger.info('Starting actors fetch', { targetUserId, limit, offset, singleLoad });
+      
       // Fetch all movies by status (only include movies and TV)
       const [watchedMoviesData, rewatchedMoviesData, droppedMoviesData] = await Promise.all([
         prisma.watchList.findMany({
@@ -186,7 +195,14 @@ export async function GET(request: Request) {
         }),
       ]);
 
+      logger.info('Movies fetched', { 
+        watched: watchedMoviesData.length, 
+        rewatched: rewatchedMoviesData.length, 
+        dropped: droppedMoviesData.length 
+      });
+
       if (watchedMoviesData.length === 0 && rewatchedMoviesData.length === 0) {
+        logger.info('No watched movies, returning empty');
         return { actors: [], hasMore: false, total: 0 };
       }
 
@@ -579,12 +595,17 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     logger.error('Ошибка при получении актеров', {
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
+      stack: errorStack,
       context: 'AchievActorsAPI'
     });
+    
     return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера' },
+      { error: errorMessage || 'Внутренняя ошибка сервера' },
       { status: 500 }
     );
   }
