@@ -15,6 +15,8 @@
 - **TasteMap compute pipeline** - Scheduler computes SimilarityScore weekly; on-demand caching (24h TTL)
 - **ML feedback loop** - Decision logging → outcome tracking → model correction (RecommendationDecision, PredictionOutcome, ModelCorrection)
 - **Confidence scoring** - Formula: base 50 + algorithmCount*5 + adjustments (max 90), penalties for cold start (-30), heavy user sampling (-10)
+- **Client-side scroll tracking** - useState + useEffect with window scroll listener; conditional rendering of Scroll-to-Top button (search page)
+- **Conditional prop passing** - Use optional props (index?: number) to selectively enable/disable features without breaking consumers
 
 ## Критические файлы
 - prisma/schema.prisma — 20+ моделей, композитные ключи
@@ -32,6 +34,7 @@
 - src/lib/tmdbCache.ts — TMDB in-memory cache (JSDoc added 2026-03-10)
 - src/app/collection/[id]/CollectionClient.tsx — Race condition fix with AbortController (2026-02-25)
 - src/app/api/recommendations/ml-stats/route.ts — Secured in Phase 16 (must keep auth check)
+- **src/app/components/FilmGridWithFilters.tsx** — Universal movie grid component used on 4 pages; changes affect multiple features
 
 ## Известные риски
 - TypeScript: strict: false, noImplicitAny: false — потенциальные runtime errors (13 current errors, ~200 after enabling strict)
@@ -51,6 +54,8 @@
 - **Counter data races** — Concurrent updates to WatchList.acceptanceCount, Tag.recommendationCount may undercount; consider atomic operations
 - **Redis/Upstash dependency** — Rate limiting and caching degrade gracefully if Redis unavailable; monitor env vars
 - **TMDB API dependency** — Missing API key or rate limits cause failures; ISR cache and graceful degradation in place
+- **Scroll-to-top code duplication** - Current implementation exists in both search and will be added to my-movies; should be extracted to reusable hook/component in future (maintainability risk)
+- **showIndex prop impact** - Adding optional showIndex to FilmGridWithFilters requires validation that all 4 usage sites behave correctly (my-movies hide, stats show)
 
 ## Зависимости и интеграции
 - Frontend: Next.js 16 → React 19 → Tailwind CSS 4
@@ -61,6 +66,7 @@
 - **Algorithm pipeline**: 8 patterns (Taste Match, Want Overlap, Drop Patterns, Type Twins, Genre Twins, Genre Recommendations, Person Twins, Person Recommendations) → merge → confidence score
 - **TasteMap integration**: Used by algorithms for similarity computation (SimilarityScore DB table, Redis cache)
 - **Outcome tracking**: RecommendationDecision → PredictionOutcome; feeds ModelCorrection and acceptance rate metrics
+- **FilmGridWithFilters**: Universal grid component used across 4 pages; accepts fetchMovies callback and manages filters/infinite scroll centrally
 
 ## Решения и почему
 - [2026-03-05] GSD + TDD интеграция — для качественного test-driven development
@@ -80,6 +86,8 @@
 - **Outcome tracking non-blocking:** PredictionOutcome creation failures don't block user actions (graceful degradation)
 - **Algorithm timeout:** 3-second timeout prevents slow algorithms from blocking entire recommendation response
 - **Weekly SimilarityScore recomputation:** Balances freshness vs performance; on-demand fallback for immediate needs
+- **Optional index prop for MovieCard:** Allows disabling serial numbers without breaking existing consumers; use showIndex flag in FilmGridWithFilters to control (2026-03-11 research)
+- **Scroll-to-top pattern:** Client-side scroll tracking with useEffect + event listener; threshold 300px; fixed position button (from SearchClient implementation)
 
 ## Типы и интерфейсы
 - Movie, TVShow, Person — TMDB типы (implicit any currently, to be defined)
@@ -104,3 +112,4 @@
 - v3.3: Переход на структуру .planning/, обновлены агенты и протокол
 - **Phase 21 Research**: Codebase analysis completed; identified 8 modular algorithms, TasteMap pipeline, ML feedback loop, rate limiting architecture, critical files, and risks. Created RESEARCH.md with full integration guide.
 - **Phase 21 (Serial Numbers)**: Added plan for serial numbers on movie cards. Integration points: MovieCard.tsx (add index prop), FilmGridWithFilters.tsx (pass index). No API changes needed.
+- **Phase 22 Research (My Movies UI Fixes)**: Analyzed integration points for scroll-to-top button (copy pattern from SearchClient.tsx) and hiding serial numbers (add showIndex prop to FilmGridWithFilters). Identified universal FilmGridWithFilters component used on 4 pages; changes must preserve existing behavior on stats pages.

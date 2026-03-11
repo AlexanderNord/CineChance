@@ -272,4 +272,20 @@ Plans:
 
 ---
 
+### Phase 22: My Movies UI Fixes
+
+**Goal:** Add scroll-to-top button to My Movies page (consistent with Search page pattern) and hide serial order numbers on movie cards while preserving ability to restore them later (non-destructive hiding via `showIndex` prop).
+
+**Requirements:** [UI-01]
+
+**Status:** ⏳ Planned
+
+**Plans:** 0/2 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Add scroll-to-top button and hide order numbers on My Movies page
+- [ ] 22-02-PLAN.md — [Optional] Test verification and edge cases
+
+---
+
 _For current project status, see .planning/PROJECT.md_

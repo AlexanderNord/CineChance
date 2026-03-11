@@ -105,6 +105,9 @@ export interface FilmGridWithFiltersProps {
   
   /** Скрывать ли блок фильтрации по жанрам */
   hideGenresFilter?: boolean;
+  
+  /** Показывать ли порядковый номер (индекс) */
+  showIndex?: boolean;
 }
 
 export interface FilmGridFilters {
@@ -140,6 +143,7 @@ export default function FilmGridWithFilters({
   hideRatingFilter = false,
   hideTagsFilter = false,
   hideGenresFilter = false,
+  showIndex = true,
 }: FilmGridWithFiltersProps) {
   const [movies, setMovies] = useState<Media[]>([]);
   const [isLoading, setIsLoading] = useState(initialLoading);
@@ -326,7 +330,7 @@ export default function FilmGridWithFilters({
           setAdditionalFilters(filters);
           setSelectedGenres(genres);
           // Извлекаем selectedTags из filters если они присутствуют
-          const tagsFromFilters = (filters as any).selectedTags || [];
+          const tagsFromFilters = filters.selectedTags || [];
           setSelectedTags(tagsFromFilters);
         }}
         availableGenres={availableGenres}
@@ -354,7 +358,7 @@ export default function FilmGridWithFilters({
                     initialAverageRating={movie.vote_average}
                     initialRatingCount={movie.vote_count}
                     initialUserRating={getInitialRating ? getInitialRating(movie) : undefined}
-                    index={index}
+                    index={showIndex ? index : undefined}
                   />
                 </MovieCardErrorBoundary>
               </div>
