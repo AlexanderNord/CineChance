@@ -25,17 +25,17 @@ export async function getOrCreateMoviePersonCache(
     where: { tmdbId_mediaType: { tmdbId, mediaType } },
   });
 
-  if (existing) {
-    return {
-      topActors: existing.topActors as any,
-      topDirectors: existing.topDirectors as any,
-    };
-  }
-
   // Fetch from TMDB
   const credits = await getMediaCredits(tmdbId, mediaType);
 
   if (!credits) {
+    if (existing) {
+      // Return existing even if incomplete, better than nothing
+      return {
+        topActors: existing.topActors as any,
+        topDirectors: existing.topDirectors as any,
+      };
+    }
     // Save empty cache to avoid repeated attempts
     await prisma.moviePersonCache.create({
       data: {
@@ -49,17 +49,29 @@ export async function getOrCreateMoviePersonCache(
     return { topActors: [], topDirectors: [] };
   }
 
-  // Save to DB
-  await prisma.moviePersonCache.create({
-    data: {
-      tmdbId,
-      mediaType,
-      topActors: credits.topActors,
-      topDirectors: credits.topDirectors,
-    },
-  });
-
-  logger.debug('Created movie person cache', { tmdbId, mediaType, actors: credits.topActors.length });
+  if (existing) {
+    // Update existing record with fresh data (including profile_path)
+    await prisma.moviePersonCache.update({
+      where: { tmdbId_mediaType: { tmdbId, mediaType } },
+      data: {
+        topActors: credits.topActors,
+        topDirectors: credits.topDirectors,
+        lastFetchedAt: new Date(),
+      },
+    });
+    logger.debug('Updated movie person cache', { tmdbId, mediaType, actors: credits.topActors.length });
+  } else {
+    // Create new record
+    await prisma.moviePersonCache.create({
+      data: {
+        tmdbId,
+        mediaType,
+        topActors: credits.topActors,
+        topDirectors: credits.topDirectors,
+      },
+    });
+    logger.debug('Created movie person cache', { tmdbId, mediaType, actors: credits.topActors.length });
+  }
 
   return {
     topActors: credits.topActors,

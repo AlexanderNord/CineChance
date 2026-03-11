@@ -231,7 +231,7 @@ export async function GET(request: Request) {
                 actorMap.set(actor.id, {
                   id: actor.id,
                   name: actor.name,
-                  profile_path: actor.profile_path,
+                  profile_path: actor.profile_path || null,
                   watchedIds: new Set(),
                   rewatchedIds: new Set(),
                   droppedIds: new Set(),
@@ -253,6 +253,8 @@ export async function GET(request: Request) {
               const rating = movie.userRating ?? 0;
               entry.ratingSumWeighted += rating * weight;
               entry.watchCountSum += weight;
+              
+              logger.debug('Added rating', { actorId: actor.id, movieId: movie.tmdbId, rating, weight, totalRating: entry.ratingSumWeighted, totalWatch: entry.watchCountSum });
             }
           })
         );
@@ -398,6 +400,8 @@ export async function GET(request: Request) {
               try {
                 const credits = await fetchPersonCredits(actor.id);
                 let filteredCast = credits?.cast || [];
+
+
 
                 if (filteredCast.length > 0) {
                   // Filter out anime/cartoon from filmography
