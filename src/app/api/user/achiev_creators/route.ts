@@ -460,6 +460,7 @@ export async function GET(request: Request) {
               }
               
               let filteredCrew = credits?.crew || [];
+              let filteredCrewDetails: any[] = [];
               
               logger.debug('Creator crew data fetched', {
                 creatorId: creator.id,
@@ -481,7 +482,6 @@ export async function GET(request: Request) {
                 const moviesToProcess = filteredCrew.slice(0, 100);
                 
                 const FETCH_BATCH_SIZE = 5;
-                const filteredCrewDetails: any[] = [];
                 
                 for (let j = 0; j < moviesToProcess.length; j += FETCH_BATCH_SIZE) {
                   const movieBatch = moviesToProcess.slice(j, j + FETCH_BATCH_SIZE);
@@ -490,7 +490,11 @@ export async function GET(request: Request) {
                     movieBatch.map(async (movie) => {
                       // Определяем тип медиа по наличию дат
                       // В TMDB crew might have either release_date (movies) или first_air_date (TV)
-                      const mediaType = movie.media_type || (movie.release_date ? 'movie' : (movie.first_air_date ? 'tv' : 'movie'));
+                      let mediaType: 'movie' | 'tv' = 'movie';
+                      if (movie.media_type === 'tv' || movie.first_air_date) {
+                        mediaType = 'tv';
+                      }
+                      // movie.media_type === 'movie' или release_date
                       const mediaDetails = await fetchMediaDetails(movie.id, mediaType);
                       return {
                         movie,
