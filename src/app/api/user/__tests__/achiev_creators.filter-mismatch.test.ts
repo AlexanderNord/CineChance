@@ -156,6 +156,7 @@ describe('AchievCreators API - Anime/Cartoon filtering consistency', () => {
     const directorId = 123;
     const directorName = 'Anime Director';
 
+    // Filmography: only anime movies
     const filmography = [
       { id: 101, title: 'Anime Movie 1', isAnime: true, isCartoon: false },
       { id: 102, title: 'Anime Movie 2', isAnime: true, isCartoon: false },
@@ -163,11 +164,7 @@ describe('AchievCreators API - Anime/Cartoon filtering consistency', () => {
     ];
 
     // User watched ALL three anime movies
-    const watchedMovies = [
-      { id: 101, title: 'Anime Movie 1', isAnime: true, isCartoon: false },
-      { id: 102, title: 'Anime Movie 2', isAnime: true, isCartoon: false },
-      { id: 103, title: 'Anime Movie 3', isAnime: true, isCartoon: false },
-    ];
+    const watchedMovies = filmography;
 
     setupMocksForDirector({
       directorId,
@@ -184,22 +181,9 @@ describe('AchievCreators API - Anime/Cartoon filtering consistency', () => {
     expect(res.status).toBe(200);
     const data = await res.json();
 
-    expect(data.creators).toHaveLength(1);
-    const director = data.creators[0];
-
-    expect(director.id).toBe(directorId);
-    expect(director.name).toBe(directorName);
-
-    // After filtering out anime, total_movies should be 0 (since all are anime)
-    expect(director.total_movies).toBe(0);
-
-    // CRITICAL: watched_movies should also be 0, because the watched set should be intersected with the filtered filmography
-    // Currently (bug): director.watched_movies = 3 (from baseCreatorsData, before filtering)
-    // After fix: should be 0
-    expect(director.watched_movies).toBe(0);
-
-    // Progress should be 0%
-    expect(director.progress_percent).toBe(0);
+    // After filtering, watched_movies = 0, so director should NOT be in the list
+    expect(data.creators).toHaveLength(0);
+    expect(data.total).toBe(0);
   });
 
   it('should correctly count when filmography has mixed anime and live-action', async () => {
@@ -256,9 +240,7 @@ describe('AchievCreators API - Anime/Cartoon filtering consistency', () => {
       { id: 301, title: 'Cartoon 1', isAnime: false, isCartoon: true },
     ];
 
-    const watchedMovies = [
-      { id: 301, title: 'Cartoon 1', isAnime: false, isCartoon: true },
-    ];
+    const watchedMovies = filmography;
 
     setupMocksForDirector({
       directorId,
@@ -273,12 +255,9 @@ describe('AchievCreators API - Anime/Cartoon filtering consistency', () => {
     const data = await res.json();
 
     // ASSERT
-    expect(data.creators).toHaveLength(1);
-    const director = data.creators[0];
-
-    expect(director.total_movies).toBe(0);
-    expect(director.watched_movies).toBe(0);
-    expect(director.progress_percent).toBe(0);
+    // After filtering, watched_movies = 0, so director should NOT be in the list
+    expect(data.creators).toHaveLength(0);
+    expect(data.total).toBe(0);
   });
 
   it('should filter average_rating to only include non-anime/cartoon movies', async () => {

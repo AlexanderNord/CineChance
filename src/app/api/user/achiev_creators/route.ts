@@ -801,10 +801,14 @@ export async function GET(request: Request) {
           achievementsPromises.push(Promise.all(batchPromises));
         }
 
-         const allCreatorsWithFullData = (await Promise.all(achievementsPromises)).flat();
+          const allCreatorsWithFullData = (await Promise.all(achievementsPromises)).flat();
 
-         // Add creator_score to each creator before sorting
-         const creatorsWithScores = allCreatorsWithFullData.map(creator => ({
+          // Filter out creators with 0 watched movies (after filtering anime/cartoons)
+          // They should not appear in the favorites list
+          const filteredCreators = allCreatorsWithFullData.filter(c => c.watched_movies > 0);
+
+          // Add creator_score to each creator before sorting
+          const creatorsWithScores = filteredCreators.map(creator => ({
            ...creator,
            creator_score: _calculateCreatorScore(creator),
          }));
@@ -858,12 +862,12 @@ export async function GET(request: Request) {
            });
          }
 
-         return {
-           creators: result,
-           hasMore: false,
-           total: creatorsWithScores.length,
-           singleLoad: true,
-         };
+          return {
+            creators: result,
+            hasMore: false,
+            total: filteredCreators.length,
+            singleLoad: true,
+          };
       }
 
        // Add creator_score to baseCreatorsData
