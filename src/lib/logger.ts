@@ -1,10 +1,10 @@
 // Simple project logger used only for network/retry flows
 // This file is intentionally the only place in `src/` that uses raw `console`.
 export const networkLogger = {
-  debug: (...args: unknown[]) => console.debug('[NETWORK_RETRY]', ...args),
-  info: (...args: unknown[]) => console.info('[NETWORK_RETRY]', ...args),
-  warn: (...args: unknown[]) => console.warn('[NETWORK_RETRY]', ...args),
-  error: (...args: unknown[]) => console.error('[NETWORK_RETRY]', ...args),
+  debug: (...args: unknown[]) => console.debug('[NETWORK_RETRY]', ...normalizeArgs(args)),
+  info: (...args: unknown[]) => console.info('[NETWORK_RETRY]', ...normalizeArgs(args)),
+  warn: (...args: unknown[]) => console.warn('[NETWORK_RETRY]', ...normalizeArgs(args)),
+  error: (...args: unknown[]) => console.error('[NETWORK_RETRY]', ...normalizeArgs(args)),
 };
 
 export default networkLogger;
@@ -41,6 +41,11 @@ function format(level: LogLevel, msg: string, context?: string) {
   return `[${getTimestamp()}] [${level.toUpperCase()}]${context ? ` [${context}]` : ''} ${msg}`;
 }
 
+// Normalize args to ensure it's always an array (handles rest parameter edge cases)
+function normalizeArgs(args: unknown[] | unknown): unknown[] {
+  return Array.isArray(args) ? args : [];
+}
+
 export class Logger {
   private level: LogLevel;
   private context?: string;
@@ -73,17 +78,17 @@ export class Logger {
      }
    }
 
-   private _log(level: LogLevel, msg: string, ...args: unknown[]) {
-     const formatted = format(level, msg, this.context);
-     if (this.output === 'console') {
-        
-       if (level === 'error') console.error(formatted, ...args);
-       else if (level === 'warn') console.warn(formatted, ...args);
-       else if (level === 'info') console.info(formatted, ...args);
-       else console.debug(formatted, ...args);
-     }
-     // Можно добавить отправку во внешний сервис
-   }
+  private _log(level: LogLevel, msg: string, ...args: unknown[]) {
+    const formatted = format(level, msg, this.context);
+    if (this.output === 'console') {
+      const safeArgs = normalizeArgs(args);
+      if (level === 'error') console.error(formatted, ...safeArgs);
+      else if (level === 'warn') console.warn(formatted, ...safeArgs);
+      else if (level === 'info') console.info(formatted, ...safeArgs);
+      else console.debug(formatted, ...safeArgs);
+    }
+    // Можно добавить отправку во внешний сервис
+  }
 }
 
 

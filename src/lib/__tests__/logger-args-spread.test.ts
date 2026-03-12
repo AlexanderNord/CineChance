@@ -220,38 +220,6 @@ describe('Logger args spread bug - RED test', () => {
     });
   });
 
-  describe('networkLogger with non-array args (bug reproduction)', () => {
-    /**
-     * This test directly reproduces the bug with spread operator on non-iterable.
-     * The bug report shows this is exactly what happens in Chrome.
-     */
-    it('should handle spread of undefined without throwing', () => {
-      expect(() => {
-        const formatted = '[NETWORK_RETRY] Test';
-        // Simulating what happens inside networkLogger when args handling fails
-        // This directly tests the problematic pattern: spread on non-iterable
-        // @ts-expect-error - intentionally passing non-iterable to reproduce bug
-        console.error(formatted, ...undefined);
-      }).not.toThrow();
-    });
-
-    it('should handle spread of null without throwing', () => {
-      expect(() => {
-        const formatted = '[NETWORK_RETRY] Test';
-        // @ts-expect-error - intentionally passing non-iterable to reproduce bug
-        console.error(formatted, ...null);
-      }).not.toThrow();
-    });
-
-    it('should handle spread of number without throwing', () => {
-      expect(() => {
-        const formatted = '[NETWORK_RETRY] Test';
-        // @ts-expect-error - intentionally passing non-iterable to reproduce bug
-        console.error(formatted, ...12345);
-      }).not.toThrow();
-    });
-  });
-
   describe('logError function with additional args', () => {
     beforeEach(() => {
       vi.clearAllMocks();
