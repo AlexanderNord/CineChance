@@ -110,6 +110,8 @@ export async function GET(
         first_air_date: movie.release_date,
         overview: movie.overview,
         isBlacklisted,
+        genre_ids: tmdbDetails?.genre_ids || [],
+        original_language: tmdbDetails?.original_language || '',
       };
 
       // Добавляем status и userRating только если фильм в watchlist
