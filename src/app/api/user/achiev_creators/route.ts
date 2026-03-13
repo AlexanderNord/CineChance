@@ -8,11 +8,54 @@ import { withCache } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 import type { TMDbMediaBase, TMDbGenre } from '@/lib/types/tmdb';
 
+interface FilteredCrewDetail {
+  movie: {
+    id: number;
+    title: string;
+    release_date?: string;
+    first_air_date?: string;
+    job: string;
+    department: string;
+    media_type?: string;
+  };
+  mediaType: 'movie' | 'tv';
+  isAnime: boolean;
+  isCartoon: boolean;
+  fetchSuccess: boolean;
+}
+
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = 'https://api.themoviedb.org/3';
 
 const DIRECTOR_JOBS = ['Director'];
 
+/**
+ * Calculates a weighted score for a creator (director) based on multiple factors.
+ * 
+ * The score combines quality, engagement, volume, and viewing progress:
+ * - Quality (35%): Average rating adjusted by rewatchs (+0.2 per rewatch) and drops (-0.3 per drop)
+ * - Progress (25%): How much of the creator's filmography the user has watched
+ * - Volume (15%): Logarithmic scale of total films in creator's filmography
+ * - Engagement (15%): Logarithmic scale of watched films count
+ * 
+ * @param creator - Object containing creator statistics
+ * @param creator.average_rating - User's average rating for this creator's work (0-10, null if unrated)
+ * @param creator.watched_movies - Number of films watched by the user
+ * @param creator.rewatched_movies - Number of films rewatched by the user
+ * @param creator.dropped_movies - Number of films dropped by the user
+ * @param creator.total_movies - Total films in creator's filmography
+ * @param creator.progress_percent - Percentage of filmography watched (0-100)
+ * @returns A weighted score value (typically 0-10 range)
+ * @example
+ * const score = _calculateCreatorScore({
+ *   average_rating: 7.5,
+ *   watched_movies: 20,
+ *   rewatched_movies: 3,
+ *   dropped_movies: 1,
+ *   total_movies: 50,
+ *   progress_percent: 40
+ * });
+ */
 function _calculateCreatorScore(creator: {
   average_rating: number | null;
   watched_movies: number;
@@ -45,6 +88,21 @@ function _calculateCreatorScore(creator: {
 const creatorCreditsCache = new Map<number, { data: unknown; timestamp: number }>();
 const CACHE_DURATION = 86400000;
 
+/**
+ * Fetches detailed information about a movie or TV show from TMDB.
+ * Used to determine if content is anime or cartoon for filtering purposes.
+ * 
+ * @param tmdbId - The TMDB ID of the movie or TV show
+ * @param mediaType - Whether the content is a 'movie' or 'tv' show
+ * @returns Object containing genres, original language, and other details, or null on failure
+ * @throws {Error} If the request times out or fails
+ * 
+ * @example
+ * const details = await fetchMediaDetails(550, 'movie');
+ * if (details && isAnime(details)) {
+ *   // Filter out this anime
+ * }
+ */
 async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
@@ -77,12 +135,46 @@ async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv') {
   }
 }
 
+/**
+ * Determines if a TMDB media item is anime.
+ * 
+ * Anime is defined as content that:
+ * 1. Has the Animation genre (id: 16)
+ * 2. Has Japanese as the original language
+ * 
+ * This filtering excludes anime from creator statistics to focus on live-action work.
+ * 
+ * @param movie - TMDB media object with genres and original_language
+ * @returns true if the content is anime, false otherwise
+ * @example
+ * const details = await fetchMediaDetails(12345, 'movie');
+ * if (details && isAnime(details)) {
+ *   console.log('This is anime, will be filtered out');
+ * }
+ */
 function isAnime(movie: TMDbMediaBase): boolean {
   const hasAnimeGenre = movie.genres?.some((g: TMDbGenre) => g.id === 16) ?? false;
   const isJapanese = movie.original_language === 'ja';
   return hasAnimeGenre && isJapanese;
 }
 
+/**
+ * Determines if a TMDB media item is a cartoon (non-Japanese animation).
+ * 
+ * Cartoons are defined as content that:
+ * 1. Has the Animation genre (id: 16)
+ * 2. Does NOT have Japanese as the original language
+ * 
+ * This filters out Western/Cartoon animations from creator statistics.
+ * 
+ * @param movie - TMDB media object with genres and original_language
+ * @returns true if the content is a cartoon, false otherwise
+ * @example
+ * const details = await fetchMediaDetails(12345, 'movie');
+ * if (details && isCartoon(details)) {
+ *   console.log('This is a cartoon, will be filtered out');
+ * }
+ */
 function isCartoon(movie: TMDbMediaBase): boolean {
   const hasAnimationGenre = movie.genres?.some((g: TMDbGenre) => g.id === 16) ?? false;
   const isNotJapanese = movie.original_language !== 'ja';
@@ -126,6 +218,18 @@ function getJobType(job: string, _department: string): CreatorJobType | null {
   return null;
 }
 
+/**
+ * Fetches the crew members for a specific movie or TV show from TMDB.
+ * Used to identify directors and other crew members associated with a work.
+ * 
+ * @param tmdbId - The TMDB ID of the movie or TV show
+ * @param mediaType - Whether the content is a 'movie' or 'tv' show
+ * @returns Object containing crew array with id, name, profile_path, job, department, or null on failure
+ * 
+ * @example
+ * const credits = await fetchMovieCredits(550, 'movie');
+ * const directors = credits?.crew.filter(member => member.job === 'Director');
+ */
 async function fetchMovieCredits(tmdbId: number, mediaType: 'movie' | 'tv'): Promise<TMDBMovieCredits | null> {
   if (!TMDB_API_KEY) {
     logger.warn('fetchMovieCredits: TMDB_API_KEY not configured', { tmdbId, mediaType });
@@ -162,6 +266,20 @@ async function fetchMovieCredits(tmdbId: number, mediaType: 'movie' | 'tv'): Pro
   }
 }
 
+/**
+ * Fetches all combined credits (cast and crew) for a person from TMDB.
+ * Used to get a creator's complete filmography for progress calculation.
+ * 
+ * Results are cached in memory for 24 hours (86400000ms) to avoid repeated API calls.
+ * This cache is specific to the server process and does not persist across restarts.
+ * 
+ * @param personId - The TMDB person ID
+ * @returns Object containing cast and crew arrays, or null on failure
+ * 
+ * @example
+ * const credits = await fetchPersonCredits(500);
+ * console.log(`Total works: ${credits?.cast.length + credits?.crew.length}`);
+ */
 async function fetchPersonCredits(personId: number): Promise<TMDBPersonCredits | null> {
   const cached = creatorCreditsCache.get(personId);
   const now = Date.now();
@@ -215,6 +333,53 @@ async function fetchPersonCredits(personId: number): Promise<TMDBPersonCredits |
   }
 }
 
+/**
+ * API endpoint for retrieving user achievement creators (directors).
+ * 
+ * This endpoint calculates which movie/TV creators (directors) the user has
+ * watched the most content from, based on their watchlist entries.
+ * 
+ * **Algorithm Overview:**
+ * 1. Fetches user's watched, rewatched, and dropped movies from watchlist
+ * 2. For each watched movie, fetches crew data from TMDB to identify directors
+ * 3. Aggregates statistics per director: watched count, rewatch count, drop count, ratings
+ * 4. For singleLoad=true: fetches full filmography for top creators to calculate progress %
+ * 5. Calculates a weighted creator_score based on quality, progress, volume, and engagement
+ * 6. Sorts by creator_score with tie-breakers (rating, progress, name)
+ * 7. Saves results to database for future fast retrieval
+ * 
+ * **Sorting Logic:**
+ * - Primary: creator_score (descending) - weighted combination of all factors
+ * - Tie-breaker 1: average_rating (descending, nulls last)
+ * - Tie-breaker 2: progress_percent (descending)
+ * - Tie-breaker 3: name (alphabetical, Russian locale)
+ * 
+ * **Filtering:**
+ * - Anime (Animation genre + Japanese language) is excluded from filmography
+ * - Cartoons (Animation genre + non-Japanese) is excluded from filmography
+ * - Only 'movie' and 'tv' media types are considered
+ * 
+ * @param request - The incoming GET request
+ * @returns JSON response with creators array, hasMore boolean, total count
+ * 
+ * @queryParam {number} [limit=24] - Maximum number of creators to return (max 50)
+ * @queryParam {number} [offset=0] - Number of creators to skip (for pagination)
+ * @queryParam {boolean} [singleLoad=false] - If true, calculates full filmography progress
+ * @queryParam {string} [userId] - Optional user ID to view another user's creators
+ * 
+ * @response 200 - { creators: CreatorAchievement[], hasMore: boolean, total: number, singleLoad?: boolean }
+ * @response 401 - Unauthorized if not logged in
+ * @response 500 - Internal server error
+ * 
+ * @example
+ * // Get top 24 directors
+ * const response = await fetch('/api/user/achiev_creators?limit=24');
+ * const { creators, hasMore, total } = await response.json();
+ * 
+ * @example
+ * // Get full filmography progress for top 50
+ * const response = await fetch('/api/user/achiev_creators?limit=50&singleLoad=true');
+ */
 export async function GET(request: Request) {
   const startTime = Date.now();
   logger.info('AchievCreatorsAPI: Request started', { timestamp: new Date().toISOString() });
@@ -460,14 +625,14 @@ export async function GET(request: Request) {
               }
               
               let filteredCrew = credits?.crew || [];
-              let filteredCrewDetails: any[] = [];
+               let filteredCrewDetails: FilteredCrewDetail[] = [];
               
               logger.debug('Creator crew data fetched', {
                 creatorId: creator.id,
                 name: creator.name,
                 totalCrewRecords: filteredCrew.length,
                 hasCrewData: !!credits?.crew,
-                crewSample: filteredCrew.slice(0, 3).map((c: any) => ({
+                crewSample: filteredCrew.slice(0, 3).map(c => ({
                   id: c.id,
                   title: c.title,
                   job: c.job,
@@ -508,15 +673,15 @@ export async function GET(request: Request) {
                   
                   filteredCrewDetails.push(...batchResults);
                   
-                  logger.debug('Creator crew batch processed', {
-                    creatorId: creator.id,
-                    batchIndex: Math.floor(j / FETCH_BATCH_SIZE),
-                    batchSize: movieBatch.length,
-                    successfulFetches: batchResults.filter((r: any) => r.fetchSuccess).length,
-                    animeCount: batchResults.filter((r: any) => r.isAnime).length,
-                    cartoonCount: batchResults.filter((r: any) => r.isCartoon).length,
-                    validCount: batchResults.filter((r: any) => !r.isAnime && !r.isCartoon).length,
-                  });
+                   logger.debug('Creator crew batch processed', {
+                     creatorId: creator.id,
+                     batchIndex: Math.floor(j / FETCH_BATCH_SIZE),
+                     batchSize: movieBatch.length,
+                     successfulFetches: batchResults.filter(r => r.fetchSuccess).length,
+                     animeCount: batchResults.filter(r => r.isAnime).length,
+                     cartoonCount: batchResults.filter(r => r.isCartoon).length,
+                     validCount: batchResults.filter(r => !r.isAnime && !r.isCartoon).length,
+                   });
                   
                   if (j + FETCH_BATCH_SIZE < moviesToProcess.length) {
                     await new Promise(resolve => setTimeout(resolve, 10));
@@ -528,29 +693,72 @@ export async function GET(request: Request) {
                   .map(({ movie }) => movie);
               }
               
-              logger.debug('Creator crew after anime filter', {
-                creatorId: creator.id,
-                name: creator.name,
-                totalDetailsProcessed: filteredCrewDetails.length,
-                crewRecordsAfterFilter: filteredCrew.length,
-                animeFiltered: filteredCrewDetails.filter((r: any) => r.isAnime).length,
-                cartoonFiltered: filteredCrewDetails.filter((r: any) => r.isCartoon).length,
-                fetchFailures: filteredCrewDetails.filter((r: any) => !r.fetchSuccess).length,
-              });
+               logger.debug('Creator crew after anime filter', {
+                 creatorId: creator.id,
+                 name: creator.name,
+                 totalDetailsProcessed: filteredCrewDetails.length,
+                 crewRecordsAfterFilter: filteredCrew.length,
+                 animeFiltered: filteredCrewDetails.filter(r => r.isAnime).length,
+                 cartoonFiltered: filteredCrewDetails.filter(r => r.isCartoon).length,
+                 fetchFailures: filteredCrewDetails.filter(r => !r.fetchSuccess).length,
+               });
               
-              // Считаем УНИКАЛЬНЫЕ фильмы по их ID (независимо от job-ов)
-              // Один фильм может иметь несколько job-ов (режиссер, продюсер, и т.д.)
-              const uniqueMovieIds = new Set<number>();
-              for (const crew of filteredCrew) {
-                uniqueMovieIds.add(crew.id);
-              }
-              
-              const totalMovies = uniqueMovieIds.size; // Количество уникальных фильмов
-              const watchedMovies = creator.watched_movies;
-              
-              const progressPercent = totalMovies > 0 
-                ? Math.round((watchedMovies / totalMovies) * 100)
-                : 0;
+               // Считаем УНИКАЛЬНЫЕ фильмы по их ID (независимо от job-ов)
+               // Один фильм может иметь несколько job-ов (режиссер, продюсер, и т.д.)
+               const uniqueMovieIds = new Set<number>();
+               for (const crew of filteredCrew) {
+                 uniqueMovieIds.add(crew.id);
+               }
+               
+               const totalMovies = uniqueMovieIds.size; // Количество уникальных фильмов (после фильтрации аниме/мультфильмов)
+               
+               // Создаем множества ID фильмов из watchlist пользователя для пересечения
+               const watchedMovieIds = new Set(watchedMoviesData.map(m => m.tmdbId));
+               const rewatchedMovieIds = new Set(rewatchedMoviesData.map(m => m.tmdbId));
+               const droppedMovieIds = new Set(droppedMoviesData.map(m => m.tmdbId));
+               
+               // Создаем Map рейтингов для каждого tmdbId (включая rewatched)
+               const ratingsMap = new Map<number, number>();
+               for (const movie of watchedMoviesData) {
+                 if (movie.userRating !== null && movie.userRating !== undefined) {
+                   ratingsMap.set(movie.tmdbId, movie.userRating);
+                 }
+               }
+               for (const movie of rewatchedMoviesData) {
+                 if (movie.userRating !== null && movie.userRating !== undefined) {
+                   ratingsMap.set(movie.tmdbId, movie.userRating);
+                 }
+               }
+               
+               // Пересекаем с отфильтрованной фильмографией (исключаем аниме/мультфильмы)
+               // Теперь watched_movies, rewatched_movies, dropped_movies согласованы с total_movies
+               let watchedMovies = 0;
+               let rewatchedMovies = 0;
+               let droppedMovies = 0;
+               const filteredRatings: number[] = [];
+               
+               for (const movieId of uniqueMovieIds) {
+                 if (watchedMovieIds.has(movieId)) {
+                   watchedMovies++;
+                   const rating = ratingsMap.get(movieId);
+                   if (rating !== undefined) filteredRatings.push(rating);
+                 }
+                 if (rewatchedMovieIds.has(movieId)) {
+                   rewatchedMovies++;
+                   const rating = ratingsMap.get(movieId);
+                   if (rating !== undefined) filteredRatings.push(rating);
+                 }
+                 if (droppedMovieIds.has(movieId)) droppedMovies++;
+               }
+               
+               // Пересчитываем average_rating только по отфильтрованным (не-аниме/мультфильмам) фильмам
+               const averageRating = filteredRatings.length > 0
+                 ? Number((filteredRatings.reduce((a, b) => a + b, 0) / filteredRatings.length).toFixed(1))
+                 : null;
+               
+               const progressPercent = totalMovies > 0 
+                 ? Math.round((watchedMovies / totalMovies) * 100)
+                 : 0;
 
               logger.info('Creator filmography calculated', {
                 creatorId: creator.id,
@@ -559,12 +767,20 @@ export async function GET(request: Request) {
                 afterAnimeFilter: filteredCrew.length,
                 uniqueMoviesCount: totalMovies,
                 watchedMovies,
+                rewatchedMovies,
+                droppedMovies,
+                filteredRatingsCount: filteredRatings.length,
+                averageRating,
                 progressPercent,
               });
 
               return {
                 ...creator,
                 total_movies: totalMovies,
+                watched_movies: watchedMovies,
+                rewatched_movies: rewatchedMovies,
+                dropped_movies: droppedMovies,
+                average_rating: averageRating,
                 progress_percent: progressPercent,
               };
             } catch (error) {
@@ -576,6 +792,7 @@ export async function GET(request: Request) {
               return {
                 ...creator,
                 total_movies: creator.watched_movies,
+                watched_movies: creator.watched_movies,
                 progress_percent: creator.watched_movies > 0 ? 100 : 0,
               };
             }
@@ -584,10 +801,86 @@ export async function GET(request: Request) {
           achievementsPromises.push(Promise.all(batchPromises));
         }
 
-        const allCreatorsWithFullData = (await Promise.all(achievementsPromises)).flat();
-        
-        // Сортировка по average_rating как у актеров
-        allCreatorsWithFullData.sort((a, b) => {
+          const allCreatorsWithFullData = (await Promise.all(achievementsPromises)).flat();
+
+          // Filter out creators with 0 watched movies (after filtering anime/cartoons)
+          // They should not appear in the favorites list
+          const filteredCreators = allCreatorsWithFullData.filter(c => c.watched_movies > 0);
+
+          // Add creator_score to each creator before sorting
+          const creatorsWithScores = filteredCreators.map(creator => ({
+           ...creator,
+           creator_score: _calculateCreatorScore(creator),
+         }));
+
+          // Sort by average_rating first, then by progress_percent (matching user requirement)
+          // Creators with higher average rating appear first
+          // When ratings are equal, sort by progress_percent descending
+          creatorsWithScores.sort((a, b) => {
+            // Primary: average_rating descending (nulls last - creators with ratings first)
+            if (a.average_rating !== null && b.average_rating !== null) {
+              if (b.average_rating !== a.average_rating) {
+                return b.average_rating - a.average_rating;
+              }
+            } else if (a.average_rating === null && b.average_rating !== null) {
+              return 1; // nulls last
+            } else if (a.average_rating !== null && b.average_rating === null) {
+              return -1;
+            }
+            // Tie-breaker 1: progress_percent descending
+            if (b.progress_percent !== a.progress_percent) {
+              return b.progress_percent - a.progress_percent;
+            }
+            // Tie-breaker 2: creator_score descending
+            if (b.creator_score !== a.creator_score) {
+              return b.creator_score - a.creator_score;
+            }
+            // Tie-breaker 3: name alphabetical (Russian locale)
+            return a.name.localeCompare(b.name, 'ru');
+          });
+
+         const result = creatorsWithScores.slice(0, limit);
+
+         // Save full creatorsWithScores to database (matching actors behavior)
+         try {
+           await prisma.personProfile.upsert({
+             where: { userId_personType: { userId: targetUserId, personType: 'director' } },
+             update: {
+               topPersons: creatorsWithScores,
+               computedAt: new Date(),
+               computationMethod: 'full',
+             },
+             create: {
+               userId: targetUserId,
+               personType: 'director',
+               topPersons: creatorsWithScores,
+               computationMethod: 'full',
+             },
+           });
+         } catch (error) {
+           logger.error('Error saving PersonProfile', {
+             error: error instanceof Error ? error.message : String(error),
+             userId: targetUserId,
+           });
+         }
+
+          return {
+            creators: result,
+            hasMore: false,
+            total: filteredCreators.length,
+            singleLoad: true,
+          };
+      }
+
+       // Add creator_score to baseCreatorsData
+       const creatorsWithScores = baseCreatorsData.map(creator => ({
+         ...creator,
+         creator_score: _calculateCreatorScore(creator),
+       }));
+
+        // Sort by average_rating first, then by progress_percent
+        creatorsWithScores.sort((a, b) => {
+          // Primary: average_rating descending (nulls last)
           if (a.average_rating !== null && b.average_rating !== null) {
             if (b.average_rating !== a.average_rating) {
               return b.average_rating - a.average_rating;
@@ -597,103 +890,41 @@ export async function GET(request: Request) {
           } else if (a.average_rating !== null && b.average_rating === null) {
             return -1;
           }
-          
+          // Tie-breaker 1: progress_percent descending
           if (b.progress_percent !== a.progress_percent) {
             return b.progress_percent - a.progress_percent;
           }
-          
+          // Tie-breaker 2: creator_score descending
+          if (b.creator_score !== a.creator_score) {
+            return b.creator_score - a.creator_score;
+          }
+          // Tie-breaker 3: name alphabetical (Russian locale)
           return a.name.localeCompare(b.name, 'ru');
         });
 
-        const result = allCreatorsWithFullData.slice(0, limit);
+       const result = creatorsWithScores.slice(offset, Math.min(offset + limit, creatorsWithScores.length));
 
-        return {
-          creators: result,
-          hasMore: false,
-          total: allCreatorsWithFullData.length,
-          singleLoad: true,
-        };
-      }
-
-      baseCreatorsData.sort((a, b) => {
-        if (a.average_rating !== null && b.average_rating !== null) {
-          if (b.average_rating !== a.average_rating) {
-            return b.average_rating - a.average_rating;
-          }
-        } else if (a.average_rating === null && b.average_rating !== null) {
-          return 1;
-        } else if (a.average_rating !== null && b.average_rating === null) {
-          return -1;
-        }
-        
-        if (b.progress_percent !== a.progress_percent) {
-          return b.progress_percent - a.progress_percent;
-        }
-        
-        return a.name.localeCompare(b.name, 'ru');
-      });
-
-      const result = baseCreatorsData.slice(offset, Math.min(offset + limit, baseCreatorsData.length));
-
-      return {
-        creators: result,
-        hasMore: offset + limit < baseCreatorsData.length,
-        total: baseCreatorsData.length,
-      };
+       return {
+         creators: result,
+         hasMore: offset + limit < creatorsWithScores.length,
+         total: creatorsWithScores.length,
+       };
     };
 
-    const result = await withCache(cacheKey, fetchCreators, 3600);
-    
-    // Add creator_score for each creator
-    const creatorsWithScores = result.creators.map((creator: any) => ({
-      ...creator,
-      creator_score: _calculateCreatorScore(creator),
-    }));
+     const result = await withCache(cacheKey, fetchCreators, 3600);
 
-    // Save to PersonProfile if singleLoad
-    if (singleLoad && creatorsWithScores.length > 0) {
-      try {
-        await prisma.personProfile.upsert({
-          where: {
-            userId_personType: {
-              userId: targetUserId,
-              personType: 'director',
-            },
-          },
-          update: {
-            topPersons: creatorsWithScores,
-          },
-          create: {
-            userId: targetUserId,
-            personType: 'director',
-            topPersons: creatorsWithScores,
-          },
-        });
-        logger.info('AchievCreatorsAPI: PersonProfile saved', { 
-          userId: targetUserId,
-          count: creatorsWithScores.length,
-        });
-      } catch (dbError) {
-        logger.error('AchievCreatorsAPI: Failed to save PersonProfile', {
-          error: dbError instanceof Error ? dbError.message : String(dbError),
-          userId: targetUserId,
-        });
-      }
-    }
+     // result.creators already includes creator_score (added inside fetchCreators)
 
-    const duration = Date.now() - startTime;
-    logger.info('AchievCreatorsAPI: Request completed successfully', {
-      duration: `${duration}ms`,
-      creatorCount: creatorsWithScores.length,
-      singleLoad,
-      hasMore: result.hasMore,
-      total: result.total,
-    });
+     const duration = Date.now() - startTime;
+     logger.info('AchievCreatorsAPI: Request completed successfully', {
+       duration: `${duration}ms`,
+       creatorCount: result.creators.length,
+       singleLoad: result.singleLoad,
+       hasMore: result.hasMore,
+       total: result.total,
+     });
 
-    return NextResponse.json({
-      ...result,
-      creators: creatorsWithScores,
-    });
+     return NextResponse.json(result);
   } catch (error) {
     logger.error('Ошибка при получении создателей', { 
       error: error instanceof Error ? error.message : String(error),

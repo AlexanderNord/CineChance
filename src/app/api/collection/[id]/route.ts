@@ -1,3 +1,74 @@
+// Helper function to fetch TMDB media details
+async function fetchMediaDetails(tmdbId: number, mediaType: 'movie' | 'tv'): Promise<{
+  genre_ids: number[];
+  original_language: string;
+} | null> {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) {
+    logger.warn('TMDB API key not configured', {
+      context: 'CollectionAPI',
+      tmdbId,
+    });
+    return null;
+  }
+  const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${apiKey}&language=ru-RU`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(url, {
+      next: { revalidate: 86400 },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      logger.warn('TMDB fetch failed', {
+        context: 'CollectionAPI',
+        tmdbId,
+        status: res.status,
+      });
+      return null;
+    }
+
+    const data = await res.json();
+    
+    // IMPORTANT: TMDB movie/{id} and tv/{id} endpoints return genres array, not genre_ids!
+    // Convert genres to genre_ids for consistency with search API
+    let genreIds: number[] = [];
+    if (data.genres && Array.isArray(data.genres)) {
+      genreIds = data.genres.map((g: any) => g.id);
+    } else if (data.genre_ids && Array.isArray(data.genre_ids)) {
+      genreIds = data.genre_ids;
+    }
+    
+    const result = {
+      genre_ids: genreIds,
+      original_language: data.original_language || '',
+    };
+
+    logger.debug('TMDB fetch successful', {
+      context: 'CollectionAPI',
+      tmdbId,
+      genre_ids: result.genre_ids,
+      original_language: result.original_language,
+    });
+
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.warn('Failed to fetch TMDB details for movie in collection', {
+      tmdbId,
+      mediaType,
+      error: errorMessage,
+      context: 'CollectionAPI'
+    });
+    return null;
+  }
+}
+
 // src/app/api/collection/[id]/route.ts
 
 import { NextResponse } from 'next/server';
@@ -12,7 +83,12 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { success } = await rateLimit(req, 'default');
+  // Get session FIRST for userId-based rate limiting
+const session = await getServerSession(authOptions);
+const userId = session?.user?.id;
+
+// Rate limit with userId if authenticated, IP if not
+const { success } = await rateLimit(req, '/api/collection', userId);
   if (!success) {
     return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
   }
@@ -56,9 +132,17 @@ export async function GET(
 
     const data = await res.json();
 
-    // Получаем сессию пользователя
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    logger.debug('TMDB Collection response', {
+      context: 'CollectionAPI',
+      collectionId,
+      firstPartKeys: data.parts && data.parts.length > 0 ? Object.keys(data.parts[0]) : [],
+      firstPartData: data.parts && data.parts.length > 0 ? {
+        id: data.parts[0].id,
+        title: data.parts[0].title,
+        genre_ids: data.parts[0].genre_ids,
+        original_language: data.parts[0].original_language,
+      } : null,
+    });
 
     // Получаем все blacklist IDs пользователя одним запросом
     let blacklistedIds: Set<number> = new Set();
@@ -92,34 +176,48 @@ export async function GET(
       });
     }
 
-    // Формируем данные о фильмах
-    const moviesWithStatus = (data.parts || []).map((movie: TMDbCollectionPart) => {
-      const watchlistKey = `movie_${movie.id}`;
-      const watchlistData = watchlistMap.get(watchlistKey);
-      const isBlacklisted = blacklistedIds.has(movie.id);
+    // Формируем данные о фильмах и получаем TMDB детали для определения типа
+    const moviesWithStatus = await Promise.all(
+      (data.parts || []).map(async (movie: TMDbCollectionPart) => {
+        const watchlistKey = `movie_${movie.id}`;
+        const watchlistData = watchlistMap.get(watchlistKey);
+        const isBlacklisted = blacklistedIds.has(movie.id);
 
-      const movieData: Record<string, unknown> = {
-        id: movie.id,
-        media_type: 'movie',
-        title: movie.title,
-        name: movie.title,
-        poster_path: movie.poster_path,
-        vote_average: movie.vote_average,
-        vote_count: movie.vote_count,
-        release_date: movie.release_date,
-        first_air_date: movie.release_date,
-        overview: movie.overview,
-        isBlacklisted,
-      };
+        // Получаем TMDB детали для определения типа (аниме/мульт)
+        const tmdbDetails = await fetchMediaDetails(movie.id, 'movie');
 
-      // Добавляем status и userRating только если фильм в watchlist
-      if (watchlistData) {
-        movieData.status = watchlistData.status;
-        movieData.userRating = watchlistData.userRating;
-      }
+        logger.debug('MovieCard data from API', {
+          context: 'CollectionAPI',
+          movieId: movie.id,
+          genre_ids: tmdbDetails?.genre_ids,
+          original_language: tmdbDetails?.original_language,
+        });
 
-      return movieData;
-    });
+        const movieData = {
+          id: movie.id,
+          media_type: 'movie' as const,
+          title: movie.title,
+          name: movie.title,
+          poster_path: movie.poster_path,
+          vote_average: movie.vote_average,
+          vote_count: movie.vote_count,
+          release_date: movie.release_date,
+          first_air_date: movie.release_date,
+          overview: movie.overview,
+          isBlacklisted,
+          // Добавляем genre_ids и original_language для определения типа (Аниме/Мульт)
+          genre_ids: tmdbDetails?.genre_ids ?? [],
+          original_language: tmdbDetails?.original_language ?? '',
+          // Добавляем status и userRating если есть в watchlist
+          ...(watchlistData && {
+            status: watchlistData.status,
+            userRating: watchlistData.userRating,
+          }),
+        };
+
+        return movieData;
+      })
+    );
 
     return NextResponse.json({
       id: data.id,

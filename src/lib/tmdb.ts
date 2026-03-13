@@ -15,10 +15,8 @@ export interface Media {
   release_date?: string;
   first_air_date?: string;
   overview: string;
-  genre_ids?: number[];
-  genres?: { id: number; name: string }[];
-  production_countries?: { iso_3166_1: string; name: string }[];
-  original_language?: string;
+  genre_ids: number[];
+  original_language: string;
   adult?: boolean;
 }
 
@@ -66,8 +64,8 @@ function transformToMedia(item: TMDBMovieResponse): Media {
     release_date: item.release_date,
     first_air_date: item.first_air_date,
     overview: item.overview,
-    genre_ids: item.genre_ids,
-    original_language: item.original_language,
+    genre_ids: item.genre_ids ?? [],
+    original_language: item.original_language ?? '',
     adult: item.adult || false,
   };
 }

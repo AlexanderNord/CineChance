@@ -24,6 +24,8 @@ interface CollectionMovie {
   status?: 'want' | 'watched' | 'dropped' | 'rewatched' | null;
   userRating?: number | null;
   isBlacklisted: boolean;
+  genre_ids: number[];
+  original_language: string;
 }
 
 interface CollectionData {
@@ -62,6 +64,16 @@ export default function CollectionClient({ collectionId }: { collectionId: strin
         if (!abortController.signal.aborted && isMounted) {
           if (!res.ok) throw new Error(`API returned ${res.status}`);
           const data = await res.json();
+          
+          // DEBUG: Log movie data from API
+          if (data.parts && data.parts.length > 0) {
+            console.log('[CollectionClient] First movie from API:', {
+              id: data.parts[0].id,
+              title: data.parts[0].title,
+              genre_ids: data.parts[0].genre_ids,
+              original_language: data.parts[0].original_language,
+            });
+          }
           
           if (!abortController.signal.aborted && isMounted) {
             setCollection(data);

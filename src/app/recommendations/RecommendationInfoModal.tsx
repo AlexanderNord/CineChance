@@ -139,9 +139,9 @@ export default function RecommendationInfoModal({
       vote_average: movie.vote_average,
       vote_count: movie.vote_count,
       overview: movie.overview,
-      genre_ids: movie.genre_ids,
+      genre_ids: movie.genre_ids ?? [],
       genres: movie.genres,
-      original_language: movie.original_language,
+      original_language: movie.original_language ?? '',
     };
     return getMediaTypeDisplay(mediaData);
   }, [movie]);
