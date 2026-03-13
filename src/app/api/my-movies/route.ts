@@ -610,8 +610,8 @@ export async function GET(request: NextRequest) {
       pageStartIndex,
       pageEndIndex,
       // Log first movie for debugging
-      firstMovieGenreIds: paginatedMovies.length > 0 ? paginatedMovies[0].genre_ids : undefined,
-      firstMovieLanguage: paginatedMovies.length > 0 ? paginatedMovies[0].original_language : undefined,
+      firstMovieId: paginatedMovies.length > 0 ? paginatedMovies[0].id : undefined,
+      firstMovieRating: paginatedMovies.length > 0 ? paginatedMovies[0].combinedRating : undefined,
     });
 
     return NextResponse.json({
