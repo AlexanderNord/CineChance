@@ -24,6 +24,8 @@ interface CollectionMovie {
   status?: 'want' | 'watched' | 'dropped' | 'rewatched' | null;
   userRating?: number | null;
   isBlacklisted: boolean;
+  genre_ids: number[];
+  original_language: string;
 }
 
 interface CollectionData {

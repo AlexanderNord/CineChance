@@ -34,7 +34,7 @@ const TV_COLOR = '#3b82f6';
  * @returns MediaTypeConfig - Display configuration for the card badge
  */
 export function getMediaTypeDisplay(movie: Media): MediaTypeConfig {
-  const hasAnimationGenre = movie.genre_ids?.includes(16) || movie.genres?.some(g => g.id === 16);
+  const hasAnimationGenre = movie.genre_ids?.includes(16);
   const isJapanese = movie.original_language === 'ja';
 
   if (hasAnimationGenre && isJapanese) {

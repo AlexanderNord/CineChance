@@ -68,6 +68,8 @@ function recommendationToMedia(item: RecommendationItem): Media {
     vote_average: item.score / 10, // Convert 0-100 to 0-10
     vote_count: 0,
     overview: '',
+    genre_ids: [],
+    original_language: '',
   };
 }
 

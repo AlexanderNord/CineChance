@@ -20,9 +20,12 @@ interface PersonCredit {
   vote_average: number;
   vote_count: number;
   release_date: string;
+  first_air_date: string;
   overview: string;
   character: string;
   popularity: number;
+  genre_ids: number[];
+  original_language: string;
 }
 
 interface PersonData {
