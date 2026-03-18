@@ -3,6 +3,7 @@ import { authOptions } from '@/auth';
 import { redirect } from 'next/navigation';
 import { getTasteMap, computeTasteMap } from '@/lib/taste-map';
 import { prisma } from '@/lib/prisma';
+import { computeUserPersonProfile } from '@/lib/taste-map/person-profile-v2';
 import type { PersonData } from '@/lib/taste-map/person-profile-v2';
 import TasteMapClient from './TasteMapClient';
 
@@ -19,7 +20,14 @@ export default async function TasteMapPage() {
   // Fetch taste map with automatic caching
   const tasteMap = await getTasteMap(session.user.id, () => computeTasteMap(session.user.id));
 
-  // Read PersonProfile from DB directly (no compute, no TMDB)
+  // Ensure PersonProfile data is fresh (compute and save to DB)
+  // This synchronizes with data from /profile/actors and /profile/creators
+  await Promise.all([
+    computeUserPersonProfile(session.user.id, 'actor'),
+    computeUserPersonProfile(session.user.id, 'director'),
+  ]);
+
+  // Read PersonProfile from DB (now guaranteed to be fresh)
   const [actorProfile, directorProfile] = await Promise.all([
     prisma.personProfile.findUnique({
       where: { userId_personType: { userId: session.user.id, personType: 'actor' } },
