@@ -1,28 +1,32 @@
 'use client';
 
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { TasteMap } from '@/lib/taste-map/types';
 import TwinTasters from './TwinTasters';
 
+/** Props for TasteMapClient component */
 interface TasteMapClientProps {
+  /** Taste map data from server (null when loading or no data) */
   tasteMap: TasteMap | null;
+  /** Current user ID for TwinTasters component */
   userId: string;
-  topActors: Array<[string, number]>;
-  topDirectors: Array<[string, number]>;
 }
 
-const COLORS = {
-  high: '#22c55e', // green-500
-  medium: '#eab308', // yellow-500
-  low: '#ef4444', // red-500
-  purple: '#a855f7', // purple-500
-  amber: '#f59e0b', // amber-500
-  blue: '#3b82f6', // blue-500
-};
-
-export default function TasteMapClient({ tasteMap, userId, topActors, topDirectors }: TasteMapClientProps) {
-  // No local state for persons - data comes from server props
-
+/**
+ * Client component for rendering user's taste map profile.
+ *
+ * Displays:
+ * - Summary stats (average rating, positive/negative intensity, consistency, diversity)
+ * - Computed metrics details with descriptions
+ * - Behavior profile (rewatch rate, drop rate, completion rate)
+ * - TwinTasters (similar users) component
+ *
+ * Charts (genre bar chart, rating pie chart) were removed in Phase 25-03
+ * to simplify the UI. Only text-based metrics remain.
+ *
+ * @param props - Component props
+ * @returns Taste map profile UI or empty state
+ */
+export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps) {
   // Empty state
   if (!tasteMap || Object.keys(tasteMap.genreProfile).length === 0) {
     return (
@@ -42,30 +46,6 @@ export default function TasteMapClient({ tasteMap, userId, topActors, topDirecto
         </a>
       </div>
     );
-  }
-
-  // Prepare genre data for horizontal bar chart (top 10)
-  const genreEntries = Object.entries(tasteMap.genreProfile)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
-  const genreData = genreEntries.map(([name, value]) => ({
-    name: name.charAt(0).toUpperCase() + name.slice(1),
-    value,
-  }));
-
-  // Prepare rating distribution for pie chart
-  const ratingData = [
-    { name: 'Высокие (8-10)', value: tasteMap.ratingDistribution.high, color: COLORS.high },
-    { name: 'Средние (5-7)', value: tasteMap.ratingDistribution.medium, color: COLORS.medium },
-    { name: 'Низкие (1-4)', value: tasteMap.ratingDistribution.low, color: COLORS.low },
-  ].filter(d => d.value > 0);
-
-  // Type breakdown data
-  const typeData = [
-    { name: 'Фильмы', value: tasteMap.ratingDistribution.high > 0 ? Math.round(tasteMap.ratingDistribution.high) : 0, color: COLORS.purple },
-  ];
-  if (tasteMap.ratingDistribution.medium > 0) {
-    typeData.push({ name: 'Сериалы', value: tasteMap.ratingDistribution.medium, color: COLORS.blue });
   }
 
   return (
@@ -95,113 +75,6 @@ export default function TasteMapClient({ tasteMap, userId, topActors, topDirecto
             {tasteMap.computedMetrics.diversity}%
           </div>
           <div className="text-sm text-gray-400">Разнообразие жанров</div>
-        </div>
-      </div>
-
-      {/* Genre Profile - Horizontal Bar Chart */}
-      <div className="bg-gray-900 rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Профиль жанров</h2>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={genreData}
-              layout="vertical"
-              margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
-            >
-              <XAxis type="number" domain={[0, 100]} stroke="#9ca3af" />
-              <YAxis
-                type="category"
-                dataKey="name"
-                stroke="#9ca3af"
-                width={80}
-                tick={{ fill: '#d1d5db', fontSize: 12 }}
-              />
-               <Tooltip
-                 contentStyle={{
-                   backgroundColor: '#1f2937',
-                   border: 'none',
-                   borderRadius: '8px',
-                   color: '#fff',
-                 }}
-               />
-              <Bar dataKey="value" fill="#a855f7" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Rating Distribution - Pie Chart */}
-      <div className="bg-gray-900 rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Распределение оценок</h2>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={ratingData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={5}
-                dataKey="value"
-                label={({ name, value }) => `${name}: ${value}%`}
-                labelLine={false}
-              >
-                {ratingData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#fff',
-                }}
-              />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Top Actors */}
-      <div className="bg-gray-900 rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Любимые актеры</h2>
-        <div className="flex flex-wrap gap-2">
-          {topActors.length > 0 ? (
-            topActors.map(([name, score]) => (
-              <a
-                key={name}
-                href="/profile/actors"
-                className="bg-amber-900/30 text-amber-400 px-3 py-1 rounded-full text-sm border border-amber-700/50 hover:bg-amber-900/50 transition-colors"
-              >
-                {name} ({score > 0 ? score.toFixed(1) : '—'})
-              </a>
-            ))
-          ) : (
-            <p className="text-gray-400">Нет данных об актерах</p>
-          )}
-        </div>
-      </div>
-
-      {/* Top Directors */}
-      <div className="bg-gray-900 rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Любимые режиссеры</h2>
-        <div className="flex flex-wrap gap-2">
-          {topDirectors.length > 0 ? (
-            topDirectors.map(([name, score]) => (
-              <a
-                key={name}
-                href="/profile/creators"
-                className="bg-blue-900/30 text-blue-400 px-3 py-1 rounded-full text-sm border border-blue-700/50 hover:bg-blue-900/50 transition-colors"
-              >
-                {name} ({score > 0 ? score.toFixed(1) : '—'})
-              </a>
-            ))
-          ) : (
-            <p className="text-gray-400">Нет данных о режиссерах</p>
-          )}
         </div>
       </div>
 

@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Personal movie tracking with intelligent recommendations
-**Current focus:** Phase 24 Complete - Ready for next phase
+**Current focus:** Phase 25 (Simplify TasteMap) - Remove chart visualizations
 
 ## Current Status
 
-- **Phase:** 24 (Taste Map DB Read Fix)
-- **Current Plan:** Ready to execute
-- **Goal:** Ensure taste-map reads actors/directors from PersonProfile DB table
+- **Phase:** 25 (Simplify TasteMap)
+- **Current Plan:** 25-03 (remove chart visualizations)
+- **Goal:** Simplify TasteMap page — remove persons, update weights, remove chart visualizations
 
 ## Progress
 
@@ -32,6 +32,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 20 | Strict TypeScript | ● Complete | QUAL-01, QUAL-02, QUAL-03 |
 | 23 | Profile Creators Page Fix | ● Complete | 0 |
 | 24 | Taste Map DB Read Fix | ● Complete | DATA-01 |
+| 25 | Simplify TasteMap | ⏳ Planned | - |
 
 ---
 
