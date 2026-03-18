@@ -302,4 +302,31 @@ Plans:
 
 ---
 
+### Phase 24: Taste Map DB Read Fix — COMPLETE
+
+**Goal:** Ensure taste-map reads actors/directors from PersonProfile DB table (not from TMDB)
+**Depends on:** Phase 23
+**Status:** ✅ Complete (2026-03-18)
+**Plans:** 1/1 plan
+
+Plans:
+- [x] 24-01-PLAN.md — Server-side PersonProfile read with DB consistency
+
+---
+
+### Phase 25: Simplify TasteMap — PLANNED
+
+**Goal:** Remove persons (actors/directors) from TasteMap UI and calculations, update similarity weights to 60% genres + 40% movies
+**Depends on:** Phase 24
+
+**User Decisions:**
+- Remove persons from UI and calculations (keep DB schema intact)
+- Update weights: 40% movies + 60% genres (was 50/30/20)
+
+Plans:
+- [ ] 25-01-PLAN.md — Update similarity weights and storage
+- [ ] 25-02-PLAN.md — Remove person UI from taste map pages
+
+---
+
 _For current project status, see .planning/PROJECT.md_
