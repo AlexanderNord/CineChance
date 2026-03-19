@@ -50,34 +50,6 @@ export default function TasteMapClient({ tasteMap, userId }: TasteMapClientProps
 
   return (
     <div className="space-y-6">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-900 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-white">
-            {tasteMap.averageRating.toFixed(1)}
-          </div>
-          <div className="text-sm text-gray-400">Средний рейтинг</div>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-500">
-            {tasteMap.computedMetrics.positiveIntensity}%
-          </div>
-          <div className="text-sm text-gray-400">Положительные оценки</div>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-amber-500">
-            {tasteMap.computedMetrics.consistency}%
-          </div>
-          <div className="text-sm text-gray-400">Консистентность</div>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-purple-500">
-            {tasteMap.computedMetrics.diversity}%
-          </div>
-          <div className="text-sm text-gray-400">Разнообразие жанров</div>
-        </div>
-      </div>
-
       {/* Computed Metrics Details */}
       <div className="bg-gray-900 rounded-lg p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Метрики профиля</h2>
