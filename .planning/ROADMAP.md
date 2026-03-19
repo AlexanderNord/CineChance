@@ -331,4 +331,16 @@ Plans:
 
 ---
 
+### Phase 26: Genre Profile Diversity Fix — PLANNED
+
+**Goal:** Correct the "Diversity" metric in TasteMap profile metrics to show percentage of unique TMDB genres (out of 19) that the user has watched, instead of incorrectly filtering by rating threshold.
+**Depends on:** Phase 25
+
+**Requirements:** [DIV-01]
+
+Plans:
+- [ ] 26-01-PLAN.md — Fix diversity calculation in computeMetrics and update tests
+
+---
+
 _For current project status, see .planning/PROJECT.md_
