@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { rateLimit } from '@/middleware/rateLimit';
+import { computeAllSimilarityScores } from '@/lib/tasks/computeSimilarityScores';
 
 /**
- * Weekly cron endpoint for data lifecycle cleanup
+ * Weekly cron endpoint for data lifecycle cleanup and similarity computation
  * Runs every Sunday at 3:00 AM UTC
- * Handles tables that need less frequent cleanup
+ * Handles tables that need less frequent cleanup + similarity scores refresh
  */
 
 // Поля дат для разных таблиц
@@ -35,7 +36,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const results: Record<string, { deleted: number; aggregated: boolean; error?: string }> = {};
+    const results: Record<string, unknown> = {};
+    const cleanupResults: Record<string, { deleted: number; aggregated: boolean; error?: string }> = {};
     const cutoffDate = new Date();
 
     // 2. Очищаем таблицы согласно политике хранения
@@ -49,20 +51,39 @@ export async function GET(request: NextRequest) {
         // Агрегируем перед удалением для NegativeFeedback
         if (table === 'NegativeFeedback' && process.env.ENABLE_FEEDBACK_AGGREGATION === 'true') {
           await aggregateNegativeFeedback(cutoff);
-          results[table] = { deleted: 0, aggregated: true };
+          cleanupResults[table] = { deleted: 0, aggregated: true };
         }
 
         const deleted = await deleteOldRecords(table, dateField, cutoff);
-        results[table] = { deleted, aggregated: false };
+        cleanupResults[table] = { deleted, aggregated: false };
         logger.info('Weekly cleanup completed', { table, deleted, days, context: 'DataLifecycle' });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        results[table] = { deleted: 0, aggregated: false, error: errorMessage };
+        cleanupResults[table] = { deleted: 0, aggregated: false, error: errorMessage };
         logger.error('Error cleaning table', { table, error: errorMessage, context: 'DataLifecycle' });
       }
     }
+    results.cleanup = cleanupResults;
 
-    // 3. Возвращаем результат
+    // 3. Similarity computation
+    const similarityResult = await computeAllSimilarityScores({
+      limit: 100,
+      offset: 0,
+    });
+    results.similarity = {
+      computed: similarityResult.computed,
+      processed: similarityResult.processed,
+      errors: similarityResult.errors,
+      duration: similarityResult.duration,
+    };
+    logger.info('Weekly similarity computation completed', {
+      computed: similarityResult.computed,
+      processed: similarityResult.processed,
+      errors: similarityResult.errors,
+      context: 'DataLifecycle',
+    });
+
+    // 4. Возвращаем результат
     return NextResponse.json({
       success: true,
       type: 'weekly',

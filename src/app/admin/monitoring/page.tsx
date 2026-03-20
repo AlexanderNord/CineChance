@@ -7,7 +7,8 @@ import RecommendationStats from '@/app/components/RecommendationStats';
 import MLDashboard from '@/app/components/MLDashboard';
 import ActiveRecommendationsBlock from '@/app/components/ActiveRecommendationsBlock';
 import AlgorithmPerformanceBlock from '@/app/components/AlgorithmPerformanceBlock';
-import { Clock } from 'lucide-react';
+import SimilarityMetrics from '@/app/components/SimilarityMetrics';
+import { Clock, Users } from 'lucide-react';
 import LoaderSkeleton from "@/app/components/LoaderSkeleton";
 
 function MLDashboardSkeleton() {
@@ -82,6 +83,9 @@ export default async function MonitoringPage() {
             <h2 className="text-2xl font-bold text-white">Мониторинг системы</h2>
           </div>
 
+          {/* Similarity метрики */}
+          <SimilarityMetrics />
+
           {/* Компонент статистики */}
           <RecommendationStats />
 
@@ -89,10 +93,22 @@ export default async function MonitoringPage() {
           <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
             <div className="flex items-center gap-3 mb-6">
               <Clock className="w-5 h-5 text-blue-400" />
-              <h3 className="text-lg font-semibold text-white">Расписание очистки</h3>
+              <h3 className="text-lg font-semibold text-white">Расписание Cron</h3>
             </div>
             
             <div className="space-y-3">
+              <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                <div>
+                  <p className="text-white font-medium flex items-center gap-2">
+                    <Users className="w-4 h-4 text-purple-400" />
+                    Similarity Computation
+                  </p>
+                  <p className="text-gray-500 text-sm">Понедельник, 2:00 UTC</p>
+                </div>
+                <span className="px-3 py-1 bg-green-400/10 text-green-400 rounded-full text-xs border border-green-400/30">
+                  Активна
+                </span>
+              </div>
               <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
                 <div>
                   <p className="text-white font-medium">Ежедневная очистка</p>
