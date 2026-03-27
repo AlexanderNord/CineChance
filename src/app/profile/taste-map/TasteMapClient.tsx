@@ -189,24 +189,25 @@ export default function TasteMapClient({ tasteMap, userId, isAdmin = false }: Ta
       <div className="bg-gray-900 rounded-lg p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Ваши жанры</h2>
         <div className="space-y-3">
-          {TMDB_GENRES.map(genre => {
-            const count = tasteMap.genreCounts[genre] ?? 0;
-            const avg = tasteMap.genreProfile[genre] || 0;
-            const maxCount = Math.max(...Object.values(tasteMap.genreCounts), 1);
-            const barWidth = (count / maxCount) * 100;
-            const hasRating = avg > 0;
-            // Always show count for all genres
-            const countDisplay = `(${count})`;
-            const avgDisplay = hasRating ? avg.toFixed(1) : '—';
-            return (
-              <div key={genre} className="flex items-center text-sm">
-                <div className="w-40 md:w-48 text-gray-300 truncate">{genre} {countDisplay} {avgDisplay}</div>
-                <div className="flex-1 mx-2 bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                  <div className="bg-purple-500 h-full rounded-full" style={{ width: `${barWidth}%` }} />
-                </div>
-              </div>
-            );
-          })}
+           {TMDB_GENRES.map(genre => {
+             const count = tasteMap.genreCounts[genre] ?? 0;
+             const avg = tasteMap.genreProfile[genre] || 0;
+             const maxCount = Math.max(...Object.values(tasteMap.genreCounts), 1);
+             const barWidth = (count / maxCount) * 100;
+             const hasRating = avg > 0;
+             // Always show count for all genres
+             const countDisplay = `(${count})`;
+             const avgDisplay = hasRating ? avg.toFixed(1) : '—';
+             const translatedGenre = translateGenre(genre);
+             return (
+               <div key={genre} className="flex items-center text-sm">
+                 <div className="w-40 md:w-48 text-gray-300 truncate">{translatedGenre} {countDisplay} {avgDisplay}</div>
+                 <div className="flex-1 mx-2 bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                   <div className="bg-purple-500 h-full rounded-full" style={{ width: `${barWidth}%` }} />
+                 </div>
+               </div>
+             );
+           })}
         </div>
       </div>
 
