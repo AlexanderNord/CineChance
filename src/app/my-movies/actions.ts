@@ -169,7 +169,7 @@ export async function fetchMoviesByStatus(
          const statusName = getStatusNameById(record.statusId);
          return {
            id: record.tmdbId,
-           media_type: record.mediaType,
+           media_type: record.mediaType as 'movie' | 'tv' | 'anime' | 'cartoon',
            title: tmdbData?.title || tmdbData?.name || record.title,
            name: tmdbData?.title || tmdbData?.name || record.title,
            poster_path: tmdbData?.poster_path || null,
@@ -233,7 +233,7 @@ export async function fetchMoviesByStatus(
 
          return {
            id: record.tmdbId,
-           media_type: record.mediaType,
+           media_type: record.mediaType as 'movie' | 'tv' | 'anime' | 'cartoon',
            title: tmdbData?.title || tmdbData?.name || 'Без названия',
            name: tmdbData?.title || tmdbData?.name || 'Без названия',
            poster_path: tmdbData?.poster_path || null,

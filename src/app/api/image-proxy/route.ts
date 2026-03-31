@@ -203,7 +203,7 @@ export async function GET(req: Request) {
     // Если у нас есть TMDB ID, пробуем получить постер из FANART_TV как fallback
     if (tmdbId && tmdbId > 0) {
       try {
-        const fanartUrl = await getFanartTvPoster(tmdbId, mediaType);
+        const fanartUrl = await getFanartTvPoster(tmdbId, mediaType as 'movie' | 'tv');
         if (fanartUrl) {
           logger.info('Using FANART_TV fallback', { tmdbId, mediaType, fanartUrl: fanartUrl.substring(0, 50) });
           
