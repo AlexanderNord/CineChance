@@ -12,12 +12,12 @@ import type { TasteMap, GenreProfile, PersonProfiles, TypeProfile } from './type
 // TTL: 24 hours in seconds
 export const TTL_24H = 86400;
 
-// Key patterns from CONTEXT.md
+// Key patterns from CONTEXT.md (v2: normalized genre keys)
 const KEY_PATTERNS = {
-  tasteMap: (userId: string) => `user:${userId}:taste-map`,
-  genreProfile: (userId: string) => `user:${userId}:genre-profile`,
-  personProfile: (userId: string) => `user:${userId}:person-profile`,
-  typeProfile: (userId: string) => `user:${userId}:type-profile`,
+  tasteMap: (userId: string) => `user:${userId}:taste-map:v2`,
+  genreProfile: (userId: string) => `user:${userId}:genre-profile:v2`,
+  personProfile: (userId: string) => `user:${userId}:person-profile:v2`,
+  typeProfile: (userId: string) => `user:${userId}:type-profile:v2`,
 };
 
 /**
@@ -250,13 +250,13 @@ export async function getTypeProfile(
  * Invalidate all taste-map related cache keys for a user
  */
 export async function invalidateTasteMap(userId: string): Promise<void> {
-  // Invalidate using pattern matching
-  await invalidateCache(`user:${userId}:taste-map`);
-  await invalidateCache(`user:${userId}:genre-profile`);
-  await invalidateCache(`user:${userId}:person-profile`);
-  await invalidateCache(`user:${userId}:type-profile`);
+  // Invalidate using pattern matching (v2 keys)
+  await invalidateCache(`user:${userId}:taste-map:v2`);
+  await invalidateCache(`user:${userId}:genre-profile:v2`);
+  await invalidateCache(`user:${userId}:person-profile:v2`);
+  await invalidateCache(`user:${userId}:type-profile:v2`);
   await invalidateCache(`user:${userId}:genre-bias`);
   await invalidateCache(`user:${userId}:person-bias`);
-  await invalidateCache(`similar-users:v2:${userId}`); // Fixed: added :v2 to match actual cache key
+  await invalidateCache(`similar-users:v2:${userId}`);
   await invalidateCache(`similarity:${userId}:*`);
 }
