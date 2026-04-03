@@ -256,10 +256,10 @@ export function computeAverageRating(watchedMovies: WatchListItemFull[]): number
  * Compute behavior profile from watch list data
  */
 export async function computeBehaviorProfile(
-  userId: string
+  userId: string,
+  preFetched?: { statusId: number; watchCount: number }[]
 ): Promise<BehaviorProfile> {
-  // Get all user items with status and watch count
-  const allItems = await prisma.watchList.findMany({
+  const allItems = preFetched ?? await prisma.watchList.findMany({
     where: { userId },
     select: {
       statusId: true,
@@ -451,10 +451,8 @@ export async function computeTasteMap(userId: string): Promise<TasteMap> {
   }
 
   // Build full items with TMDB data
-  // Limit to avoid too many API calls - batch fetch
-  const itemsToFetch = watchedItems.slice(0, 50); // Limit for performance
   const watchListItems = await Promise.all(
-    itemsToFetch.map(buildWatchListItem)
+    watchedItems.map(buildWatchListItem)
   );
 
   // Compute profiles
@@ -464,7 +462,13 @@ export async function computeTasteMap(userId: string): Promise<TasteMap> {
   const typeProfile = computeTypeProfile(watchListItems);
   const ratingDistribution = computeRatingDistribution(watchListItems);
   const averageRating = computeAverageRating(watchListItems);
-  const behaviorProfile = await computeBehaviorProfile(userId);
+
+  // Fetch all items for behavior profile in a single query
+  const allItems = await prisma.watchList.findMany({
+    where: { userId },
+    select: { statusId: true, watchCount: true },
+  });
+  const behaviorProfile = await computeBehaviorProfile(userId, allItems);
   const computedMetrics = computeMetrics(genreProfile, ratingDistribution);
 
   const tasteMap: TasteMap = {
@@ -479,24 +483,6 @@ export async function computeTasteMap(userId: string): Promise<TasteMap> {
     computedMetrics,
     updatedAt: new Date(),
   };
-
-  return tasteMap;
-}
-
-/**
- * Compute and store taste map to Redis
- */
-export async function recomputeTasteMap(userId: string): Promise<TasteMap> {
-  const tasteMap = await computeTasteMap(userId);
-
-  // Store to Redis
-  await storeTasteMap(userId, tasteMap);
-  await storeGenreProfile(userId, tasteMap.genreProfile);
-  await storePersonProfile(userId, tasteMap.personProfiles);
-  await storeTypeProfile(userId, {
-    movie: tasteMap.ratingDistribution.high, // This is simplified
-    tv: 0,
-  });
 
   return tasteMap;
 }

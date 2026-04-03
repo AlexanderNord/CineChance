@@ -724,12 +724,12 @@ async function computeRatingCorrelation(
 export async function computeSimilarity(
   userIdA: string,
   userIdB: string,
-  includePatterns?: boolean
+  options?: { includePatterns?: boolean; forceFresh?: boolean }
 ): Promise<SimilarityResult> {
-  // Get taste maps from cache (or compute fresh)
+  const forceFresh = options?.forceFresh ?? false;
   const [tasteMapA, tasteMapB] = await Promise.all([
-    getTasteMap(userIdA, () => computeTasteMap(userIdA)),
-    getTasteMap(userIdB, () => computeTasteMap(userIdB)),
+    getTasteMap(userIdA, () => computeTasteMap(userIdA), forceFresh),
+    getTasteMap(userIdB, () => computeTasteMap(userIdB), forceFresh),
   ]);
   
   // Handle missing profiles
@@ -766,14 +766,12 @@ export async function computeSimilarity(
   // Average of actor and director overlap
   const personOverlapValue = (actorsOverlap + directorsOverlap) / 2;
   
-  // For rating correlation, compute from shared watched movies
-  const ratingCorrelationValue = await computeRatingCorrelation(userIdA, userIdB);
-  
-  // Compute rating patterns first if needed (they're required for proper overall match calculation)
   let ratingPatterns: RatingMatchPatterns | undefined;
-  if (includePatterns) {
+  if (options?.includePatterns) {
     ratingPatterns = await computeRatingPatterns(userIdA, userIdB);
   }
+  
+  const ratingCorrelationValue = ratingPatterns?.pearsonCorrelation ?? await computeRatingCorrelation(userIdA, userIdB);
   
   const result: SimilarityResult = {
     tasteSimilarity,
@@ -807,7 +805,7 @@ export async function findSimilarUsers(
     
     // Compute similarity without patterns for performance
     // computeOverallMatch handles fallback to normalized ratingCorrelation
-    const result = await computeSimilarity(userId, candidateId, false);
+    const result = await computeSimilarity(userId, candidateId, { includePatterns: false });
     
     // Store individual pair similarity to Redis
     await storeSimilarityPair(userId, candidateId, result.overallMatch);

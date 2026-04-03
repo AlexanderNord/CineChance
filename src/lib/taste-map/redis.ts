@@ -47,12 +47,16 @@ export async function storeTasteMap(userId: string, tasteMap: TasteMap): Promise
  */
 export async function getTasteMap(
   userId: string,
-  computeFn?: () => Promise<TasteMap>
+  computeFn?: () => Promise<TasteMap>,
+  forceFresh?: boolean
 ): Promise<TasteMap | null> {
+  if (forceFresh && computeFn) {
+    return computeFn();
+  }
+
   const redis = getRedis();
   if (!redis) return null;
 
-  // If computeFn provided, use withCache for automatic cache-aside
   if (computeFn) {
     return withCache<TasteMap>(
       KEY_PATTERNS.tasteMap(userId),
@@ -61,7 +65,6 @@ export async function getTasteMap(
     );
   }
 
-  // Otherwise just get from cache
   try {
     const cached = await redis.get<string>(KEY_PATTERNS.tasteMap(userId));
     if (cached) {
@@ -250,13 +253,10 @@ export async function getTypeProfile(
  * Invalidate all taste-map related cache keys for a user
  */
 export async function invalidateTasteMap(userId: string): Promise<void> {
-  // Invalidate using pattern matching (v2 keys)
-  await invalidateCache(`user:${userId}:taste-map:v2`);
-  await invalidateCache(`user:${userId}:genre-profile:v2`);
-  await invalidateCache(`user:${userId}:person-profile:v2`);
-  await invalidateCache(`user:${userId}:type-profile:v2`);
-  await invalidateCache(`user:${userId}:genre-bias`);
-  await invalidateCache(`user:${userId}:person-bias`);
+  await invalidateCache(`user:${userId}:taste-map:v3`);
+  await invalidateCache(`user:${userId}:genre-profile:v3`);
+  await invalidateCache(`user:${userId}:person-profile:v3`);
+  await invalidateCache(`user:${userId}:type-profile:v3`);
   await invalidateCache(`similar-users:v2:${userId}`);
-  await invalidateCache(`similarity:${userId}:*`);
+  await invalidateCache(`similarity:v2:${userId}:*`);
 }
