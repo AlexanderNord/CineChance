@@ -42,7 +42,14 @@ export const GENRE_TRANSLATIONS: Record<string, string> = {
   'Western': 'Вестерн',
 };
 
+/**
+ * Reverse translations: Russian → English.
+ * Includes both title-case and lowercase variants since TMDB
+ * returns genre names in different cases depending on context.
+ * Also includes additional genres that TMDB returns for TV shows.
+ */
 export const GENRE_REVERSE_TRANSLATIONS: Record<string, string> = {
+  // Title-case variants
   'Боевик': 'Action',
   'Приключения': 'Adventure',
   'Анимация': 'Animation',
@@ -62,4 +69,32 @@ export const GENRE_REVERSE_TRANSLATIONS: Record<string, string> = {
   'Триллер': 'Thriller',
   'Военный': 'War',
   'Вестерн': 'Western',
+  // Lowercase variants (TMDB returns these for ru-RU)
+  'боевик': 'Action',
+  'приключения': 'Adventure',
+  'анимация': 'Animation',
+  'мультфильм': 'Animation',
+  'комедия': 'Comedy',
+  'криминал': 'Crime',
+  'документальный': 'Documentary',
+  'драма': 'Drama',
+  'семейный': 'Family',
+  'фэнтези': 'Fantasy',
+  'исторический': 'History',
+  'ужасы': 'Horror',
+  'музыка': 'Music',
+  'мистика': 'Mystery',
+  'мелодрама': 'Romance',
+  'научная фантастика': 'Science Fiction',
+  'фантастика': 'Science Fiction',
+  'телефильм': 'TV Movie',
+  'триллер': 'Thriller',
+  'военный': 'War',
+  'вестерн': 'Western',
+  'детектив': 'Mystery',
+  'новости': 'News',
+  'реалити': 'Reality',
+  'soap': 'Soap',
+  'ток-шоу': 'Talk',
+  'war & politics': 'War & Politics',
 };

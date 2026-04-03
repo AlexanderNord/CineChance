@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { fetchMediaDetails } from '@/lib/tmdb';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
 import { GENRE_REVERSE_TRANSLATIONS } from '@/lib/genreData';
+import { TMDB_GENRES } from '@/lib/genreData';
 import type {
   TasteMap,
   GenreProfile,
@@ -32,13 +33,32 @@ const COMPLETED_STATUS_IDS = [MOVIE_STATUS_IDS.WATCHED, MOVIE_STATUS_IDS.REWATCH
 const TMDB_GENRE_COUNT = 19 as const;
 
 /**
- * Normalize genre name to English using reverse translation
+ * Normalize genre name to English using reverse translation.
  * TMDB returns Russian genre names when language=ru-RU is used.
- * This function converts Russian names back to English to ensure
- * consistent keys in TasteMap data structures.
+ * Returns null for composite/unknown genres (e.g. "Боевик и Приключения").
+ * Only the 19 official TMDB genres are counted.
  */
-function normalizeGenreName(name: string): string {
-  return GENRE_REVERSE_TRANSLATIONS[name] || name;
+function normalizeGenreName(name: string): string | null {
+  // Already an English TMDB genre — pass through as-is
+  if ((TMDB_GENRES as readonly string[]).includes(name)) {
+    return name;
+  }
+
+  // Direct match in reverse translations (Russian → English)
+  if (GENRE_REVERSE_TRANSLATIONS[name]) {
+    return GENRE_REVERSE_TRANSLATIONS[name];
+  }
+
+  // Case-insensitive match for Russian variants
+  const lowerName = name.toLowerCase();
+  for (const [ru, en] of Object.entries(GENRE_REVERSE_TRANSLATIONS)) {
+    if (ru.toLowerCase() === lowerName) {
+      return en;
+    }
+  }
+
+  // Composite or unknown genre — skip it
+  return null;
 }
 
 /**
@@ -56,7 +76,9 @@ export function computeGenreCounts(watchedMovies: WatchListItemFull[]): Record<s
     const uniqueGenres = new Set<string>();
     for (const genre of genres) {
       const normalized = normalizeGenreName(genre.name);
-      uniqueGenres.add(normalized);
+      if (normalized) {
+        uniqueGenres.add(normalized);
+      }
     }
     for (const name of uniqueGenres) {
       counts[name] = (counts[name] || 0) + 1;
@@ -78,6 +100,7 @@ export function computeGenreProfile(watchedMovies: WatchListItemFull[]): GenrePr
 
     for (const genre of genres) {
       const normalized = normalizeGenreName(genre.name);
+      if (!normalized) continue;
       const existing = genreMap.get(normalized) || { totalRating: 0, count: 0 };
       existing.totalRating += rating;
       existing.count += 1;
