@@ -12,12 +12,12 @@ import type { TasteMap, GenreProfile, PersonProfiles, TypeProfile } from './type
 // TTL: 24 hours in seconds
 export const TTL_24H = 86400;
 
-// Key patterns from CONTEXT.md (v2: normalized genre keys)
+// Key patterns v3: normalized genre keys + normalized mediaType (cartoon→movie, anime→tv)
 const KEY_PATTERNS = {
-  tasteMap: (userId: string) => `user:${userId}:taste-map:v2`,
-  genreProfile: (userId: string) => `user:${userId}:genre-profile:v2`,
-  personProfile: (userId: string) => `user:${userId}:person-profile:v2`,
-  typeProfile: (userId: string) => `user:${userId}:type-profile:v2`,
+  tasteMap: (userId: string) => `user:${userId}:taste-map:v3`,
+  genreProfile: (userId: string) => `user:${userId}:genre-profile:v3`,
+  personProfile: (userId: string) => `user:${userId}:person-profile:v3`,
+  typeProfile: (userId: string) => `user:${userId}:type-profile:v3`,
 };
 
 /**
