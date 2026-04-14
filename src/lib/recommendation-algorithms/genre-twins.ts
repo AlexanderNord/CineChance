@@ -22,6 +22,7 @@ import { getSimilarUsers, computeSimilarity } from '@/lib/taste-map/similarity';
 import { getGenreProfile, getTasteMap } from '@/lib/taste-map/redis';
 import { cosineSimilarity } from '@/lib/taste-map/similarity';
 import { subDays } from 'date-fns';
+import { getWatchedStatusIds } from './twins-shared';
 
 // Algorithm configuration
 const ALGORITHM_NAME = 'genre_twins_v1';
@@ -378,23 +379,6 @@ function calculateCandidateScores(
       score: rawScore,
     };
   });
-}
-
-/**
- * Get status IDs for watched content
- */
-async function getWatchedStatusIds(): Promise<number[]> {
-  const statuses = await prisma.movieStatus.findMany({
-    where: {
-      OR: [
-        { name: 'Просмотрено' },
-        { name: 'Пересмотрено' },
-      ],
-    },
-    select: { id: true },
-  });
-
-  return statuses.map(s => s.id);
 }
 
 export default genreTwins;

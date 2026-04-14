@@ -20,6 +20,7 @@ import { normalizeScores, DEFAULT_COOLDOWN } from './interface';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { subDays } from 'date-fns';
+import { getWatchedStatusIds } from './twins-shared';
 
 // Algorithm configuration
 const ALGORITHM_NAME = 'type_twins_v1';
@@ -495,23 +496,6 @@ function calculateCandidateScores(
       score: rawScore,
     };
   });
-}
-
-/**
- * Get status IDs for watched content
- */
-async function getWatchedStatusIds(): Promise<number[]> {
-  const statuses = await prisma.movieStatus.findMany({
-    where: {
-      OR: [
-        { name: 'Просмотрено' },
-        { name: 'Пересмотрено' },
-      ],
-    },
-    select: { id: true },
-  });
-  
-  return statuses.map(s => s.id);
 }
 
 export default typeTwins;
