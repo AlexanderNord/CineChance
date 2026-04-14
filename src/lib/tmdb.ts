@@ -423,7 +423,15 @@ export const fetchMediaDetails = async (
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      logger.error('Ошибка TMDB details', { status: response.status, context: 'TMDB' });
+      // 404 is normal (media deleted from TMDB or doesn't exist) — skip error logging
+      if (response.status !== 404) {
+        logger.warn('TMDB API error fetching media details', { 
+          status: response.status,
+          tmdbId,
+          mediaType,
+          context: 'TMDB'
+        });
+      }
       return null;
     }
 
@@ -498,7 +506,15 @@ export const getMediaCredits = async (
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      logger.error('Ошибка TMDB details', { status: response.status, context: 'TMDB' });
+      // 404 is normal (media deleted from TMDB) — skip error logging
+      if (response.status !== 404) {
+        logger.warn('TMDB API error fetching credits', { 
+          status: response.status,
+          tmdbId,
+          mediaType,
+          context: 'TMDB'
+        });
+      }
       return null;
     }
 

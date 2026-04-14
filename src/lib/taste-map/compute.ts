@@ -6,6 +6,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { fetchMediaDetails } from '@/lib/tmdb';
+import { logger } from '@/lib/logger';
 import { MOVIE_STATUS_IDS } from '@/lib/movieStatusConstants';
 import { GENRE_REVERSE_TRANSLATIONS } from '@/lib/genreData';
 import { TMDB_GENRES } from '@/lib/genreData';
@@ -399,17 +400,41 @@ const TMDB_BATCH_DELAY_MS = 200 as const;
 
 /**
  * Build complete watch list item with TMDB details
+ * Gracefully handles TMDB errors (404, timeouts) and returns item with fallback data
  */
 async function buildWatchListItem(
   item: { tmdbId: number; mediaType: string; userRating: number | null; voteAverage: number }
 ): Promise<WatchListItemFull> {
   const tmdbMediaType = normalizeMediaType(item.mediaType);
   
-  // Fetch TMDB details (includes genres)
-  const details = await fetchMediaDetails(item.tmdbId, tmdbMediaType);
+  let details = null;
+  let credits = null;
   
-  // Fetch credits separately
-  const credits = await fetchMovieCredits(item.tmdbId, tmdbMediaType);
+  try {
+    // Fetch TMDB details (includes genres)
+    details = await fetchMediaDetails(item.tmdbId, tmdbMediaType);
+  } catch (error) {
+    // Log error but continue - item has voteAverage from DB
+    logger.warn('Failed to fetch media details', { 
+      tmdbId: item.tmdbId, 
+      mediaType: tmdbMediaType, 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      context: 'buildWatchListItem'
+    });
+  }
+  
+  try {
+    // Fetch credits separately
+    credits = await fetchMovieCredits(item.tmdbId, tmdbMediaType);
+  } catch (error) {
+    // Log error but continue - credits are optional
+    logger.warn('Failed to fetch movie credits', { 
+      tmdbId: item.tmdbId, 
+      mediaType: tmdbMediaType, 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      context: 'buildWatchListItem'
+    });
+  }
   
   return {
     userId: '', // Not needed for computation
@@ -424,6 +449,7 @@ async function buildWatchListItem(
 
 /**
  * Process items in batches with delays to avoid TMDB rate limiting
+ * Uses Promise.allSettled instead of Promise.all to continue on individual errors
  */
 async function processInBatches<T, R>(
   items: T[],
@@ -435,8 +461,16 @@ async function processInBatches<T, R>(
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
-    const batchResults = await Promise.all(batch.map(fn));
-    results.push(...batchResults);
+    // Use allSettled to continue even if individual items error
+    const batchResults = await Promise.allSettled(batch.map(fn));
+    
+    // Extract fulfilled values and skip rejected ones
+    for (const result of batchResults) {
+      if (result.status === 'fulfilled') {
+        results.push(result.value);
+      }
+      // Rejected results are silently skipped - buildWatchListItem has try-catch
+    }
     
     // Delay between batches (but not after the last one)
     if (i + batchSize < items.length) {
@@ -449,6 +483,7 @@ async function processInBatches<T, R>(
 
 /**
  * Main function to compute complete TasteMap for a user
+ * Gracefully handles TMDB API errors and returns partial data when some items fail
  */
 export async function computeTasteMap(userId: string): Promise<TasteMap> {
   // Get items from database (watched + rewatched for better coverage)
@@ -481,42 +516,85 @@ export async function computeTasteMap(userId: string): Promise<TasteMap> {
     };
   }
 
-  // Build full items with TMDB data (batched to avoid rate limiting)
-  const watchListItems = await processInBatches(
-    watchedItems,
-    buildWatchListItem
-  );
+  try {
+    // Build full items with TMDB data (batched to avoid rate limiting)
+    const watchListItems = await processInBatches(
+      watchedItems,
+      buildWatchListItem
+    );
 
-  // Compute profiles
-  const genreProfile = computeGenreProfile(watchListItems);
-  const genreCounts = computeGenreCounts(watchListItems);
-  const personProfiles = computePersonProfile(watchListItems);
-  const typeProfile = computeTypeProfile(watchListItems);
-  const ratingDistribution = computeRatingDistribution(watchListItems);
-  const averageRating = computeAverageRating(watchListItems);
+    // Skip computation if no items loaded successfully
+    if (watchListItems.length === 0) {
+      logger.warn('No watch list items loaded from TMDB', { 
+        userId, 
+        totalItems: watchedItems.length,
+        context: 'computeTasteMap'
+      });
+      // Return empty taste map but with correct totalWatched count
+      return {
+        userId,
+        genreProfile: {},
+        genreCounts: {},
+        totalWatched: watchedItems.length,
+        ratingDistribution: { high: 0, medium: 0, low: 0 },
+        averageRating: 0,
+        personProfiles: { actors: {}, directors: {} },
+        behaviorProfile: { rewatchRate: 0, dropRate: 0, completionRate: 100 },
+        computedMetrics: { positiveIntensity: 0, negativeIntensity: 0, consistency: 0, diversity: 0 },
+        updatedAt: new Date(),
+      };
+    }
 
-  // Fetch all items for behavior profile in a single query
-  const allItems = await prisma.watchList.findMany({
-    where: { userId },
-    select: { statusId: true, watchCount: true },
-  });
-  const behaviorProfile = await computeBehaviorProfile(userId, allItems);
-  const computedMetrics = computeMetrics(genreProfile, ratingDistribution);
+    // Compute profiles
+    const genreProfile = computeGenreProfile(watchListItems);
+    const genreCounts = computeGenreCounts(watchListItems);
+    const personProfiles = computePersonProfile(watchListItems);
+    const typeProfile = computeTypeProfile(watchListItems);
+    const ratingDistribution = computeRatingDistribution(watchListItems);
+    const averageRating = computeAverageRating(watchListItems);
 
-  const tasteMap: TasteMap = {
-    userId,
-    genreProfile,
-    genreCounts,
-    totalWatched: watchedItems.length,
-    ratingDistribution,
-    averageRating,
-    personProfiles,
-    behaviorProfile,
-    computedMetrics,
-    updatedAt: new Date(),
-  };
+    // Fetch all items for behavior profile in a single query
+    const allItems = await prisma.watchList.findMany({
+      where: { userId },
+      select: { statusId: true, watchCount: true },
+    });
+    const behaviorProfile = await computeBehaviorProfile(userId, allItems);
+    const computedMetrics = computeMetrics(genreProfile, ratingDistribution);
 
-  return tasteMap;
+    const tasteMap: TasteMap = {
+      userId,
+      genreProfile,
+      genreCounts,
+      totalWatched: watchedItems.length,
+      ratingDistribution,
+      averageRating,
+      personProfiles,
+      behaviorProfile,
+      computedMetrics,
+      updatedAt: new Date(),
+    };
+
+    return tasteMap;
+  } catch (error) {
+    logger.error('Error computing taste map', { 
+      userId, 
+      error: error instanceof Error ? error.message : String(error),
+      context: 'computeTasteMap'
+    });
+    // Return empty taste map on critical error
+    return {
+      userId,
+      genreProfile: {},
+      genreCounts: {},
+      totalWatched: watchedItems.length,
+      ratingDistribution: { high: 0, medium: 0, low: 0 },
+      averageRating: 0,
+      personProfiles: { actors: {}, directors: {} },
+      behaviorProfile: { rewatchRate: 0, dropRate: 0, completionRate: 100 },
+      computedMetrics: { positiveIntensity: 0, negativeIntensity: 0, consistency: 0, diversity: 0 },
+      updatedAt: new Date(),
+    };
+  }
 }
 
 /**
