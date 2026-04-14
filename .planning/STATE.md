@@ -5,13 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Personal movie tracking with intelligent recommendations
-**Current focus:** Phase 25 (Simplify TasteMap) - Remove chart visualizations
+**Current focus:** Phase 30 (TDD Refactoring) - Complete
 
 ## Current Status
 
-- **Phase:** 25 (Simplify TasteMap)
-- **Current Plan:** 25-03 (remove chart visualizations)
-- **Goal:** Simplify TasteMap page — remove persons, update weights, remove chart visualizations
+- **Phase:** 30 (TDD Refactoring)
+- **Current Plan:** Complete
+- **Goal:** Рефакторинг критичных файлов через TDD цикл
+- **Latest Completed:** Phase 30 (2026-04-14)
 
 ## Progress
 
@@ -32,9 +33,12 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 | 20 | Strict TypeScript | ● Complete | QUAL-01, QUAL-02, QUAL-03 |
 | 23 | Profile Creators Page Fix | ● Complete | 0 |
 | 24 | Taste Map DB Read Fix | ● Complete | DATA-01 |
-| 25 | Simplify TasteMap | ⏳ Planned | - |
-| 26 | Genre Profile Diversity Fix | ⏳ Planned | DIV-01 |
-| 27 | Taste Twins Validation | ⏳ Planned | VALID-01, VALID-02, VALID-03 |
+| 25 | Simplify TasteMap | ● Complete | - |
+| 26 | Genre Profile Diversity Fix | ● Complete | DIV-01 |
+| 27 | Taste Twins Validation | ● Complete | VALID-01, VALID-02, VALID-03 |
+| 28 | Similarity Algorithm Fixes | ● Complete | SIM-01, SIM-02, SIM-03 |
+| 29 | Genre Stats Display | ● Complete | UI-02 |
+| 30 | TDD Refactoring | ● Complete | - |
 
 ---
 

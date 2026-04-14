@@ -344,37 +344,38 @@ Plans:
 
 ---
 
-### Phase 28: Similarity Algorithm Fixes — PLANNING
+### Phase 28: Similarity Algorithm Fixes — COMPLETE
 
 **Goal:** Fix similarity algorithm staleness and cold-start issues — add expiresAt TTL, invalidate cache on rating changes, improve cold-start for new users, fix scheduler thresholds
 **Depends on:** Phase 27
-**Status:** ⏳ Planning in progress
+**Status:** ✅ Complete (2026-04-14)
 
 **Requirements:** [SIM-01, SIM-02, SIM-03]
 
 Plans:
-- [ ] 28-01-PLAN.md — Storage layer: add expiresAt, deleteSimilarityScoresByUser
-- [ ] 28-02-PLAN.md — Rewrite similar-users API: cache-first, staleness-first, lazy recompute
-- [ ] 28-03-PLAN.md — Add invalidation triggers to WatchList mutations + scheduler fixes
+- [x] 28-01-PLAN.md — Storage layer: add expiresAt, deleteSimilarityScoresByUser
+- [x] 28-02-PLAN.md — Rewrite similar-users API: cache-first, staleness-first, lazy recompute
+- [x] 28-03-PLAN.md — Add invalidation triggers to WatchList mutations + scheduler fixes
 
 ---
 
-### Phase 29: Genre Stats Display — BACKLOG
+### Phase 29: Genre Stats Display — COMPLETE
 
 **Goal:** Add "Ваши жанры" block to TasteMap page showing horizontal bars for each TMDB genre with movie count and average rating.
 **Depends on:** Phase 28
+**Status:** ✅ Complete (2026-04-14)
 
 **Requirements:** [UI-02]
 
 Plans:
-- [ ] 29-01-PLAN.md — Add genreCounts computation and UI display
+- [x] 29-01-PLAN.md — Add genreCounts computation and UI display
 
 ---
 
-### Phase 30: TDD Refactoring — PLANNED
+### Phase 30: TDD Refactoring — COMPLETE
 
 **Goal:** Рефакторинг критичных файлов через TDD цикл (RED → GREEN → REFACTOR)
-**Depends on:** Phase 28
+**Depends on:** Phase 29
 
 **Requirements:** None (internal quality improvement)
 
